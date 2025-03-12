@@ -49,3 +49,87 @@ DEBUG - 2025-03-12 04:43:35 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_
 DEBUG - 2025-03-12 04:43:35 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/modules/template/views/layout.php
 INFO - 2025-03-12 04:43:35 --> Final output sent to browser
 DEBUG - 2025-03-12 04:43:35 --> Total execution time: 0.1230
+INFO - 2025-03-12 10:25:54 --> Config Class Initialized
+INFO - 2025-03-12 10:25:54 --> Hooks Class Initialized
+DEBUG - 2025-03-12 10:25:54 --> UTF-8 Support Enabled
+INFO - 2025-03-12 10:25:54 --> Utf8 Class Initialized
+INFO - 2025-03-12 10:25:54 --> URI Class Initialized
+DEBUG - 2025-03-12 10:25:54 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/modules/dashboard/config/routes.php
+DEBUG - 2025-03-12 10:25:54 --> No URI present. Default controller set.
+INFO - 2025-03-12 10:25:54 --> Router Class Initialized
+INFO - 2025-03-12 10:25:54 --> Output Class Initialized
+INFO - 2025-03-12 10:25:54 --> Security Class Initialized
+DEBUG - 2025-03-12 10:25:54 --> Global POST, GET and COOKIE data sanitized
+INFO - 2025-03-12 10:25:54 --> Input Class Initialized
+INFO - 2025-03-12 10:25:54 --> Language Class Initialized
+INFO - 2025-03-12 10:25:54 --> Language Class Initialized
+INFO - 2025-03-12 10:25:54 --> Config Class Initialized
+INFO - 2025-03-12 10:25:54 --> Loader Class Initialized
+INFO - 2025-03-12 10:25:54 --> Helper loaded: url_helper
+INFO - 2025-03-12 10:25:54 --> Helper loaded: file_helper
+INFO - 2025-03-12 10:25:54 --> Helper loaded: html_helper
+INFO - 2025-03-12 10:25:54 --> Helper loaded: form_helper
+INFO - 2025-03-12 10:25:54 --> Helper loaded: text_helper
+INFO - 2025-03-12 10:25:54 --> Helper loaded: lang_helper
+INFO - 2025-03-12 10:25:54 --> Helper loaded: directory_helper
+INFO - 2025-03-12 10:25:54 --> Helper loaded: dompdf_helper
+INFO - 2025-03-12 10:25:54 --> Database Driver Class Initialized
+INFO - 2025-03-12 10:25:54 --> Email Class Initialized
+INFO - 2025-03-12 10:25:54 --> Session: Class initialized using 'files' driver.
+INFO - 2025-03-12 10:25:54 --> Form Validation Class Initialized
+INFO - 2025-03-12 10:25:54 --> Language file loaded: language/english/pagination_lang.php
+INFO - 2025-03-12 10:25:54 --> Pagination Class Initialized
+INFO - 2025-03-12 10:25:54 --> Controller Class Initialized
+DEBUG - 2025-03-12 10:25:54 --> Auth MX_Controller Initialized
+INFO - 2025-03-12 10:25:54 --> Model Class Initialized
+DEBUG - 2025-03-12 10:25:54 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/modules/dashboard/models/Auth_model.php
+INFO - 2025-03-12 10:25:54 --> Model Class Initialized
+DEBUG - 2025-03-12 10:25:54 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/controllers/../modules/template/controllers/Template.php
+DEBUG - 2025-03-12 10:25:54 --> Template MX_Controller Initialized
+DEBUG - 2025-03-12 10:25:54 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/modules/template/models/Template_model.php
+INFO - 2025-03-12 10:25:54 --> Model Class Initialized
+DEBUG - 2025-03-12 10:25:54 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/modules/template/views/login.php
+INFO - 2025-03-12 10:25:54 --> Final output sent to browser
+DEBUG - 2025-03-12 10:25:54 --> Total execution time: 0.0421
+INFO - 2025-03-12 10:25:58 --> Config Class Initialized
+INFO - 2025-03-12 10:25:58 --> Hooks Class Initialized
+DEBUG - 2025-03-12 10:25:58 --> UTF-8 Support Enabled
+INFO - 2025-03-12 10:25:58 --> Utf8 Class Initialized
+INFO - 2025-03-12 10:25:58 --> URI Class Initialized
+DEBUG - 2025-03-12 10:25:58 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/modules/dashboard/config/routes.php
+DEBUG - 2025-03-12 10:25:58 --> No URI present. Default controller set.
+INFO - 2025-03-12 10:25:58 --> Router Class Initialized
+INFO - 2025-03-12 10:25:58 --> Output Class Initialized
+INFO - 2025-03-12 10:25:58 --> Security Class Initialized
+DEBUG - 2025-03-12 10:25:58 --> Global POST, GET and COOKIE data sanitized
+INFO - 2025-03-12 10:25:58 --> Input Class Initialized
+INFO - 2025-03-12 10:25:58 --> Language Class Initialized
+INFO - 2025-03-12 10:25:58 --> Language Class Initialized
+INFO - 2025-03-12 10:25:58 --> Config Class Initialized
+INFO - 2025-03-12 10:25:58 --> Loader Class Initialized
+INFO - 2025-03-12 10:25:58 --> Helper loaded: url_helper
+INFO - 2025-03-12 10:25:58 --> Helper loaded: file_helper
+INFO - 2025-03-12 10:25:58 --> Helper loaded: html_helper
+INFO - 2025-03-12 10:25:58 --> Helper loaded: form_helper
+INFO - 2025-03-12 10:25:58 --> Helper loaded: text_helper
+INFO - 2025-03-12 10:25:58 --> Helper loaded: lang_helper
+INFO - 2025-03-12 10:25:58 --> Helper loaded: directory_helper
+INFO - 2025-03-12 10:25:58 --> Helper loaded: dompdf_helper
+INFO - 2025-03-12 10:25:58 --> Database Driver Class Initialized
+INFO - 2025-03-12 10:25:58 --> Email Class Initialized
+INFO - 2025-03-12 10:25:58 --> Session: Class initialized using 'files' driver.
+INFO - 2025-03-12 10:25:58 --> Form Validation Class Initialized
+INFO - 2025-03-12 10:25:58 --> Language file loaded: language/english/pagination_lang.php
+INFO - 2025-03-12 10:25:58 --> Pagination Class Initialized
+INFO - 2025-03-12 10:25:58 --> Controller Class Initialized
+DEBUG - 2025-03-12 10:25:58 --> Auth MX_Controller Initialized
+INFO - 2025-03-12 10:25:58 --> Model Class Initialized
+DEBUG - 2025-03-12 10:25:58 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/modules/dashboard/models/Auth_model.php
+INFO - 2025-03-12 10:25:58 --> Model Class Initialized
+DEBUG - 2025-03-12 10:25:58 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/controllers/../modules/template/controllers/Template.php
+DEBUG - 2025-03-12 10:25:58 --> Template MX_Controller Initialized
+DEBUG - 2025-03-12 10:25:58 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/modules/template/models/Template_model.php
+INFO - 2025-03-12 10:25:58 --> Model Class Initialized
+DEBUG - 2025-03-12 10:25:58 --> File loaded: /Users/faiz.shiraji/Sites/GenITech_B2B/application/modules/template/views/login.php
+INFO - 2025-03-12 10:25:58 --> Final output sent to browser
+DEBUG - 2025-03-12 10:25:58 --> Total execution time: 0.0341
