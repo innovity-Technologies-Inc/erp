@@ -2,6 +2,7 @@
 <div class="row">
     <div class="col-sm-12">
         <div class="panel panel-bd">
+<!-- track -->
             <div id="printableArea" onload="printDiv('printableArea')">
                 <div class="panel-body print-font-size">
                     <div class="row print_header">
@@ -166,8 +167,16 @@
                                 <tr>
                                     <td class="text-center"><?php echo $details['sl']?></td>
                                     <td class="text-center">
-                                        <div><span class="comp-web"><?php echo $details['product_name']?> -
-                                                (<?php echo $details['product_model']?>)</span></div>
+                                        <div>
+                                            <span class="comp-web">
+                                                <?php
+                                                echo $details['product_name'];
+                                                if (!empty(trim($details['product_model']))) {
+                                                    echo " - (" . $details['product_model'] . ")";
+                                                }
+                                                ?>
+                                            </span>
+                                        </div>
                                     </td>
                                     <td class="text-center comp-web">
                                         <div><?php echo $details['unit']?></div>

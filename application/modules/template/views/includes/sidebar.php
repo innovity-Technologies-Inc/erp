@@ -759,13 +759,7 @@
                         href="<?php echo base_url('supplier_returns') ?>"><?php echo display('supplier_return') ?></a>
                 </li>
                 <?php } ?>
-                <?php if($this->permission1->method('tax_report','read')->access()){ ?>
-                <li class="treeview <?php if ($this->uri->segment('1') == ("tax_report")){
-                        echo "active";
-                    } else {
-                        echo " ";
-                    }?>"><a href="<?php echo base_url('tax_report') ?>"><?php echo display('tax_report') ?></a></li>
-                <?php } ?>
+                
                 <?php if($this->permission1->method('profit_report','read')->access()){ ?>
                 <li class="treeview <?php if ($this->uri->segment('1') == ("profit_report")){
                         echo "active";

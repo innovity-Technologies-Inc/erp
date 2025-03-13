@@ -936,57 +936,58 @@ $(document).ready(function(){
 
 }
 
- $( document ).ready(function() {
-        "use strict";
-        var paytype = $("#editpayment_type").val();
-        if(paytype == 2){
-          $("#bank_div").css("display", "block");        
-      }else{
-       $("#bank_div").css("display", "none"); 
-      }
+$( document ).ready(function() {
+    "use strict";
+    var paytype = $("#editpayment_type").val();
+    if(paytype == 2){
+      $("#bank_div").css("display", "block");        
+  }else{
+   $("#bank_div").css("display", "none"); 
+  }
 
-      $(".bankpayment").css("width", "100%");
-    });
+  $(".bankpayment").css("width", "100%");
+});
 
-    function invoice_product_batch(sl){
-        var base_url = $('.baseUrl').val();
-        var csrf_test_name = $('[name="csrf_test_name"]').val();
-        var prod_id = $(".product_id_" + sl).val();
-        var batch_no = $("#serial_no_" + sl).val();
-        var taxnumber = $("#txfieldnum").val();
-        var available_quantity = $(".available_quantity_" + sl).val();
+function invoice_product_batch(sl){
+    var base_url = $('.baseUrl').val();
+    var csrf_test_name = $('[name="csrf_test_name"]').val();
+    var prod_id = $(".product_id_" + sl).val();
+    var batch_no = $("#serial_no_" + sl).val();
+    var taxnumber = $("#txfieldnum").val();
+    var available_quantity = $(".available_quantity_" + sl).val();
 
-        $.ajax( {
-            url: base_url + "invoice/invoice/paysenz_batchwise_productprice",
-            method: 'post',
-            dataType: "json",
-            data: {
-            prod_id: prod_id,
-            batch_no:batch_no,
-            csrf_test_name:csrf_test_name,
-            },
-            success: function( data ) {
-                if (parseInt(data) >= 0) {
-                    $(".available_quantity_" + sl).val(data.toFixed(2,2));
-                }else{
-                    var message = "You can Sale maximum " + available_quantity + " Items";
-                    toastr["error"](message);
-                    $("#total_qntt_" + sl).val('');
-                    var quantity = 0;
-                    $("#total_price_" + sl).val(0);
-                    for(var i=0;i<taxnumber;i++){
-                        $("#all_tax"+i+"_" + sl).val(0);
-                        paysenz_invoice_quantity_calculate(sl);
-                    }
+    $.ajax( {
+        url: base_url + "invoice/invoice/paysenz_batchwise_productprice",
+        method: 'post',
+        dataType: "json",
+        data: {
+        prod_id: prod_id,
+        batch_no:batch_no,
+        csrf_test_name:csrf_test_name,
+        },
+        success: function( data ) {
+            if (parseInt(data) >= 0) {
+                $(".available_quantity_" + sl).val(data.toFixed(2,2));
+            }else{
+                var message = "You can Sale maximum " + available_quantity + " Items";
+                toastr["error"](message);
+                $("#total_qntt_" + sl).val('');
+                var quantity = 0;
+                $("#total_price_" + sl).val(0);
+                for(var i=0;i<taxnumber;i++){
+                    $("#all_tax"+i+"_" + sl).val(0);
+                    paysenz_invoice_quantity_calculate(sl);
                 }
-               
             }
-          });
+           
+        }
+      });
 
 
 
 
-    }
+}
+
 
     function check_creditsale(){
         var card_typesl = $('.card_typesl').val();

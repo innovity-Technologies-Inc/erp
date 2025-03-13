@@ -1116,83 +1116,83 @@ public function invoice_taxinfo($invoice_id){
  }
 
    // product information retrieve by product id
-    public function get_total_product_invoic($product_id) {
-        $this->db->select('SUM(a.quantity) as total_purchase');
-        $this->db->from('product_purchase_details a');
-        $this->db->where('a.product_id', $product_id);
-        $total_purchase = $this->db->get()->row();
+   public function get_total_product_invoic($product_id) {
+    $this->db->select('SUM(a.quantity) as total_purchase');
+    $this->db->from('product_purchase_details a');
+    $this->db->where('a.product_id', $product_id);
+    $total_purchase = $this->db->get()->row();
 
-        $this->db->select('SUM(b.quantity) as total_sale');
-        $this->db->from('invoice_details b');
-        $this->db->where('b.product_id', $product_id);
-        $total_sale = $this->db->get()->row();
+    $this->db->select('SUM(b.quantity) as total_sale');
+    $this->db->from('invoice_details b');
+    $this->db->where('b.product_id', $product_id);
+    $total_sale = $this->db->get()->row();
 
-        $this->db->select('a.*,b.*');
-        $this->db->from('product_information a');
-        $this->db->join('supplier_product b', 'a.product_id=b.product_id');
-        $this->db->where(array('a.product_id' => $product_id, 'a.status' => 1));
-        $product_information = $this->db->get()->row();
+    $this->db->select('a.*,b.*');
+    $this->db->from('product_information a');
+    $this->db->join('supplier_product b', 'a.product_id=b.product_id');
+    $this->db->where(array('a.product_id' => $product_id, 'a.status' => 1));
+    $product_information = $this->db->get()->row();
 
-        $this->db->select('SUM(quantity) as purchase_qty,batch_id,product_id');
-        $this->db->from('product_purchase_details');
-        $this->db->where('product_id', $product_id);
-        $this->db->group_by('batch_id');
-        $pur_product_batch = $this->db->get()->result();
+    $this->db->select('SUM(quantity) as purchase_qty,batch_id,product_id');
+    $this->db->from('product_purchase_details');
+    $this->db->where('product_id', $product_id);
+    $this->db->group_by('batch_id');
+    $pur_product_batch = $this->db->get()->result();
 
-        $this->db->select('SUM(quantity) as sale_qty,batch_id');
-        $this->db->from('invoice_details');
-        $this->db->where('product_id', $product_id);
-        $this->db->group_by('batch_id');
-        $sell_product_batch = $this->db->get()->result();
+    $this->db->select('SUM(quantity) as sale_qty,batch_id');
+    $this->db->from('invoice_details');
+    $this->db->where('product_id', $product_id);
+    $this->db->group_by('batch_id');
+    $sell_product_batch = $this->db->get()->result();
 
-        $available_quantity = ($total_purchase->total_purchase - $total_sale->total_sale);
-        $tablecolumn = $this->db->list_fields('tax_collection');
-               $num_column = count($tablecolumn)-4;
-  $taxfield='';
-  $taxvar = [];
-   for($i=0;$i<$num_column;$i++){
-    $taxfield = 'tax'.$i;
-    $data2[$taxfield] = (!empty($product_information->$taxfield)?$product_information->$taxfield:0);
-    $taxvar[$i]       = (!empty($product_information->$taxfield)?$product_information->$taxfield:0);
-    $data2['taxdta']  = $taxvar;
-   }
+    $available_quantity = ($total_purchase->total_purchase - $total_sale->total_sale);
+    $tablecolumn = $this->db->list_fields('tax_collection');
+           $num_column = count($tablecolumn)-4;
+$taxfield='';
+$taxvar = [];
+for($i=0;$i<$num_column;$i++){
+$taxfield = 'tax'.$i;
+$data2[$taxfield] = (!empty($product_information->$taxfield)?$product_information->$taxfield:0);
+$taxvar[$i]       = (!empty($product_information->$taxfield)?$product_information->$taxfield:0);
+$data2['taxdta']  = $taxvar;
+}
 
-    $content =explode(',', $product_information->serial_no);
+$content =explode(',', $product_information->serial_no);
 
 
-        $html = "";
-        if (empty($pur_product_batch)) {
-            $html .="No Serial Found !";
-        }else{
-            // Select option created for product
-            $html .="<select name=\"serial_no[]\" onchange=\"invoice_product_batch()\"  class=\"serial_no_1 form-control basic-single\" id=\"serial_no_1\">";
-                $html .= "<option value=''>".display('select_one')."</option>";
-                foreach ($pur_product_batch as $p_batch) {
-                    $sellt_prod_batch = $this->db->select('SUM(quantity) as sale_qty,batch_id, product_id')->from('invoice_details')->where('product_id', $p_batch->product_id)->where('batch_id', $p_batch->batch_id)->get()->row();
-                    $pur_prod = (empty($sellt_prod_batch->sale_qty)?0:$sellt_prod_batch->sale_qty);
-                    $available_prod = $p_batch->purchase_qty - $pur_prod;
-                    if ($available_prod > 0) {
-                        # code...
-                        $html .="<option value=".$p_batch->batch_id.">".$p_batch->batch_id."</option>";
-                    }
+    $html = "";
+    if (empty($pur_product_batch)) {
+        $html .="No Serial Found !";
+    }else{
+        // Select option created for product
+        $html .="<select name=\"serial_no[]\" onchange=\"invoice_product_batch()\"  class=\"serial_no_1 form-control basic-single\" id=\"serial_no_1\">";
+            $html .= "<option value=''>".display('select_one')."</option>";
+            foreach ($pur_product_batch as $p_batch) {
+                $sellt_prod_batch = $this->db->select('SUM(quantity) as sale_qty,batch_id, product_id')->from('invoice_details')->where('product_id', $p_batch->product_id)->where('batch_id', $p_batch->batch_id)->get()->row();
+                $pur_prod = (empty($sellt_prod_batch->sale_qty)?0:$sellt_prod_batch->sale_qty);
+                $available_prod = $p_batch->purchase_qty - $pur_prod;
+                if ($available_prod > 0) {
+                    # code...
+                    $html .="<option value=".$p_batch->batch_id.">".$p_batch->batch_id."</option>";
+                }
 
-                }   
-            $html .="</select>";
-        }
-
-            $data2['total_product']  = $available_quantity;
-            $data2['supplier_price'] = $product_information->supplier_price;
-            $data2['price']          = $product_information->price;
-            $data2['supplier_id']    = $product_information->supplier_id;
-            $data2['unit']           = $product_information->unit;
-            $data2['tax']            = $product_information->tax;
-            $data2['product_vat']    = $product_information->product_vat;
-            $data2['serial']         = $html;
-            $data2['txnmber']        = $num_column;
-        
-
-        return $data2;
+            }   
+        $html .="</select>";
     }
+
+        $data2['total_product']  = $available_quantity;
+        $data2['supplier_price'] = $product_information->supplier_price;
+        $data2['price']          = $product_information->price;
+        $data2['supplier_id']    = $product_information->supplier_id;
+        $data2['unit']           = $product_information->unit;
+        $data2['tax']            = $product_information->tax;
+        $data2['product_vat']    = $product_information->product_vat;
+        $data2['serial']         = $html;
+        $data2['txnmber']        = $num_column;
+    
+
+    return $data2;
+}
 
         public function generator($lenth) { 
         $number = array("1", "2", "3", "4", "5", "6", "7", "8", "9");

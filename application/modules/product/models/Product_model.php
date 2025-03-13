@@ -273,111 +273,125 @@ class Product_model extends CI_Model {
     }
 
 
-    public function getProductList($postData=null){
+    public function getProductList($postData = null)
+{
+    $response = array();
 
-         $response = array();
+    ## Read value
+    $draw = $postData['draw'];
+    $start = $postData['start'];
+    $rowperpage = $postData['length']; // Rows display per page
+    $columnIndex = $postData['order'][0]['column']; // Column index
+    $columnName = $postData['columns'][$columnIndex]['data']; // Column name
+    $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
+    $searchValue = $postData['search']['value']; // Search value
 
-         ## Read value
-         $draw = $postData['draw'];
-         $start = $postData['start'];
-         $rowperpage = $postData['length']; // Rows display per page
-         $columnIndex = $postData['order'][0]['column']; // Column index
-         $columnName = $postData['columns'][$columnIndex]['data']; // Column name
-         $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
-         $searchValue = $postData['search']['value']; // Search value
+    ## Search Query
+    $searchQuery = "";
+    if (!empty($searchValue)) {
+        $searchQuery = " (a.product_name LIKE '%" . $searchValue . "%' 
+                        OR a.product_model LIKE '%" . $searchValue . "%' 
+                        OR a.price LIKE '%" . $searchValue . "%' 
+                        OR c.supplier_price LIKE '%" . $searchValue . "%' 
+                        OR m.supplier_name LIKE '%" . $searchValue . "%') ";
+    }
 
-         ## Search 
-         $searchQuery = "";
-         if($searchValue != ''){
-            $searchQuery = " (a.product_name like '%".$searchValue."%' or a.product_model like '%".$searchValue."%' or a.price like'%".$searchValue."%' or c.supplier_price like'%".$searchValue."%' or m.supplier_name like'%".$searchValue."%') ";
-         }
+    ## Total number of records without filtering
+    $this->db->select('COUNT(*) as allcount');
+    $this->db->from('product_information a');
+    $this->db->join('supplier_product c', 'c.product_id = a.product_id', 'left');
+    $this->db->join('supplier_information m', 'm.supplier_id = c.supplier_id', 'left');
+    if (!empty($searchValue)) {
+        $this->db->where($searchQuery);
+    }
+    $records = $this->db->get()->result();
+    $totalRecords = $records[0]->allcount;
 
-         ## Total number of records without filtering
-         $this->db->select('count(*) as allcount');
-         $this->db->from('product_information a');
-         $this->db->join('supplier_product c','c.product_id = a.product_id','left');
-         $this->db->join('supplier_information m','m.supplier_id = c.supplier_id','left');
-          if($searchValue != '')
-         $this->db->where($searchQuery);
-         $records = $this->db->get()->result();
-         $totalRecords = $records[0]->allcount;
+    ## Total number of record with filtering
+    $this->db->select('COUNT(*) as allcount');
+    $this->db->from('product_information a');
+    $this->db->join('supplier_product c', 'c.product_id = a.product_id', 'left');
+    $this->db->join('supplier_information m', 'm.supplier_id = c.supplier_id', 'left');
+    if (!empty($searchValue)) {
+        $this->db->where($searchQuery);
+    }
+    $records = $this->db->get()->result();
+    $totalRecordwithFilter = $records[0]->allcount;
 
-         ## Total number of record with filtering
-         $this->db->select('count(*) as allcount');
-         $this->db->from('product_information a');
-         $this->db->join('supplier_product c','c.product_id = a.product_id','left');
-         $this->db->join('supplier_information m','m.supplier_id = c.supplier_id','left');
-         if($searchValue != '')
-            $this->db->where($searchQuery);
-         $records = $this->db->get()->result();
-         $totalRecordwithFilter = $records[0]->allcount;
-
-         ## Fetch records
-         $this->db->select("a.*,
+    ## Fetch records
+    $this->db->select("a.product_id,
                 a.product_name,
-                a.product_id,
+                a.product_model,
                 a.product_vat,
                 a.image,
                 c.supplier_price,
                 c.supplier_id,
                 m.supplier_name,
-                pc.category_name"); // ✅ Add category_name
-        $this->db->from('product_information a');
-        $this->db->join('supplier_product c','c.product_id = a.product_id','left');
-        $this->db->join('supplier_information m','m.supplier_id = c.supplier_id','left');
-        $this->db->join('product_category pc','pc.category_id = a.category_id','left'); // ✅ Join with category table
-         if($searchValue != '')
-         $this->db->where($searchQuery);
-         $this->db->order_by($columnName, $columnSortOrder);
-         $this->db->limit($rowperpage, $start);
-         $records = $this->db->get()->result();
-         $data = array();
-         $sl =1;
-  
-         foreach($records as $record ){
-          $button = '';
-          $base_url = base_url();
-          $jsaction = "return confirm('Are You Sure ?')";
-            $image = '<img src="'.$base_url.$record->image.'" class="img img-responsive" height="50" width="50">';
-           if($this->permission1->method('manage_product','delete')->access()){
-                                  
-           $button .= '<a href="'.$base_url.'product/product/paysenz_deleteproduct/'.$record->product_id.'" class="btn btn-xs btn-danger "  onclick="'.$jsaction.'"><i class="fa fa-trash"></i></a>';
-         }
+                pc.category_name");
+    $this->db->from('product_information a');
+    $this->db->join('supplier_product c', 'c.product_id = a.product_id', 'left');
+    $this->db->join('supplier_information m', 'm.supplier_id = c.supplier_id', 'left');
+    $this->db->join('product_category pc', 'pc.category_id = a.category_id', 'left'); // ✅ Join with category table
+    if (!empty($searchValue)) {
+        $this->db->where($searchQuery);
+    }
+    $this->db->order_by($columnName, $columnSortOrder);
+    $this->db->limit($rowperpage, $start);
+    $records = $this->db->get()->result();
+    $data = array();
+    $sl = 1;
 
-         $button .='  <a href="'.$base_url.'qrcode/'.$record->product_id.'" class="btn btn-success btn-xs" data-toggle="tooltip" data-placement="left" title="'.display('qr_code').'"><i class="fa fa-qrcode" aria-hidden="true"></i></a>';
+    foreach ($records as $record) {
+        $button = '';
+        $base_url = base_url();
+        $jsaction = "return confirm('Are You Sure ?')";
+        $image = '<img src="' . $base_url . $record->image . '" class="img img-responsive" height="50" width="50">';
 
-         $button .='  <a href="'.$base_url.'barcode/'.$record->product_id.'" class="btn btn-warning btn-xs" data-toggle="tooltip" data-placement="left" title="'.display('barcode').'"><i class="fa fa-barcode" aria-hidden="true"></i></a>';
-      if($this->permission1->method('manage_product','update')->access()){
-         $button .=' <a href="'.$base_url.'product_form/'.$record->product_id.'" class="btn btn-info btn-xs" data-toggle="tooltip" data-placement="left" title="'. display('update').'"><i class="fa fa-pencil" aria-hidden="true"></i></a>';
-     }
+        if ($this->permission1->method('manage_product', 'delete')->access()) {
+            $button .= '<a href="' . $base_url . 'product/product/paysenz_deleteproduct/' . $record->product_id . '" class="btn btn-xs btn-danger " onclick="' . $jsaction . '"><i class="fa fa-trash"></i></a>';
+        }
 
-         $product_name = '<a href="'.$base_url.'product_details/'.$record->product_id.'">'.$record->product_name.'</a>';
-         $supplier = '<a href="'.$base_url.'supplier_ledgerinfo/'.$record->supplier_id.'">'.$record->supplier_name.'</a>';
-               
-         $data[] = array( 
-            'sl'               => $sl,
-            'product_name'     => $product_name,
-            'category'         => $record->category_name, // ✅ Replace product_model with category
-            'supplier_name'    => $supplier,
-            'price'            => $record->price,
-            'purchase_p'       => $record->supplier_price,
-            'image'            => $image,
-            'button'           => $button,
-            ); 
-            $sl++;
-         }
+        $button .= '  <a href="' . $base_url . 'qrcode/' . $record->product_id . '" class="btn btn-success btn-xs" data-toggle="tooltip" data-placement="left" title="' . display('qr_code') . '"><i class="fa fa-qrcode" aria-hidden="true"></i></a>';
 
-         ## Response
-         $response = array(
-            "draw" => intval($draw),
-            "iTotalRecords" => $totalRecordwithFilter,
-            "iTotalDisplayRecords" => $totalRecords,
-            "aaData" => $data
-         );
+        $button .= '  <a href="' . $base_url . 'barcode/' . $record->product_id . '" class="btn btn-warning btn-xs" data-toggle="tooltip" data-placement="left" title="' . display('barcode') . '"><i class="fa fa-barcode" aria-hidden="true"></i></a>';
 
-         return $response; 
+        if ($this->permission1->method('manage_product', 'update')->access()) {
+            $button .= ' <a href="' . $base_url . 'product_form/' . $record->product_id . '" class="btn btn-info btn-xs" data-toggle="tooltip" data-placement="left" title="' . display('update') . '"><i class="fa fa-pencil" aria-hidden="true"></i></a>';
+        }
+
+        // ✅ FIXED: Parentheses () only if `product_model` exists
+        $product_name_display = trim($record->product_model) ? 
+            $record->product_name . " (" . trim($record->product_model) . ")" : 
+            $record->product_name;
+
+        $product_name = '<a href="' . $base_url . 'product_details/' . $record->product_id . '">' . $product_name_display . '</a>';
+        $supplier = '<a href="' . $base_url . 'supplier_ledgerinfo/' . $record->supplier_id . '">' . $record->supplier_name . '</a>';
+
+        error_log("Product: " . $record->product_name . " | Model: " . $record->product_model); // Debugging
+
+        $data[] = array(
+            'sl' => $sl,
+            'product_name' => $product_name,
+            'category' => $record->category_name, // ✅ Display Category
+            'supplier_name' => $supplier,
+            'price' => $record->price,
+            'purchase_p' => $record->supplier_price,
+            'image' => $image,
+            'button' => $button,
+        );
+        $sl++;
     }
 
+    ## Response
+    $response = array(
+        "draw" => intval($draw),
+        "iTotalRecords" => $totalRecordwithFilter,
+        "iTotalDisplayRecords" => $totalRecords,
+        "aaData" => $data
+    );
+
+    return $response;
+}
     public function delete_product($id){
     $this->db->where('product_id', $id)
             ->delete("supplier_product");

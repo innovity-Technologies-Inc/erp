@@ -51,10 +51,14 @@
          if($gui_p != 'gui_pos'){
          ?>    
                 <ol class="breadcrumb">
-                <li><a href="#"><i class="pe-7s-home"></i> <?php echo display('home') ?></a></li>
-                <li><a href="#"><?php echo $module; ?></a></li>
-                <li class="active"><?php echo $title; ?></li>
-            </ol>
+                    <li><a href="#"><i class="pe-7s-home"></i> <?php echo display('home') ?></a></li>
+                    <li>
+                        <a href="#">
+                            <?php echo ($module == 'customer') ? 'Merchant' : $module; ?>
+                        </a>
+                    </li>
+                    <li class="active"><?php echo $title; ?></li>
+                </ol>
             <?php }?>
 
                     <!-- load messages -->
@@ -138,61 +142,68 @@
 
  
 
-    <div class="modal fade modal-success" id="cust_info" role="dialog">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            
-                            <a href="#" class="close" data-dismiss="modal">&times;</a>
-                            <h3 class="modal-title"><?php echo display('add_new_customer') ?></h3>
-                        </div>
-                        
-                        <div class="modal-body">
-                            <div id="customeMessage" class="alert hide"></div>
-                       <?php echo form_open('invoice/invoice/instant_customer', array('class' => 'form-vertical', 'id' => 'newcustomer')) ?>
-                    <div class="panel-body">
- <input type ="hidden" name="csrf_test_name" id="" value="<?php echo $this->security->get_csrf_hash();?>">
-                        <div class="form-group row">
-                            <label for="customer_name" class="col-sm-4 col-form-label"><?php echo display('customer_name') ?> <i class="text-danger">*</i></label>
-                            <div class="col-sm-6">
-                                <input class="form-control" name ="customer_name" id="m_customer_name" type="text" placeholder="<?php echo display('customer_name') ?>"  required="" tabindex="1">
-                            </div>
-                        </div>
+  <div class="modal fade modal-success" id="cust_info" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <a href="#" class="close" data-dismiss="modal">&times;</a>
+                <h3 class="modal-title"><?php echo display('add_new_customer') ?></h3>
+            </div>
+            
+            <div class="modal-body">
+                <div id="customeMessage" class="alert hide"></div>
+                <?php echo form_open('invoice/invoice/instant_customer', array('class' => 'form-vertical', 'id' => 'newcustomer')) ?>
+                <div class="panel-body">
+                    <input type="hidden" name="csrf_test_name" value="<?php echo $this->security->get_csrf_hash();?>">
 
-                        <div class="form-group row">
-                            <label for="email" class="col-sm-4 col-form-label"><?php echo display('customer_email') ?></label>
-                            <div class="col-sm-6">
-                                <input class="form-control" name ="email" id="email" type="email" placeholder="<?php echo display('customer_email') ?>" tabindex="2"> 
-                            </div>
+                    <div class="form-group row">
+                        <label for="customer_name" class="col-sm-4 col-form-label">
+                            <?php echo display('customer_name') ?> <i class="text-danger">*</i>
+                        </label>
+                        <div class="col-sm-6">
+                            <input class="form-control" name="customer_name" id="m_customer_name" type="text"
+                                placeholder="<?php echo display('customer_name') ?>" required tabindex="1">
                         </div>
-
-                        <div class="form-group row">
-                            <label for="mobile" class="col-sm-4 col-form-label"><?php echo display('customer_mobile') ?></label>
-                            <div class="col-sm-6">
-                                <input class="form-control" name ="mobile" id="mobile" type="number" placeholder="<?php echo display('customer_mobile') ?>" min="0" tabindex="3">
-                            </div>
-                        </div>
-
-                        <div class="form-group row">
-                            <label for="address " class="col-sm-4 col-form-label"><?php echo display('customer_address') ?></label>
-                            <div class="col-sm-6">
-                                <textarea class="form-control" name="address" id="address " rows="3" placeholder="<?php echo display('customer_address') ?>" tabindex="4"></textarea>
-                            </div>
-                        </div>
-                      
                     </div>
-                    
-                        </div>
 
-                        <div class="modal-footer">
-                            
-                            <a href="#" class="btn btn-danger" tabindex="5" data-dismiss="modal">Close</a>
-                            
-                            <input type="submit" tabindex="6" class="btn btn-success" value="Submit">
+                    <div class="form-group row">
+                        <label for="mobile" class="col-sm-4 col-form-label">
+                            <?php echo display('customer_mobile') ?> <i class="text-danger">*</i>
+                        </label>
+                        <div class="col-sm-6">
+                            <input class="form-control" name="mobile" id="mobile" type="number"
+                                placeholder="<?php echo display('customer_mobile') ?>" min="0" required tabindex="3">
                         </div>
-                        <?php echo form_close() ?>
-                    </div><!-- /.modal-content -->
-                </div><!-- /.modal-dialog -->
-            </div><!-- /.modal -->
+                    </div>
+
+                    <div class="form-group row">
+                        <label for="email" class="col-sm-4 col-form-label"><?php echo display('customer_email') ?></label>
+                        <div class="col-sm-6">
+                            <input class="form-control" name="email" id="email" type="email"
+                                placeholder="<?php echo display('customer_email') ?>" tabindex="2">
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <label for="address" class="col-sm-4 col-form-label">
+                            <?php echo display('customer_address') ?>
+                        </label>
+                        <div class="col-sm-6">
+                            <textarea class="form-control" name="address" id="address" rows="3"
+                                placeholder="<?php echo display('customer_address') ?>" tabindex="4"></textarea>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <a href="#" class="btn btn-danger" tabindex="5" data-dismiss="modal">Close</a>
+                <input type="submit" tabindex="6" class="btn btn-success" value="Submit">
+            </div>
+            <?php echo form_close() ?>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
     </body>
 </html>
