@@ -28,7 +28,7 @@
                      </div>
                      <label for="customer_mobile"
                          class="col-sm-2 text-right col-form-label"><?php echo display('mobile_no')?> <i
-                             class="text-danger"> </i>:</label>
+                             class="text-danger"> * </i>:</label>
                      <div class="col-sm-4">
                          <div class="">
 

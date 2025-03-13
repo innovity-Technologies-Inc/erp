@@ -912,48 +912,63 @@ $(document).ready(function(){
 
       
 $(document).ready(function() {
-        "use strict";
- $("#newcustomer").submit(function(e){
-        e.preventDefault();
-        var customeMessage   = $("#customeMessage");
-        var customer_id      = $("#autocomplete_customer_id");
-        var customer_name    = $("#customer_name");
-        $.ajax({
-            url: $(this).attr('action'),
-            method: $(this).attr('method'),
-            dataType: 'json',
-            data: $(this).serialize(),
-            beforeSend: function()
-            {
-                customeMessage.removeClass('hide');
-               
-            },
-            success: function(data)
-            {
-                if (data.status == true) {
-                    toastr["success"](data.message);
-                    customer_id.val(data.customer_id);
-                    customer_name.val(data.customer_name);
-                     $("#cust_info").modal('hide');
-                } else {
-                    toastr["error"](data.exception);
-                }
-            },
-            error: function(xhr)
-            {
-                alert('failed!');
-            }
+  "use strict";
+  
+  $("#newcustomer").submit(function(e) {
+      e.preventDefault();
+      var customeMessage = $("#customeMessage");
+      var customer_id = $("#autocomplete_customer_id");
+      var customer_name = $("#m_customer_name"); // Updated ID
+      var mobile = $("#mobile");
 
-        });
+      // Manual validation check
+      if ($.trim(customer_name.val()) === "") {
+          toastr["error"]("Customer name is required");
+          customer_name.focus();
+          return false;
+      }
 
-    });
- });
+      if ($.trim(mobile.val()) === "") {
+          toastr["error"]("Customer mobile number is required");
+          mobile.focus();
+          return false;
+      }
+
+      $.ajax({
+          url: $(this).attr('action'),
+          method: $(this).attr('method'),
+          dataType: 'json',
+          data: $(this).serialize(),
+          beforeSend: function() {
+              customeMessage.removeClass('hide');
+          },
+          success: function(data) {
+              if (data.status == true) {
+                  toastr["success"](data.message);
+
+                  // Insert data into add_invoice_form
+                  $("#customer_name").val(data.customer_name);  // Update customer name
+                  $("#customer_phone").val(data.mobile); // Update customer mobile
+
+                  // Close the modal
+                  $("#cust_info").modal('hide');
+              } else {
+                  toastr["error"](data.exception);
+              }
+          },
+          error: function(xhr) {
+              alert('failed!');
+          }
+      });
+  });
+});
 
 
   function customer_form(){
         var form          = $("#customer_form");
         var custome_id    = $("#customer_id").val();
         var customer_name = $("#customer_name").val();
+        var customer_mobile = $("#customer_mobile").val();
          var base_url     = $("#base_url").val();
         if(custome_id !==''){
           var form_url = base_url+'edit_customer/'+custome_id;
@@ -968,6 +983,12 @@ $(document).ready(function() {
         }, 500);
         return false;
     }
+    // Validate Customer Mobile
+    if (customer_mobile == '') {
+      $("#customer_mobile").focus();
+      toastr["error"]("Customer mobile number is required");
+      return false;
+  }
        
         $.ajax({
             url : form_url,

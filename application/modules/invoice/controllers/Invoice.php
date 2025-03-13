@@ -1662,19 +1662,28 @@ public function paysenz_customer_autocomplete() {
 }
 
      /*product autocomple search*/
-        public function paysenz_autocomplete_product(){
-        $product_name   = $this->input->post('product_name',TRUE);
-        $product_info   = $this->invoice_model->autocompletproductdata($product_name);
-       if(!empty($product_info)){
-        $list[''] = '';
-        foreach ($product_info as $value) {
-            $json_product[] = array('label'=>$value['product_name'].'('.$value['product_model'].')','value'=>$value['product_id']);
-        } 
-    }else{
-        $json_product[] = 'No Product Found';
-        }
-        echo json_encode($json_product);
+     public function paysenz_autocomplete_product() {
+        $product_name = $this->input->post('product_name', TRUE);
+        $product_info = $this->invoice_model->autocompletproductdata($product_name);
     
+        $json_product = [];
+    
+        if (!empty($product_info)) {
+            foreach ($product_info as $value) {
+                // Check if product_model is empty or null
+                if (!empty(trim($value['product_model']))) {
+                    $product_label = $value['product_name'] . ' (' . trim($value['product_model']) . ')';
+                } else {
+                    $product_label = $value['product_name']; // No empty parentheses
+                }
+    
+                $json_product[] = array('label' => $product_label, 'value' => $value['product_id']);
+            }
+        } else {
+            $json_product[] = array('label' => 'No Product Found', 'value' => '');
+        }
+    
+        echo json_encode($json_product);
     }
      
      /*after selecting product retrieve product info*/
@@ -1683,6 +1692,7 @@ public function paysenz_customer_autocomplete() {
         $product_info = $this->invoice_model->get_total_product_invoic($product_id);
         echo json_encode($product_info);
         }
+        
         public function paysenz_batchwise_productprice() {
         $product_id   = $this->input->post('prod_id',TRUE);
         $batch_no   = $this->input->post('batch_no',TRUE);

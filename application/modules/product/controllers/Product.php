@@ -380,6 +380,10 @@ class Product extends MX_Controller {
     public function CheckProductList(){
         $postData = $this->input->post();
         $data = $this->product_model->getProductList($postData);
+
+        // ✅ Debugging in controller
+    log_message('error', 'Controller Product Name: ' . print_r($data, true));
+
         echo json_encode($data);
     } 
 

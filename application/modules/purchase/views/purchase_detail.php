@@ -28,7 +28,7 @@
             <div class="panel-body " id="printableArea">
 
                 <div class="row print-font-size purchasedetails-header">
-
+        <!-- Purchase Tracked -->
                     <div class="col-xs-4 ">
                         <?php foreach($company_info as $cominfo){?>
                         <img src="<?php
@@ -141,11 +141,18 @@
                             <?php foreach($purchase_all_data as $details){?>
                             <tr>
                                 <td class="text-center"><?php echo $details['sl']?></td>
-                                <td class="comp-web text-center">
-    
-                                    <?php echo $details['product_name'].' -('.$details['product_model'].')'?>
-    
-                                </td>
+                                <td class="text-center">
+                                        <div>
+                                            <span class="comp-web">
+                                                <?php
+                                                echo $details['product_name'];
+                                                if (!empty(trim($details['product_model']))) {
+                                                    echo " - (" . $details['product_model'] . ")";
+                                                }
+                                                ?>
+                                            </span>
+                                        </div>
+                                    </td>
                                 <td class="text-right comp-web"><?php echo $details['quantity']?></td>
                                 <td class="text-right comp-web">
                                     <?php echo (($position==0)?$currency.' '.$details['rate']:$details['rate'].' '.$currency) ?>

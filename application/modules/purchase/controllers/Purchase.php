@@ -443,17 +443,28 @@ public function paysenz_purchase_edit_form($purchase_id = null){
 	}
 
     public function paysenz_product_search_by_supplier() {
-        $supplier_id = $this->input->post('supplier_id',TRUE);
-        $product_name = $this->input->post('product_name',TRUE);
+        $supplier_id = $this->input->post('supplier_id', TRUE);
+        $product_name = $this->input->post('product_name', TRUE);
         $product_info = $this->purchase_model->product_search_item($supplier_id, $product_name);
-        if(!empty($product_info)){
-        $list[''] = '';
-        foreach ($product_info as $value) {
-            $json_product[] = array('label'=>$value['product_name'].'('.$value['product_model'].')','value'=>$value['product_id']);
-        } 
-    }else{
-        $json_product[] = 'No Product Found';
+    
+        $json_product = [];
+    
+        if (!empty($product_info)) {
+            foreach ($product_info as $value) {
+                $product_model = trim($value['product_model']);
+                $product_label = !empty($product_model) 
+                    ? "{$value['product_name']} ({$product_model})" 
+                    : $value['product_name']; // ✅ Remove empty parentheses
+    
+                $json_product[] = [
+                    'label' => $product_label,
+                    'value' => $value['product_id']
+                ];
+            }
+        } else {
+            $json_product[] = ['label' => 'No Product Found', 'value' => ''];
         }
+    
         echo json_encode($json_product);
     }
 
