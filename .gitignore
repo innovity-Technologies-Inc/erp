@@ -8,6 +8,7 @@ assets/data/.DS_Store
 # Ignore logs
 application/logs/*.log
 application/logs/log-*.php
+application/cache/temp/*
 
 # DB Config
 application/config/database.php
