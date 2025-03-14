@@ -239,46 +239,7 @@
     // ******* new payment add start *******
     $(document).on('click','#add_new_payment_type',function(){
       var base_url = $('#base_url').val();
-      var csrf_test_name = $('[name="csrf_test_name"]').val();
-      var gtotal=$("#paidAmount").val();
-      
-      var total = 0;
-      $( ".pay" ).each( function(){
-        total += parseFloat( $( this ).val() ) || 0;
-      });
-      var is_credit_edit = $('#is_credit_edit').val();
-      if(total>=gtotal){
-        alert("Paid amount is exceed to Total amount.");
-       
-        return false;
-      }
-        
-      var url= base_url + "purchase/purchase/paysenz_showpaymentmodal";
-      $.ajax({
-        type: "post",
-        url: url,
-        data:{is_credit_edit:is_credit_edit, csrf_test_name:csrf_test_name},
-        success: function(data) {
-          
-          $($('#add_new_payment').append(data));
-          var length = $(".number").length;
-          var total3 = 0;
-          $( ".pay" ).each( function(){
-            total3 += parseFloat( $( this ).val() ) || 0;
-          });
-
-          var nextamnt = gtotal -total3;
-
-
-          $(".number:eq("+(length-1)+")").val(nextamnt.toFixed(2,2));
-          var total2 = 0;
-          $( ".number" ).each( function(){
-            total2 += parseFloat( $( this ).val() ) || 0;
-          });
-          var dueamnt = parseFloat(gtotal) - total2
-          
-        }
-      }); 
+      window.location.href = base_url + "add_payment_method"; // ✅ Redirects always
     });
 
 

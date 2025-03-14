@@ -1496,3 +1496,65 @@ function delivery_note(sl){
     }); 
   
 }
+
+// --------------
+document.addEventListener("DOMContentLoaded", function () {
+  let parentSelect = document.getElementById("parent_id");
+  let categoryNameInput = document.getElementById("category_name");
+  let categoryLabelText = document.getElementById("category_name_text");
+  let categoryLabel = document.getElementById("category_name_label");
+  let finalCategoryInput = document.getElementById("final_category_name");
+
+  let defaultCategoryName = categoryLabel.getAttribute("data-default-name");
+
+  function updateCategoryLabel() {
+      let selectedOption = parentSelect.options[parentSelect.selectedIndex];
+      let parentCategory = selectedOption.getAttribute("data-name") || "";
+
+      // ✅ Prevent duplicate appending of parent category
+      categoryLabelText.textContent = parentCategory 
+          ? `${defaultCategoryName} (${parentCategory} ->)` 
+          : defaultCategoryName;
+  }
+
+  function updateFinalCategoryName() {
+      let selectedOption = parentSelect.options[parentSelect.selectedIndex];
+      let parentCategory = selectedOption.getAttribute("data-name") || "";
+      let subCategory = categoryNameInput.value.trim();
+
+      // ✅ Prevent duplicate parent name in final category
+      if (parentCategory && subCategory) {
+          finalCategoryInput.value = parentCategory.includes(subCategory) 
+              ? parentCategory 
+              : parentCategory + "->" + subCategory;
+      } else {
+          finalCategoryInput.value = subCategory;
+      }
+  }
+
+  parentSelect.addEventListener("change", function () {
+      updateCategoryLabel();
+      updateFinalCategoryName();
+  });
+
+  categoryNameInput.addEventListener("input", function () {
+      updateFinalCategoryName();
+  });
+
+  // Initialize on load
+  updateCategoryLabel();
+  updateFinalCategoryName();
+});
+
+document.addEventListener("DOMContentLoaded", function () {
+  setTimeout(function() {
+      $(".alert").fadeOut("slow");
+  }, 5000); // Auto-hide messages after 5 seconds
+
+  // Clear session storage after 5 seconds
+  setTimeout(function () {
+      sessionStorage.removeItem('lastMessage');
+      sessionStorage.removeItem('lastError');
+      sessionStorage.removeItem('lastValidationError');
+  }, 5500);
+});

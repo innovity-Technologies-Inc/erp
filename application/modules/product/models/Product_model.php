@@ -9,18 +9,27 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Product_model extends CI_Model {
 
-    public function get_category_level($category_id, $level = 0) {
-        if ($category_id == NULL) {
-            return $level; // Return depth level
+    public function get_category_level($category_id, $level = 1) {
+        if ($category_id == 0 || empty($category_id)) {
+            return 1; // Root level
         }
-        $parent = $this->db->select('parent_id')
-                           ->where('category_id', $category_id)
-                           ->get('product_category')
-                           ->row();
-        if ($parent && $parent->parent_id != NULL) {
-            return $this->get_category_level($parent->parent_id, $level + 1);
+    
+        // Fetch parent ID
+        $this->db->select('parent_id');
+        $this->db->from('product_category');
+        $this->db->where('category_id', $category_id);
+        $query = $this->db->get();
+    
+        if ($query->num_rows() > 0) {
+            $parent_id = $query->row()->parent_id;
+    
+            // If parent exists, recursively check the level
+            if (!empty($parent_id)) {
+                return $this->get_category_level($parent_id, $level + 1);
+            }
         }
-        return $level + 1;
+    
+        return $level;
     }
 
     # ✅ Fetch All Categories for Parent Dropdown (Excluding Current)
@@ -423,6 +432,40 @@ public function check_product($id){
             ->get()
             ->result_array();
     }
+
+// New Function added by Faiz
+public function get_category_name($category_id) {
+    if ($category_id == 0 || empty($category_id)) {
+        return null;
+    }
+
+    // Fetch category details
+    $this->db->select('category_name, parent_id');
+    $this->db->from('product_category');
+    $this->db->where('category_id', $category_id);
+    $query = $this->db->get();
+
+    if ($query->num_rows() > 0) {
+        $category = $query->row();
+
+        // ✅ Fetch only the immediate parent's name, NOT full hierarchy
+        return $category->category_name;
+    }
+
+    return null;
+}
+
+public function is_duplicate_category($category_name) {
+    $this->db->select('category_id');
+    $this->db->from('product_category');
+    $this->db->where('category_name', $category_name);
+    $query = $this->db->get();
+
+    // ✅ Return true if a duplicate is found
+    return ($query->num_rows() > 0);
+}
+
+// New Function End
 
      public function product_purchase_info($product_id) {
         $this->db->select('a.*,b.*,sum(b.quantity) as quantity,sum(b.total_amount) as total_amount,c.supplier_name');

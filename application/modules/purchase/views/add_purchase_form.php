@@ -101,8 +101,7 @@
                                 <th class="text-center invoice_fields"><?php echo display('fixed_dis') ?> </th>
                                 <?php } ?>
                                 <th class="text-center invoice_fields"><?php echo display('dis_val') ?> </th>
-                                <th class="text-center invoice_fields"><?php echo display('vat').' %' ?> </th>
-                                <th class="text-center invoice_fields"><?php echo display('vat_val') ?> </th>
+                                
                                 <th class="text-center"><?php echo display('total') ?></th>
                                 <th class="text-center"><?php echo display('action') ?></th>
                             </tr>
@@ -164,18 +163,8 @@
                                 </td>
                                 <!-- Discount end-->
                                 <!-- VAT  start-->
-                                <td>
-                                    <input type="text" name="vatpercent[]" onkeyup="calculate_store(1);"
-                                        onchange="calculate_store(1);" id="vat_percent_1"
-                                        class="form-control text-right" min="0" tabindex="13" placeholder="0.00" />
-
-
-                                </td>
-                                <td>
-                                    <input type="text" name="vatvalue[]" id="vat_value_1"
-                                        class="form-control text-right total_vatamnt" min="0" tabindex="14"
-                                        placeholder="0.00" readonly />
-                                </td>
+                               
+                                
                                 <!-- VAT  end-->
 
                                 <td class="text-right">
@@ -199,7 +188,7 @@
                         <tfoot>
                             <tr>
 
-                                <td class="text-right" colspan="10"><b><?php echo display('total') ?>:</b></td>
+                                <td class="text-right" colspan="8"><b><?php echo display('total') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="Total" class="text-right form-control" name="total"
                                         value="0.00" readonly="readonly" />
@@ -214,7 +203,7 @@
                             </tr>
                             <tr>
 
-                                <td class="text-right" colspan="10"><b><?php echo display('purchase_discount') ?>:</b>
+                                <td class="text-right" colspan="8"><b><?php echo display('purchase_discount') ?>:</b>
                                 </td>
                                 <td class="text-right">
                                     <input type="text" id="discount" class="text-right form-control discount total_discount_val"
@@ -226,14 +215,14 @@
                                 </td>
                             </tr>
                             <tr>
-                                <td class="text-right" colspan="10"><b><?php echo display('total_discount') ?>:</b></td>
+                                <td class="text-right" colspan="8"><b><?php echo display('total_discount') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="total_discount_ammount" class="form-control text-right"
                                         name="total_discount" value="0.00" readonly="readonly" />
                                 </td>
                             </tr>
                             <tr>
-                                <td class="text-right" colspan="10"><b><?php echo display('ttl_val') ?>:</b></td>
+                                <td class="text-right" colspan="8"><b><?php echo display('ttl_val') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="total_vat_amnt" class="form-control text-right"
                                         name="total_vat_amnt" value="0.00" readonly="readonly" />
@@ -242,7 +231,7 @@
 
                             <tr>
 
-                                <td class="text-right" colspan="10"><b><?php echo display('grand_total') ?>:</b></td>
+                                <td class="text-right" colspan="8"><b><?php echo display('grand_total') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="grandTotal" class="text-right form-control grandTotalamnt"
                                         name="grand_total_price" placeholder="0.00" value="00" readonly />
@@ -251,7 +240,7 @@
                             </tr>
                             <tr>
 
-                                <td class="text-right" colspan="10"><b><?php echo display('paid_amount') ?>:</b></td>
+                                <td class="text-right" colspan="8"><b><?php echo display('paid_amount') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="paidAmount" class="text-right form-control"
                                         onKeyup="invoice_paidamount()" name="paid_amount" placeholder="0.00" value="" />
@@ -260,7 +249,7 @@
                             </tr>
                             <tr>
                                 
-                                <td class="text-right" colspan="10"><b><?php echo display('due_amount') ?>:</b></td>
+                                <td class="text-right" colspan="8"><b><?php echo display('due_amount') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="dueAmmount" class="text-right form-control" name="due_amount"
                                         value="0.00" readonly="readonly" />
