@@ -203,175 +203,119 @@ public function paysenz_purchase_edit_form($purchase_id = null){
     
     
     public function paysenz_update_purchase() {
-    $purchase_id  = $this->input->post('purchase_id',TRUE);
-    $dbpurs_id    = $this->input->post('dbpurs_id',TRUE);
-    $this->form_validation->set_rules('supplier_id', display('supplier') ,'required|max_length[15]');
-    $this->form_validation->set_rules('chalan_no', display('invoice_no') ,'required|max_length[20]');
-    $this->form_validation->set_rules('product_id[]',display('product'),'required|max_length[20]');
-    $this->form_validation->set_rules('multipaytype[]',display('payment_type'),'required');
-    $this->form_validation->set_rules('product_quantity[]',display('quantity'),'required|max_length[20]');
-    $this->form_validation->set_rules('product_rate[]',display('rate'),'required|max_length[20]');
-    $finyear = $this->input->post('finyear',true);
-    if($finyear<=0){
-        $this->session->set_flashdata('exception', 'Please Create Financial Year First');
-        redirect("add_purchase");
-    }else {
-
-        if ($this->form_validation->run() === true) {
-            
-            $paid_amount  = $this->input->post('paid_amount',TRUE);
-            $due_amount   = $this->input->post('due_amount',TRUE);
-            $bank_id      = $this->input->post('bank_id',TRUE);
-                if(!empty($bank_id)){
-            $bankname = $this->db->select('bank_name')->from('bank_add')->where('bank_id',$bank_id)->get()->row()->bank_name;
-            $bankcoaid   = $this->db->select('HeadCode')->from('acc_coa')->where('HeadName',$bankname)->get()->row()->HeadCode;
-            }
-            $p_id        = $this->input->post('product_id',TRUE);
-            $supplier_id = $this->input->post('supplier_id',TRUE);
-            $supinfo     = $this->db->select('*')->from('supplier_information')->where('supplier_id',$supplier_id)->get()->row();
-            $sup_head    = $supinfo->supplier_id.'-'.$supinfo->supplier_name;
-            $sup_coa     = $this->db->select('*')->from('acc_coa')->where('HeadName',$sup_head)->get()->row();
-            $receive_by  = $this->session->userdata('id');
-            $receive_date= date('Y-m-d');
-            $createdate  = date('Y-m-d H:i:s');
-            $multipayamount = $this->input->post('pamount_by_method',TRUE);
-            $multipaytype = $this->input->post('multipaytype',TRUE);
-
-            if ($multipaytype[0] == 0) {
-                $is_credit = 1;
-            }
-            else {
-                $is_credit = '';
-            }
-            $data = array(
-                'purchase_id'        => $purchase_id,
-                'chalan_no'          => $this->input->post('chalan_no',TRUE),
-                'supplier_id'        => $this->input->post('supplier_id',TRUE),
-                'grand_total_amount' => $this->input->post('grand_total_price',TRUE),
-                'total_discount'     => $this->input->post('discount',TRUE),
-                'invoice_discount'   => $this->input->post('total_discount',TRUE),
-                'total_vat_amnt'     => $this->input->post('total_vat_amnt',TRUE),
-                'purchase_date'      => $this->input->post('purchase_date',TRUE),
-                'purchase_details'   => $this->input->post('purchase_details',TRUE),
-                'paid_amount'        => $paid_amount,
-                'due_amount'         => $due_amount,
-                'bank_id'           =>  $this->input->post('bank_id',TRUE),
-                'payment_type'       =>  1,
-                'is_credit'          =>  $is_credit,
-            );
-        
-            
-            $predefine_account  = $this->db->select('*')->from('acc_predefine_account')->get()->row();
-            $Narration          = "Purchase Voucher";
-            $Comment            = "Purchase Voucher for supplier";
-            $COAID              = $predefine_account->purchaseCode;
-
-            if ($purchase_id != '') {
-                $this->db->where('id', $dbpurs_id);
-                $this->db->update('product_purchase', $data);
-
-                //account transaction update
-                $this->db->where('referenceNo', $purchase_id);
-                $this->db->delete('acc_vaucher');
-
-                $this->db->where('purchase_id', $dbpurs_id);
-                $this->db->delete('product_purchase_details');
-            }
-
-
-            $multipayamount = $this->input->post('pamount_by_method',TRUE);
-            $multipaytype = $this->input->post('multipaytype',TRUE);
-            
-            if($multipaytype && $multipayamount){
-
-                if ($multipaytype[0] == 0) {
-                    
-                    $amount_pay = $data['grand_total_amount'];
-                    $amnt_type = 'Credit';
-                    $reVID     = $predefine_account->supplierCode;
-                    $subcode   = $this->db->select('*')->from('acc_subcode')->where('referenceNo', $supplier_id)->where('subTypeId', 4)->get()->row()->id;
-                    $insrt_pay_amnt_vcher = $this->insert_purchase_debitvoucher($is_credit,$purchase_id,$COAID,$amnt_type,$amount_pay,$Narration,$Comment,$reVID,$subcode);
-
-                }else {
-                    $amnt_type = 'Debit';
-                    for ($i=0; $i < count($multipaytype); $i++) {
-
-                        $reVID = $multipaytype[$i];
-                        $amount_pay = $multipayamount[$i];
-
-                        $insrt_pay_amnt_vcher = $this->insert_purchase_debitvoucher($is_credit,$purchase_id,$COAID,$amnt_type,$amount_pay,$Narration,$Comment,$reVID);
-                        
+        $purchase_id  = $this->input->post('purchase_id', TRUE);
+        $dbpurs_id    = $this->input->post('dbpurs_id', TRUE);
+    
+        $this->form_validation->set_rules('supplier_id', display('supplier'), 'required|max_length[15]');
+        $this->form_validation->set_rules('chalan_no', display('invoice_no'), 'required|max_length[20]');
+        $this->form_validation->set_rules('product_id[]', display('product'), 'required|max_length[20]');
+        $this->form_validation->set_rules('multipaytype[]', display('payment_type'), 'required');
+        $this->form_validation->set_rules('product_quantity[]', display('quantity'), 'required|max_length[20]');
+        $this->form_validation->set_rules('product_rate[]', display('rate'), 'required|max_length[20]');
+    
+        $finyear = $this->input->post('finyear', true);
+        if ($finyear <= 0) {
+            $this->session->set_flashdata('exception', 'Please Create Financial Year First');
+            redirect("add_purchase");
+        } else {
+            if ($this->form_validation->run() === true) {
+                $paid_amount  = $this->input->post('paid_amount', TRUE);
+                $due_amount   = $this->input->post('due_amount', TRUE);
+                $bank_id      = $this->input->post('bank_id', TRUE);
+    
+                if (!empty($bank_id)) {
+                    $bankname = $this->db->select('bank_name')->from('bank_add')->where('bank_id', $bank_id)->get()->row()->bank_name;
+                    $bankcoaid = $this->db->select('HeadCode')->from('acc_coa')->where('HeadName', $bankname)->get()->row()->HeadCode;
+                }
+    
+                $p_id        = $this->input->post('product_id', TRUE);
+                $supplier_id = $this->input->post('supplier_id', TRUE);
+                $supinfo     = $this->db->select('*')->from('supplier_information')->where('supplier_id', $supplier_id)->get()->row();
+                $sup_head    = $supinfo->supplier_id . '-' . $supinfo->supplier_name;
+                $sup_coa     = $this->db->select('*')->from('acc_coa')->where('HeadName', $sup_head)->get()->row();
+                $receive_by  = $this->session->userdata('id');
+                $receive_date = date('Y-m-d');
+                $createdate  = date('Y-m-d H:i:s');
+                $multipayamount = $this->input->post('pamount_by_method', TRUE);
+                $multipaytype = $this->input->post('multipaytype', TRUE);
+    
+                $is_credit = ($multipaytype[0] == 0) ? 1 : '';
+    
+                $data = array(
+                    'purchase_id'        => $purchase_id,
+                    'chalan_no'          => $this->input->post('chalan_no', TRUE),
+                    'supplier_id'        => $this->input->post('supplier_id', TRUE),
+                    'grand_total_amount' => $this->input->post('grand_total_price', TRUE),
+                    'total_discount'     => $this->input->post('discount', TRUE),
+                    'invoice_discount'   => $this->input->post('total_discount', TRUE),
+                    'total_vat_amnt'     => $this->input->post('total_vat_amnt', TRUE),
+                    'purchase_date'      => $this->input->post('purchase_date', TRUE),
+                    'purchase_details'   => $this->input->post('purchase_details', TRUE),
+                    'paid_amount'        => $paid_amount,
+                    'due_amount'         => $due_amount,
+                    'bank_id'            => $this->input->post('bank_id', TRUE),
+                    'payment_type'       => 1,
+                    'is_credit'          => $is_credit,
+                );
+    
+                $predefine_account  = $this->db->select('*')->from('acc_predefine_account')->get()->row();
+                $Narration          = "Purchase Voucher";
+                $Comment            = "Purchase Voucher for supplier";
+                $COAID              = $predefine_account->purchaseCode;
+    
+                if ($purchase_id != '') {
+                    $this->db->where('id', $dbpurs_id);
+                    $this->db->update('product_purchase', $data);
+    
+                    // ✅ Delete old transactions before inserting new ones
+                    $this->db->where('referenceNo', $purchase_id);
+                    $this->db->delete('acc_vaucher');
+    
+                    $this->db->where('purchase_id', $dbpurs_id);
+                    $this->db->delete('product_purchase_details');
+                }
+    
+                // ✅ Reinsert purchase details
+                foreach ($p_id as $i => $product_id) {
+                    $data1 = array(
+                        'purchase_detail_id' => $this->generator(15),
+                        'purchase_id'        => $dbpurs_id,
+                        'product_id'         => $product_id,
+                        'quantity'           => isset($this->input->post('product_quantity', TRUE)[$i]) ? $this->input->post('product_quantity', TRUE)[$i] : 0,
+                        'rate'               => isset($this->input->post('product_rate', TRUE)[$i]) ? $this->input->post('product_rate', TRUE)[$i] : 0,
+                        'batch_id'           => isset($this->input->post('batch_no', TRUE)[$i]) ? $this->input->post('batch_no', TRUE)[$i] : '',
+                        'expiry_date'        => isset($this->input->post('expiry_date', TRUE)[$i]) ? $this->input->post('expiry_date', TRUE)[$i] : '',
+                        'total_amount'       => isset($this->input->post('total_price', TRUE)[$i]) ? $this->input->post('total_price', TRUE)[$i] : 0,
+                        'discount'           => isset($this->input->post('discount_per', TRUE)[$i]) ? $this->input->post('discount_per', TRUE)[$i] : 0,
+                        'discount_amnt'      => isset($this->input->post('discountvalue', TRUE)[$i]) ? $this->input->post('discountvalue', TRUE)[$i] : 0,
+                        'vat_amnt_per'       => isset($this->input->post('vatpercent', TRUE)[$i]) ? $this->input->post('vatpercent', TRUE)[$i] : 0,
+                        'vat_amnt'           => isset($this->input->post('vatvalue', TRUE)[$i]) ? $this->input->post('vatvalue', TRUE)[$i] : 0,
+                        'status'             => 1
+                    );
+    
+                    if ($data1['quantity'] > 0) {
+                        $this->db->insert('product_purchase_details', $data1);
                     }
                 }
-
-                
-            }
-
-            $rate         = $this->input->post('product_rate',TRUE);
-            $p_id         = $this->input->post('product_id',TRUE);
-            $quantity     = $this->input->post('product_quantity',TRUE);
-            $t_price      = $this->input->post('total_price',TRUE);
-            $expiry_date  = $this->input->post('expiry_date',TRUE);
-            $batch_no     = $this->input->post('batch_no',TRUE);
-            $discountvalue= $this->input->post('discountvalue',TRUE);
-            $vatpercent   = $this->input->post('vatpercent',TRUE);
-            $vatvalue     = $this->input->post('vatvalue',TRUE);
-            $discount_per = $this->input->post('discount_per',TRUE);
-
-            $discount = $this->input->post('discount',TRUE);
-
-            for ($i = 0, $n = count($p_id); $i < $n; $i++) {
-                $product_quantity = $quantity[$i];
-                $product_rate     = $rate[$i];
-                $product_id       = $p_id[$i];
-                $total_price      = $t_price[$i];
-                $disc             = $discount[$i];
-                $ba_no            = $batch_no[$i];
-                $exp_date         = $expiry_date[$i];
-                $dis_per          = $discount_per[$i];
-                $disval           = $discountvalue[$i];
-                $vatper           = $vatpercent[$i];
-                $vatval           = $vatvalue[$i];
-                
-
-                $data1 = array(
-                    'purchase_detail_id' => $this->generator(15),
-                    'purchase_id'        => $dbpurs_id,
-                    'product_id'         => $product_id,
-                    'quantity'           => $product_quantity,
-                    'rate'               => $product_rate,
-                    'batch_id'           => $ba_no,
-                    'expiry_date'        => $exp_date,
-                    'total_amount'       => $total_price,
-                    'discount'           => $dis_per,
-                    'discount_amnt'      => $disval,
-                    'vat_amnt_per'       => $vatper,
-                    'vat_amnt'           => $vatval,
-                    'status'             => 1
-                );
-
-                $product_price = array(
-
-                    'supplier_price' => $product_rate
-                );
-
-                if (($quantity)) {
-
-                    $this->db->insert('product_purchase_details', $data1);
-                    $this->db->where('product_id', $product_id)->update('supplier_product', $product_price);
+    
+                // ✅ Ensure auto-approval does not cause issues
+                $setting_data = $this->db->select('is_autoapprove_v')
+                    ->from('web_setting')
+                    ->where('setting_id', 1)
+                    ->get()
+                    ->result_array();
+    
+                if ($setting_data[0]['is_autoapprove_v'] == 1) {
+                    $this->load->model('purchase/Purchase_model'); // ✅ Load model
+                    $this->Purchase_model->autoapprove($purchase_id);
                 }
-            }
-            $setting_data = $this->db->select('is_autoapprove_v')->from('web_setting')->where('setting_id', 1)->get()->result_array();
-            if ($setting_data[0]['is_autoapprove_v'] == 1) {	
-                
-                $new = $this->autoapprove($purchase_id);
-            }
-            $this->session->set_flashdata('message', display('update_successfully'));
-            redirect("purchase_list");
+    
+                $this->session->set_flashdata('message', display('update_successfully'));
+                redirect("purchase_list");
             } else {
                 $this->session->set_flashdata('exception', validation_errors());
-                redirect("purchase_edit/".$purchase_id);
-            } 
+                redirect("purchase_edit/" . $purchase_id);
+            }
         }
     }
 

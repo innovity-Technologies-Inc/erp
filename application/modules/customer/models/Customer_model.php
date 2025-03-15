@@ -10,55 +10,50 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 class Customer_model extends CI_Model {
 
      
-   public function create($data = array())
-	{
-		$add_customer =  $this->db->insert('customer_information', $data);
+  public function create($data = array()) {
+    // Insert customer record
+    $add_customer =  $this->db->insert('customer_information', $data);
+    $customer_id = $this->db->insert_id();
 
-		 $customer_id = $this->db->insert_id();
-        $coa = $this->headcode();
-           if($coa->HeadCode!=NULL){
-                $headcode=$coa->HeadCode+1;
-           }else{
-                $headcode="113100000001";
-            }
-    $c_acc=$customer_id.'-'.$data['customer_name'];
-    $createby=$this->session->userdata('id');
-    $createdate=date('Y-m-d H:i:s');
-       
+    // Generate COA HeadCode
+    $coa = $this->headcode();
+    $headcode = ($coa->HeadCode != NULL) ? $coa->HeadCode + 1 : "113100000001";
+
+    $c_acc = $customer_id . '-' . $data['customer_name'];
+    $createby = $this->session->userdata('id');
+    $createdate = date('Y-m-d H:i:s');
 
     $customer_coa = [
-             'HeadCode'         => $headcode,
-             'HeadName'         => $c_acc,
-             'PHeadName'        => 'Merchants',
-             'HeadLevel'        => '4',
-             'IsActive'         => '1',
-             'IsTransaction'    => '1',
-             'IsGL'             => '0',
-             'HeadType'         => 'A',
-             'IsBudget'         => '0',
-             'IsDepreciation'   => '0',
-             'DepreciationRate' => '0',
-             'customer_id'      => $customer_id,
-             'CreateBy'         => $createby,
-             'CreateDate'       => $createdate,
-        ];
-        
-    $sub_acc = [
-             'subTypeId'   => 3,
-             'name'        => $data['customer_name'],
-             'referenceNo' => $customer_id,
-             'status'      => 1,
-             'created_date'=> date("Y-m-d"),
-             
-        ];
+        'HeadCode'         => $headcode,
+        'HeadName'         => $c_acc,
+        'PHeadName'        => 'Merchants',
+        'HeadLevel'        => '4',
+        'IsActive'         => '1',
+        'IsTransaction'    => '1',
+        'IsGL'             => '0',
+        'HeadType'         => 'A',
+        'IsBudget'         => '0',
+        'IsDepreciation'   => '0',
+        'DepreciationRate' => '0',
+        'customer_id'      => $customer_id,
+        'CreateBy'         => $createby,
+        'CreateDate'       => $createdate,
+    ];
 
-        if($add_customer){
-            $this->db->insert('acc_subcode',$sub_acc);
-        }
-        if(!empty($this->input->post('previous_balance'))){
-          }
-        return true;
-	}
+    $sub_acc = [
+        'subTypeId'   => 3,
+        'name'        => $data['customer_name'],
+        'referenceNo' => $customer_id,
+        'status'      => 1,
+        'created_date'=> date("Y-m-d"),
+    ];
+
+    if ($add_customer) {
+        $this->db->insert('acc_subcode', $sub_acc);
+    }
+
+    return true;
+}
 
 	public function customer_dropdown()
 	{
@@ -140,134 +135,159 @@ class Customer_model extends CI_Model {
     }
 
 
-      public function getCustomerList($postData=null){
+    public function getCustomerList($postData = null)
+{
+    log_message('error', 'DEBUG: getCustomerList() called.');
 
-         $response = array();
-         $customer_id =  $this->input->post('customer_id');
-         $custom_data = $this->input->post('customfiled');
-         if(!empty($custom_data)){
-         $cus_data = [''];
-         foreach ($custom_data as $cusd) {
-           $cus_data[] = $cusd;
-         }
-       }
-    
-         ## Read value
-         $draw = $postData['draw'];
-         $start = $postData['start'];
-         $rowperpage = $postData['length']; // Rows display per page
-         $columnIndex = $postData['order'][0]['column']; // Column index
-         $columnName = $postData['columns'][$columnIndex]['data']; // Column name
-         $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
-         $searchValue = $postData['search']['value']; // Search value
+    $response = array();
+    $customer_id = $this->input->post('customer_id');
+    $custom_data = $this->input->post('customfiled');
 
-         ## Search 
-         $searchQuery = "";
-         if($searchValue != ''){
-            $searchQuery = " (a.customer_name like '%".$searchValue."%' or a.customer_mobile like '%".$searchValue."%' or a.customer_email like '%".$searchValue."%'or a.phone like '%".$searchValue."%' or a.customer_address like '%".$searchValue."%' or a.country like '%".$searchValue."%' or a.state like '%".$searchValue."%' or a.zip like '%".$searchValue."%' or a.city like '%".$searchValue."%') ";
-         }
+    log_message('error', 'DEBUG: Received customer_id = ' . json_encode($customer_id));
+    log_message('error', 'DEBUG: Received customfiled = ' . json_encode($custom_data));
 
-         ## Total number of records without filtering
-         $this->db->select('count(*) as allcount');
-         $this->db->from('customer_information a');
-         $this->db->join('acc_coa b','a.customer_id = b.customer_id','left');
-         
-         if(!empty($customer_id)){
-             $this->db->where('a.customer_id',$customer_id);
-         }
-         if(!empty($custom_data)){
-             $this->db->where_in('a.customer_id',$cus_data);
-         }
-          if($searchValue != '')
-         $this->db->where($searchQuery);
-         $this->db->group_by('a.customer_id');
-         $totalRecords =$this->db->get()->num_rows();
+    if (!empty($custom_data)) {
+        $cus_data = [''];
+        foreach ($custom_data as $cusd) {
+            $cus_data[] = $cusd;
+        }
+    }
 
-         ## Total number of record with filtering
-         $this->db->select('count(*) as allcount');
-         $this->db->from('customer_information a');
-         $this->db->join('acc_coa b','a.customer_id = b.customer_id','left');
-         if(!empty($customer_id)){
-             $this->db->where('a.customer_id',$customer_id);
-         }
-          if(!empty($custom_data)){
-             $this->db->where_in('a.customer_id',$cus_data);
-         }
-         if($searchValue != '')
-            $this->db->where($searchQuery);
-           $this->db->group_by('a.customer_id');
-         $totalRecordwithFilter = $this->db->get()->num_rows();
+    ## Read value
+    $draw = $postData['draw'];
+    $start = $postData['start'];
+    $rowperpage = $postData['length']; // Rows display per page
+    $columnIndex = $postData['order'][0]['column']; // Column index
+    $columnName = $postData['columns'][$columnIndex]['data']; // Column name
+    $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
+    $searchValue = $postData['search']['value']; // Search value
 
-         ## Fetch records
-         $this->db->select("a.*, a.status, b.HeadCode,((SELECT IFNULL(SUM(Debit),0) FROM acc_transaction WHERE subCode= `s`.`id` AND subType = 3) - (SELECT IFNULL(SUM(Credit),0) FROM acc_transaction WHERE subCode= `s`.`id` AND subType = 3)) AS balance");
-         $this->db->from('customer_information a');
-         
-         $this->db->join('acc_coa b','a.customer_id = b.customer_id','left');
-         $this->db->join('acc_subcode s','a.customer_id = s.referenceNo','left');
-         $this->db->where('s.subTypeId',3);
+    log_message('error', 'DEBUG: Search Value = ' . $searchValue);
 
-         $this->db->group_by('a.customer_id');
-          if(!empty($customer_id)){
-             $this->db->where('a.customer_id',$customer_id);
-         }
-          if(!empty($custom_data)){
-             $this->db->where_in('a.customer_id',$cus_data);
-         }
-         if($searchValue != '')
-         $this->db->where($searchQuery);
-         $this->db->order_by($columnName, $columnSortOrder);
-         $this->db->limit($rowperpage, $start);
-         $records = $this->db->get()->result();
-         $data = array();
-         $sl =1;
+    ## Search Query
+    $searchQuery = "";
+    if ($searchValue != '') {
+        $searchQuery = " (a.customer_name LIKE '%" . $searchValue . "%' 
+                        OR a.customer_mobile LIKE '%" . $searchValue . "%' 
+                        OR a.customer_email LIKE '%" . $searchValue . "%'
+                        OR a.phone LIKE '%" . $searchValue . "%' 
+                        OR a.customer_address LIKE '%" . $searchValue . "%' 
+                        OR a.country LIKE '%" . $searchValue . "%' 
+                        OR a.state LIKE '%" . $searchValue . "%' 
+                        OR a.zip LIKE '%" . $searchValue . "%'
+                        OR a.sales_permit_number LIKE '%" . $searchValue . "%'
+                        OR a.email_address LIKE '%" . $searchValue . "%')";
+    }
+
+    ## Total records count without filter
+    log_message('error', 'DEBUG: Counting total records...');
+    $this->db->select('count(*) as allcount');
+    $this->db->from('customer_information a');
+    $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
+
+    if (!empty($customer_id)) {
+        $this->db->where('a.customer_id', $customer_id);
+    }
+    if (!empty($custom_data)) {
+        $this->db->where_in('a.customer_id', $cus_data);
+    }
+    if ($searchValue != '') {
+        $this->db->where($searchQuery);
+    }
+    $this->db->group_by('a.customer_id');
+    $totalRecords = $this->db->get()->num_rows();
+    log_message('error', 'DEBUG: Total Records = ' . $totalRecords);
+
+    ## Fetch filtered records
+    log_message('error', 'DEBUG: Fetching filtered records...');
+    $this->db->select("
+        a.customer_id, 
+        a.customer_name, 
+        a.customer_address, 
+        a.customer_mobile, 
+        a.customer_email, 
+        a.email_address AS vat_no, 
+        a.sales_permit_number, 
+        a.sales_permit, 
+        a.zip, 
+        a.country, 
+        a.status, 
+        ((SELECT IFNULL(SUM(Debit),0) FROM acc_transaction WHERE subCode= `s`.`id` AND subType = 3) - 
+         (SELECT IFNULL(SUM(Credit),0) FROM acc_transaction WHERE subCode= `s`.`id` AND subType = 3)) AS balance
+    ");
+    $this->db->from('customer_information a');
+    $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
+    $this->db->join('acc_subcode s', 'a.customer_id = s.referenceNo', 'left');
+    $this->db->where('s.subTypeId', 3);
+
+    if (!empty($customer_id)) {
+        $this->db->where('a.customer_id', $customer_id);
+    }
+    if (!empty($custom_data)) {
+        $this->db->where_in('a.customer_id', $cus_data);
+    }
+    if ($searchValue != '') {
+        $this->db->where($searchQuery);
+    }
+
+    $this->db->group_by('a.customer_id');
+    $this->db->order_by($columnName, $columnSortOrder);
+    $this->db->limit($rowperpage, $start);
+    $records = $this->db->get()->result();
+
+    log_message('error', 'DEBUG: Records fetched -> ' . json_encode($records));
+
+    $data = array();
+    $sl = 1;
+
+    foreach ($records as $record) {
+      $button = '';
+      $base_url = base_url();
   
-         foreach($records as $record ){
-          $button = '';
-          $base_url = base_url();
- 
-    if($this->permission1->method('manage_customer','update')->access()){
-      $button .=' <a href="'.$base_url.'edit_customer/'.$record->customer_id.'" class="btn btn-info btn-xs m-b-5 custom_btn" data-toggle="tooltip" data-placement="left" title="Update"><i class="pe-7s-note" aria-hidden="true"></i></a>';
-    }
-    if($this->permission1->method('manage_customer','delete')->access()){
-      $button .=' <a onclick="customerdelete('.$record->customer_id.')" href="javascript:void(0)"  class="btn btn-danger btn-xs m-b-5 custom_btn" data-toggle="tooltip" data-placement="right" title="Delete "><i class="pe-7s-trash" aria-hidden="true"></i></a>';
-    }
+      if ($this->permission1->method('manage_customer', 'update')->access()) {
+          $button .= ' <a href="' . $base_url . 'edit_customer/' . $record->customer_id . '" 
+              class="btn btn-info btn-xs m-b-5 custom_btn" title="Update">
+              <i class="pe-7s-note"></i>
+          </a>';
+      }
+      if ($this->permission1->method('manage_customer', 'delete')->access()) {
+          $button .= ' <a onclick="customerdelete(' . $record->customer_id . ')" href="javascript:void(0)" 
+              class="btn btn-danger btn-xs m-b-5 custom_btn" title="Delete">
+              <i class="pe-7s-trash"></i>
+          </a>';
+      }
+  
+      $data[] = array(
+          'sl'                 => $sl,
+          'customer_name'      => $record->customer_name,
+          'address'            => $record->customer_address,
+          'mobile'             => $record->customer_mobile,
+          'email'              => $record->customer_email,
+          'vat_no'             => $record->vat_no,
+          'sales_permit_number'=> $record->sales_permit_number,
+          'sales_permit'       => !empty($record->sales_permit) ? 
+                                   '<a href="' . base_url('uploads/sales_permits/' . $record->sales_permit) . '" target="_blank">View File</a>' : 'N/A',
+          'zip'                => $record->zip,
+          'country'            => $record->country,
+          'balance'            => (!empty($record->balance) ? $record->balance : 0),
+          'status'             => $record->status,  // ✅ Include status
+          'button'             => $button, // ✅ Ensure this is returned
+      );
+      $sl++;
+  }
 
+    log_message('error', 'DEBUG: Final JSON response -> ' . json_encode($data));
 
-        
-               
-            $data[] = array( 
-                'sl'               =>$sl,
-                'customer_name'    =>$record->customer_name,
-                'address'          =>$record->customer_address,
-                'address2'         =>$record->address2,
-                'mobile'           =>$record->customer_mobile,
-                'phone'            =>$record->phone,
-                'email'            =>$record->customer_email,
-                'email_address'    =>$record->email_address,
-                'contact'          =>$record->contact,
-                'fax'              =>$record->fax,
-                'city'             =>$record->email_address,
-                'state'            =>$record->contact,
-                'zip'              =>$record->zip,
-                'country'          =>$record->country,
-                'balance'          =>(!empty($record->balance)?$record->balance:0),
-                'status'         => $record->status,  // ✅ Include status
-                'button'           =>$button,
-                
-            ); 
-            $sl++;
-         }
+    ## Response
+    $response = array(
+        "draw" => intval($draw),
+        "iTotalRecords" => $totalRecords,
+        "iTotalDisplayRecords" => count($records),
+        "aaData" => $data
+    );
 
-         ## Response
-         $response = array(
-            "draw" => intval($draw),
-            "iTotalRecords" => $totalRecordwithFilter,
-            "iTotalDisplayRecords" => $totalRecords,
-            "aaData" => $data
-         );
-
-         return $response; 
-    }
+    return $response;
+}
 
 
 
@@ -611,28 +631,64 @@ class Customer_model extends CI_Model {
       ->result();
   }
 
-	public function update($data = array())
-	{
-		$updatecustomer =  $this->db->where('customer_id', $data["customer_id"])
-			->update("customer_information", $data);
+	public function update($data = array()) {
+    // Retrieve existing sales_permit filename
+    $this->db->select('sales_permit');
+    $this->db->from('customer_information');
+    $this->db->where('customer_id', $data["customer_id"]);
+    $existing = $this->db->get()->row();
 
-		$customer_id = $data["customer_id"];
-        $old_headnam = $customer_id.'-'.$this->input->post("old_name");
-        $c_acc=$customer_id.'-'.$data["customer_name"];
-         $customer_coa = [
-             'HeadName'         => $c_acc
-        ];
+    // If new file is uploaded, replace existing file name
+    if (!empty($_FILES['sales_permit']['name'])) {
+        $config['upload_path']   = './uploads/sales_permits/';
+        $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
+        $config['max_size']      = 2048; // 2MB max
+        $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
 
-        $sub_acc = [
-          'name'        => $data['customer_name'],
-        ];
+        $this->load->library('upload', $config);
 
-        $this->db->where('referenceNo', $customer_id)
-                 ->where('subTypeId', 3)
-                 ->update('acc_subcode',$sub_acc);
-     
-      return true;
-	}
+        if ($this->upload->do_upload('sales_permit')) {
+            $upload_data = $this->upload->data();
+            $data['sales_permit'] = $upload_data['file_name']; // ✅ Save filename
+
+            // Delete old file if exists
+            if (!empty($existing->sales_permit)) {
+                $old_file = './uploads/sales_permits/' . $existing->sales_permit;
+                if (file_exists($old_file)) {
+                    unlink($old_file);
+                }
+            }
+        } else {
+            $this->session->set_flashdata('exception', $this->upload->display_errors());
+            redirect($_SERVER['HTTP_REFERER']);
+            return false;
+        }
+    } else {
+        // If no new file is uploaded, retain existing file name
+        $data['sales_permit'] = $existing->sales_permit;
+    }
+
+    $updatecustomer = $this->db->where('customer_id', $data["customer_id"])
+                               ->update("customer_information", $data);
+
+    $customer_id = $data["customer_id"];
+    $old_headnam = $customer_id . '-' . $this->input->post("old_name");
+    $c_acc = $customer_id . '-' . $data["customer_name"];
+
+    $customer_coa = [
+        'HeadName' => $c_acc
+    ];
+
+    $sub_acc = [
+        'name' => $data['customer_name'],
+    ];
+
+    $this->db->where('referenceNo', $customer_id)
+             ->where('subTypeId', 3)
+             ->update('acc_subcode', $sub_acc);
+
+    return true;
+}
 
 	public function delete($id = null)
 	{

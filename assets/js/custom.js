@@ -964,133 +964,104 @@ $(document).ready(function() {
 });
 
 
-  function customer_form(){
-        var form          = $("#customer_form");
-        var custome_id    = $("#customer_id").val();
-        var customer_name = $("#customer_name").val();
-        var customer_mobile = $("#customer_mobile").val();
-         var base_url     = $("#base_url").val();
-        if(custome_id !==''){
-          var form_url = base_url+'edit_customer/'+custome_id;
-        }else{
-          var form_url = base_url+'add_customer';
-        }
+function customer_form(){
+  var form = $("#customer_form");
+  var custome_id = $("#customer_id").val();
+  var customer_name = $("#customer_name").val();
+  var customer_mobile = $("#customer_mobile").val();
+  var base_url = $("#base_url").val();
 
-         if (customer_name == '') {
-        $("#customer_name").focus();
-        toastr["error"]("Customer name must be required");
-        setTimeout(function () {
-        }, 500);
-        return false;
-    }
-    // Validate Customer Mobile
-    if (customer_mobile == '') {
+  var form_url = custome_id !== '' ? base_url + 'edit_customer/' + custome_id : base_url + 'add_customer';
+
+  if (customer_name == '') {
+      $("#customer_name").focus();
+      toastr["error"]("Customer name must be required");
+      return false;
+  }
+
+  if (customer_mobile == '') {
       $("#customer_mobile").focus();
       toastr["error"]("Customer mobile number is required");
       return false;
   }
-       
-        $.ajax({
-            url : form_url,
-            method : 'POST',
-            dataType : 'json',
-            data : form.serialize(),
-            success: function(r) 
-            {
-                if(r.status == 1){
-                  if(custome_id ==''){
-                $('#customer_form').trigger("reset");
-                 }else{
-                   setTimeout(function () {
-            }, 1000);
-                location.reload();
-                 }
-               toastr["success"](r.msg);
-                }else{
-                toastr["error"](r.msg);
-                }
-            },
-            error: function(xhr)
-            {
-                alert('failed!');
-            }
-        });
-    }
 
-    $(document).ready(function() { 
-    // customer list
-   var CSRF_TOKEN = $('#CSRF_TOKEN').val();
-   var customer_id = $('#customer_id').val();
-   var base_url  = $('#base_url').val();
-    var mydatatable = $('#CustomerList').DataTable({ 
-             responsive: true,
-
-             "aaSorting": [[ 1, "asc" ]],
-             "columnDefs": [
-                { "bSortable": false, "aTargets": [0,2,3,4,5,6,7,8,9] },
-
-            ],
-           'processing': true,
-           'serverSide': true,
-
-          
-           'lengthMenu':[[50,100,250,500, -1], [50,100,250,500, "All"]],
-
-            
-            'serverMethod': 'post',
-            'ajax': {
-               'url':base_url + 'customer/customer/paysenz_CheckCustomerList',
-            "data": function ( data) {
-              
-         data.csrf_test_name = CSRF_TOKEN;
-         data.customer_id =  $('#customer_id').val();
-         data.customfiled =  $("select[name='customsearch[]']").val();
-},    
-            },
-          'columns': [
-             { data: 'sl' },
-             { data: 'customer_name' },
-             { data: 'address'},
-             { data: 'mobile' },
-             { data: 'email'},
-             { data: 'city'},
-             { data: 'state'},
-             { data: 'zip'},
-             { data: 'country'},
-             { data: 'balance',class:"balance" },
-             { data: 'status', render: function(data, type, row) { // ✅ Add status column
-              return data == 1 ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>';
-          }},
-             { data: 'button'},
-          ],
-
-  "footerCallback": function(row, data, start, end, display) {
-  var api = this.api();
- 
-  api.columns('.balance', {
-    page: 'current'
-  }).every(function() {
-    var sum = this
-      .data()
-      .reduce(function(a, b) {
-        var x = parseFloat(a) || 0;
-        var y = parseFloat(b) || 0;
-        return x + y;
-      }, 0);
-    $(this.footer()).html(sum.toFixed(2, 2));
+  $.ajax({
+      url : form_url,
+      method : 'POST',
+      dataType : 'json',
+      data : form.serialize(),
+      success: function(response) {
+          if(response.status == 1){
+              toastr["success"](response.msg);
+              setTimeout(function () {
+                  location.reload(); // Refresh page after success
+              }, 1500);
+          } else {
+              toastr["error"](response.msg);
+          }
+      },
+      error: function(xhr) {
+          alert('Request failed!');
+      }
   });
-
-
 }
 
-    });
-$("#customer_id").on('change', function(){
-   mydatatable.ajax.reload();  
-});
+$(document).ready(function() { 
+  var CSRF_TOKEN = $('#CSRF_TOKEN').val();
+  var base_url  = $('#base_url').val();
 
-$("#customsearch").on('change', function(){
-   mydatatable.ajax.reload();  
-});
+  var mydatatable = $('#CustomerList').DataTable({ 
+      responsive: true,
+      "aaSorting": [[1, "asc"]],
+      "columnDefs": [
+          { "bSortable": false, "aTargets": [0,2,3,4,5,6,7,8,9,10,11,12] },
+      ],
+      'processing': true,
+      'serverSide': true,
+      'lengthMenu': [[50, 100, 250, 500, -1], [50, 100, 250, 500, "All"]],
+      'serverMethod': 'post',
+      'ajax': {
+          'url': base_url + 'customer/customer/paysenz_CheckCustomerList',
+          "data": function (data) {
+              data.csrf_test_name = CSRF_TOKEN;
+              data.customer_id = $('#customer_id').val();
+              data.customfiled = $("select[name='customsearch[]']").val();
+              console.log("DEBUG: Sending AJAX Request ->", data);
+          },
+          "dataSrc": function(json) {
+              console.log("DEBUG: Server Response ->", json);
+              return json.aaData || [];
+          }
+      },
+      'columns': [
+          { data: 'sl' },
+          { data: 'customer_name' },
+          { data: 'address' },
+          { data: 'mobile' },
+          { data: 'email' },
+          { data: 'vat_no' },
+          { data: 'sales_permit_number' },
+          { data: 'sales_permit' },
+          { data: 'zip' },
+          { data: 'country' },
+          { data: 'balance', class: "balance" },
+          { data: 'status', render: function(data, type, row) { 
+            return data == 1 ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>';
+          }},
+          { 
+            data: 'button', 
+            render: function(data, type, row) {
+                console.log("DEBUG: Action Buttons Data ->", data); // Log button data
+                return data ? data : '<span class="text-muted">No Actions</span>'; // Ensure it doesn't break
+            }
+          }
+      ]
+  });
+
+  $("#customer_id, #customsearch").on('change', function(){
+      console.log("DEBUG: Reloading DataTable...");
+      mydatatable.ajax.reload();  
+  });
 });
 
 

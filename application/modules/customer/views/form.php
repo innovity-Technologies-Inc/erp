@@ -8,11 +8,13 @@
              </div>
 
              <div class="panel-body">
-                 <?php echo form_open('','class="" id="customer_form"')?>
+                <?php echo form_open_multipart('', 'class="" id="customer_form"') ?>
 
                  <input type="hidden" name="customer_id" id="customer_id" value="<?php echo $customer->customer_id?>">
+
                  <div class="form-group row">
-                     <label for="customer_name"
+                    <!--Customer Name  -->
+                    <label for="customer_name"
                          class="col-sm-2 text-right col-form-label"><?php echo display('customer_name')?> <i
                              class="text-danger"> * </i>:</label>
                      <div class="col-sm-4">
@@ -26,6 +28,7 @@
                          </div>
 
                      </div>
+                    <!-- Mobile No -->
                      <label for="customer_mobile"
                          class="col-sm-2 text-right col-form-label"><?php echo display('mobile_no')?> <i
                              class="text-danger"> * </i>:</label>
@@ -43,7 +46,9 @@
 
                      </div>
                  </div>
+
                  <div class="form-group row">
+                    <!-- Email Address -->
                      <label for="customer_email"
                          class="col-sm-2 text-right col-form-label"><?php echo display('email_address')?>:</label>
                      <div class="col-sm-4">
@@ -57,7 +62,8 @@
                          </div>
 
                      </div>
-                     <label for="email_address"
+                    <!-- EIN / VAT No -->
+                     <label for="vat_no"
                          class="col-sm-2 text-right col-form-label"><?php echo display('vat_no')?>:</label>
                      <div class="col-sm-4">
                          <div class="">
@@ -71,6 +77,7 @@
                      </div>
                  </div>
                  <div class="form-group row">
+                    <!-- Phone No -->
                      <label for="phone"
                          class="col-sm-2 text-right col-form-label"><?php echo display('phone')?>:</label>
                      <div class="col-sm-4">
@@ -85,10 +92,17 @@
 
                      </div>
 
-                    
-                     
+                     <label for="sales_permit_number" 
+                     class="col-sm-2 text-right col-form-label"> <?php echo display('sellers_permit_number'); ?>:</label>
+                    <div class="col-sm-4">
+                        <input type="text" name="sales_permit_number" class="form-control" id="sales_permit_number"
+                            placeholder="<?php echo display('sellers_permit_number'); ?>"
+                            value="<?php echo $customer->sales_permit_number; ?>">
+                    </div>
+
                  </div>
                  <div class="form-group row">
+                    <!-- Address1 -->
                      <label for="address1"
                          class="col-sm-2 text-right col-form-label"><?php echo display('address1')?>:</label>
                      <div class="col-sm-4">
@@ -101,19 +115,19 @@
 
                      </div>
 
-                     <label for="address2"
-                         class="col-sm-2 text-right col-form-label"><?php echo display('address2')?>:</label>
-                     <div class="col-sm-4">
-                         <div class="">
-
-                             <textarea name="address2" id="address2" class="form-control"
-                                 placeholder="<?php echo display('address2')?>"><?php echo $customer->address2?></textarea>
-
-                         </div>
-
-                     </div>
+                     <label for="sales_permit" class="col-sm-2 text-right col-form-label"><?php echo display('sellers_permit_document'); ?>:</label>
+                    <div class="col-sm-4">
+                        <input type="file" name="sales_permit" id="sales_permit" class="form-control">
+                        <?php if (!empty($customer->sales_permit)) { ?>
+                            <a href="<?php echo base_url('uploads/sales_permits/' . $customer->sales_permit); ?>" target="_blank">
+                                View Current File
+                            </a>
+                        <?php } ?>
+                    </div>
+                     
                  </div>
                  <div class="form-group row">
+                    <!-- Fax -->
                      <label for="fax" class="col-sm-2 text-right col-form-label"><?php echo display('fax')?>:</label>
                      <div class="col-sm-4">
                          <div class="">
@@ -124,6 +138,7 @@
                          </div>
 
                      </div>
+                     <!-- City -->
                      <label for="city" class="col-sm-2 text-right col-form-label"><?php echo display('city')?>:</label>
                      <div class="col-sm-4">
                          <div class="">
@@ -136,6 +151,7 @@
                      </div>
                  </div>
                  <div class="form-group row">
+                    <!-- State -->
                      <label for="state"
                          class="col-sm-2 text-right col-form-label"><?php echo display('state')?>:</label>
                      <div class="col-sm-4">
@@ -147,6 +163,7 @@
                          </div>
 
                      </div>
+                     <!-- Zip -->
                      <label for="zip" class="col-sm-2 text-right col-form-label"><?php echo display('zip')?>:</label>
                      <div class="col-sm-4">
                          <div class="">
@@ -159,6 +176,7 @@
                      </div>
                  </div>
                  <div class="form-group row">
+                    <!-- Country -->
                      <label for="country"
                          class="col-sm-2 text-right col-form-label"><?php echo display('country')?>:</label>
                      <div class="col-sm-4">
@@ -199,8 +217,9 @@
                      <div class="col-sm-6 text-right">
                          <div class="">
 
-                             <button type="button" onclick="customer_form()" class="btn btn-success">
-                                 <?php echo (empty($customer->customer_id)?display('save'):display('update')) ?></button>
+                         <button type="submit" class="btn btn-success">
+                            <?php echo (empty($customer->customer_id) ? display('save') : display('update')) ?>
+                        </button>
 
                          </div>
 

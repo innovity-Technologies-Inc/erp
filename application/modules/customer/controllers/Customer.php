@@ -75,90 +75,127 @@ class Customer extends MX_Controller {
     } 
 
 
-  public function paysenz_form($id = null)
-    {
-        $data['title'] = display('add_customer');
-        #-------------------------------#
-        $this->form_validation->set_rules('customer_name',display('customer_name'),'required|max_length[200]');
-        $this->form_validation->set_rules('customer_mobile', display('customer_mobile') ,'max_length[20]');
-        if(empty($id)){
-        $this->form_validation->set_rules('customer_email',display('email'),'max_length[100]|valid_email|is_unique[customer_information.customer_email]');
-    }else{
-        $this->form_validation->set_rules('customer_email',display('email'),'max_length[100]|valid_email');
+    public function paysenz_form($id = null)
+{
+    $data['title'] = display('add_customer');
+
+    #-------------------------------#
+    $this->form_validation->set_rules('customer_name', display('customer_name'), 'required|max_length[200]');
+    $this->form_validation->set_rules('customer_mobile', display('customer_mobile'), 'max_length[20]');
+    if (empty($id)) {
+        $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email|is_unique[customer_information.customer_email]');
+    } else {
+        $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email');
     }
-        $this->form_validation->set_rules('contact',display('contact'),'max_length[200]');
-        $this->form_validation->set_rules('phone',display('phone'),'max_length[20]');
-        $this->form_validation->set_rules('city',display('city'),'max_length[100]'); 
-        $this->form_validation->set_rules('state',display('state'),'max_length[100]');
-        $this->form_validation->set_rules('zip',display('zip'),'max_length[30]');
-        $this->form_validation->set_rules('country',display('country'),'max_length[100]');  
-        $this->form_validation->set_rules('customer_address',display('customer_address'),'max_length[255]');
-        $this->form_validation->set_rules('address2',display('address2'),'max_length[255]'); 
-        #-------------------------------#
+    $this->form_validation->set_rules('contact', display('contact'), 'max_length[200]');
+    $this->form_validation->set_rules('phone', display('phone'), 'max_length[20]');
+    $this->form_validation->set_rules('city', display('city'), 'max_length[100]');
+    $this->form_validation->set_rules('state', display('state'), 'max_length[100]');
+    $this->form_validation->set_rules('zip', display('zip'), 'max_length[30]');
+    $this->form_validation->set_rules('country', display('country'), 'max_length[100]');
+    $this->form_validation->set_rules('customer_address', display('customer_address'), 'max_length[255]');
+    $this->form_validation->set_rules('address2', display('address2'), 'max_length[255]');
+    $this->form_validation->set_rules('sales_permit_number', display('sales_permit_number'), 'max_length[50]');
 
-        $data['customer'] = (object)$postData = [
-            'customer_id'      => $this->input->post('customer_id',true),
-            'customer_name'    => $this->input->post('customer_name',true),
-            'customer_mobile'  => $this->input->post('customer_mobile', true),
-            'customer_email'   => $this->input->post('customer_email', true),
-            'email_address'    => $this->input->post('email_address', true),
-            'contact'          => $this->input->post('contact', true),
-            'phone'            => $this->input->post('phone', true),
-            'fax'              => $this->input->post('fax', true), 
-            'city'             => $this->input->post('city', true) ,
-            'state'            => $this->input->post('state', true) ,
-            'zip'              => $this->input->post('zip', true) ,
-            'country'          => $this->input->post('country', true) ,
-            'customer_address' => $this->input->post('customer_address', true) ,
-            'address2'         => $this->input->post('address2', true) ,
-            'status'           => 1,
-            'create_by'        => $this->session->userdata('id') ,
-            
-        ]; 
-        #-------------------------------#
-        if ($this->form_validation->run() === true) {
-            #if empty $id then insert data
-            if (empty($postData['customer_id'])) {
-                if ($this->customer_model->create($postData)) {
-                    #set success message
-                        $info['msg']    = display('save_successfully');
-                        $info['status'] = 1;
-                } else {
-                    #set exception message
-                        $info['msg']    = display('please_try_again');
-                        $info['status'] = 0;
-                }
-            } else {
-                if ($this->customer_model->update($postData)) {
-                    #set success message
-                    $info['msg']    = display('update_successfully');
-                    $info['status'] = 1;
-                } else {
-                    #set exception message
-                    $info['msg']    = display('please_try_again');
-                    $info['status'] = 0;
-                } 
-            }
- 
-            echo json_encode($info);
+    #-------------------------------#
+    
+    // Handle file upload
+    $sales_permit = "";
+    if (!empty($_FILES['sales_permit']['name'])) {
+        $config['upload_path']   = './uploads/sales_permits/';
+        $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
+        $config['max_size']      = 2048; // 2MB max
+        $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
 
-        } else { 
-            if(empty($this->input->post('customer_name',true))){
-            if(!empty($id)){
-            $data['title']    = display('edit_customer');
-            $data['customer'] = $this->customer_model->singledata($id);  
-            }
-            $data['module']   = "customer";  
-            $data['page']     = "form";  
-            echo Modules::run('template/layout', $data); 
-        }else{
+        $this->load->library('upload', $config);
 
-          $info['msg']    = validation_errors();
-          $info['status'] = 0;
-           echo json_encode($info);
+        if ($this->upload->do_upload('sales_permit')) {
+            $upload_data = $this->upload->data();
+            $sales_permit = $upload_data['file_name']; // Save filename in DB
+        } else {
+            log_message('error', 'File Upload Error: ' . $this->upload->display_errors());
+            $this->session->set_flashdata('exception', 'File upload failed: ' . $this->upload->display_errors());
+            redirect($_SERVER['HTTP_REFERER']);
+            return;
         }
-        } 
     }
+
+    // Customer Data
+    $data['customer'] = (object)$postData = [
+        'customer_id'        => $this->input->post('customer_id', true),
+        'customer_name'      => $this->input->post('customer_name', true),
+        'customer_mobile'    => $this->input->post('customer_mobile', true),
+        'customer_email'     => $this->input->post('customer_email', true),
+        'email_address'      => $this->input->post('email_address', true),
+        'contact'            => $this->input->post('contact', true),
+        'phone'              => $this->input->post('phone', true),
+        'fax'                => $this->input->post('fax', true),
+        'city'               => $this->input->post('city', true),
+        'state'              => $this->input->post('state', true),
+        'zip'                => $this->input->post('zip', true),
+        'country'            => $this->input->post('country', true),
+        'customer_address'   => $this->input->post('customer_address', true),
+        'address2'           => !empty($this->input->post('address2', true)) ? $this->input->post('address2', true) : NULL,
+        'sales_permit_number'=> $this->input->post('sales_permit_number', true),
+        'status'             => 1,
+        'create_by'          => $this->session->userdata('id')
+    ];
+
+    // Save file name only if a file was uploaded
+    if (!empty($sales_permit)) {
+        $postData['sales_permit'] = $sales_permit;
+    }
+
+    log_message('error', 'DEBUG: File Upload Attempt - Filename: ' . ($_FILES['sales_permit']['name'] ?? 'No File'));
+
+    #-------------------------------#
+    if ($this->form_validation->run() === true) {
+        if (empty($postData['customer_id'])) {
+            if ($this->customer_model->create($postData)) {
+                $info['msg']    = display('save_successfully');
+                $info['status'] = 1;
+            } else {
+                $info['msg']    = display('please_try_again');
+                $info['status'] = 0;
+            }
+        } else {
+            if ($this->customer_model->update($postData)) {
+                $info['msg']    = display('update_successfully');
+                $info['status'] = 1;
+            } else {
+                $info['msg']    = display('please_try_again');
+                $info['status'] = 0;
+            }
+        }
+
+        // ✅ Handle JSON or Redirect Based on Request Type
+        if ($this->input->is_ajax_request()) {
+            echo json_encode($info); // ✅ Send JSON response for AJAX
+        } else {
+            if ($info['status'] == 1) {
+                $this->session->set_flashdata('message', $info['msg']);
+                redirect('customer_list'); // ✅ Redirect to customer list page
+            } else {
+                $this->session->set_flashdata('exception', $info['msg']);
+                redirect($_SERVER['HTTP_REFERER']); // ✅ Stay on form if there's an error
+            }
+        }
+    } else {
+        if ($this->input->is_ajax_request()) {
+            $info['msg']    = validation_errors();
+            $info['status'] = 0;
+            echo json_encode($info); // ✅ Send JSON validation errors
+        } else {
+            if (!empty($id)) {
+                $data['title']    = display('edit_customer');
+                $data['customer'] = $this->customer_model->singledata($id);
+            }
+            $data['module']   = "customer";
+            $data['page']     = "form";
+            echo Modules::run('template/layout', $data); // ✅ Show form with errors
+        }
+    }
+}
 
 
 
