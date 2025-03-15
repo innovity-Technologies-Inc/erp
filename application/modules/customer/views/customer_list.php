@@ -20,7 +20,8 @@
                             <th><?php echo display('mobile_no') ?></th>
                             <th><?php echo display('email'); ?></th>
                             <th><?php echo display('vat_no'); ?></th>
-                            <th><?php echo display('cr_no') ?></th>
+                            <th><?php echo display('sp_no') ?></th>
+                            <th><?php echo display('sp_file') ?></th>
                             <th><?php echo display('zip'); ?></th>
                             <th><?php echo display('country'); ?></th>
                             <th><?php echo display('balance') ?></th>
