@@ -1,14 +1,59 @@
-# Ignore .DS_Store files
+# ========================
+#  Ignore macOS System Files
+# ========================
 .DS_Store
-application/.DS_Store
-application/cache/.DS_Store
-assets/.DS_Store
-assets/data/.DS_Store
+**/.DS_Store
+**/._*
 
-# Ignore logs
+# ========================
+#  Ignore Logs, Cache & Temporary Files
+# ========================
+application/logs/
 application/logs/*.log
 application/logs/log-*.php
-application/cache/temp/*
+application/cache/
+application/cache/temp/
+storage/logs/
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/views/
+*.log
+*.tmp
+*.cache
 
-# DB Config
+# ========================
+#  Ignore User-Specific and Editor Files
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ========================
+#  Ignore Compiled Files and Dependencies
+# ========================
+vendor/
+node_modules/
+composer.lock
+package-lock.json
+yarn.lock
+
+# ========================
+#  Ignore Database Backups & Config
+# ========================
 application/config/database.php
+*.sql
+*.sqlite
+*.bak
+*.db
+
+# ========================
+#  Ignore Generated & Uploaded Files
+# ========================
+assets/data/outgoing/
+assets/data/outgoing/*.sql
+assets/data/pdf/
+assets/uploads/
+assets/generated/
+assets/dist/
+my-assets/image/employee/
