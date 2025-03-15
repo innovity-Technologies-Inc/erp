@@ -92,49 +92,62 @@ class Product extends MX_Controller {
         $this->form_validation->set_rules('category_name', display('category_name'), 'required|max_length[200]');
         $this->form_validation->set_rules('status', display('status'), 'max_length[2]');
     
-        $parent_id = $this->input->post('parent_id');
-        $category_level = $this->product_model->get_category_level($parent_id);
+        $parent_id = $this->input->post('parent_id', true);
+        $sub_category_name = trim($this->input->post('category_name', true));
     
-        // 🚨 Prevent more than 3 levels
-        if ($category_level >= 3) {
-            $this->session->set_flashdata('exception', display('cannot_add_more_than_3_levels'));
-            redirect('category_form');
+        $parent_category_name = $this->product_model->get_category_name($parent_id);
+        $final_category_name = (!empty($parent_category_name) && $parent_category_name !== $sub_category_name)
+            ? $parent_category_name . '->' . $sub_category_name
+            : $sub_category_name;
+    
+        // ✅ Check for duplicate category BEFORE saving
+        if ($this->product_model->is_duplicate_category($final_category_name)) {
+            log_message('error', "ERROR: Duplicate category found -> " . $final_category_name);
+            
+            // ✅ Set Flash Message for duplicate category
+            $this->session->set_flashdata('exception', 'Error: This category already exists!');
+            redirect($_SERVER['HTTP_REFERER']); 
             exit;
         }
     
         $data['category'] = (object)$postData = [
             'category_id'   => $id,
-            'category_name' => $this->input->post('category_name', true),
+            'category_name' => $final_category_name, 
             'parent_id'     => ($parent_id == 0) ? NULL : $parent_id,
             'status'        => $this->input->post('status', true),
-        ]; 
+        ];
     
         if ($this->form_validation->run() === true) {
-            if (empty($id)) {  # Insert new category
+            if (empty($id)) {
                 if ($this->product_model->create_category($postData)) {
-                    $this->session->set_flashdata('message', display('save_successfully'));
+                    log_message('info', "INFO: Category Created Successfully -> " . $final_category_name);
+                    $this->session->set_flashdata('message', 'Category saved successfully!');
                 } else {
-                    $this->session->set_flashdata('exception', display('please_try_again'));
+                    log_message('error', "ERROR: Failed to create category.");
+                    $this->session->set_flashdata('exception', 'Error: Could not save the category!');
                 }
-                redirect("category_list");
-            } else {  # Update existing category
+            } else {
                 if ($this->product_model->update_category($postData)) {
-                    $this->session->set_flashdata('message', display('update_successfully'));
+                    log_message('info', "INFO: Category Updated Successfully -> " . $final_category_name);
+                    $this->session->set_flashdata('message', 'Category updated successfully!');
                 } else {
-                    $this->session->set_flashdata('exception', display('please_try_again'));
+                    log_message('error', "ERROR: Failed to update category.");
+                    $this->session->set_flashdata('exception', 'Error: Could not update the category!');
                 }
-                redirect("category_list");
             }
-        } else { 
+            redirect("category_list");
+        } else {
             if (!empty($id)) {
                 $data['title'] = display('edit_category');
                 $data['category'] = $this->product_model->single_category_data($id);
             }
     
-            $data['categories'] = $this->product_model->get_all_categories($id);  
-            $data['module'] = "product";  
-            $data['page'] = "category_form";  
-            echo Modules::run('template/layout', $data); 
+            $data['categories'] = $this->product_model->get_all_categories();
+            $data['module'] = "product";
+            $data['page'] = "category_form";
+            log_message('debug', "DEBUG: Loading category_form page with data -> " . json_encode($data));
+    
+            echo Modules::run('template/layout', $data);
         }
     }
 
