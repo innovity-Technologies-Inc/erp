@@ -934,79 +934,110 @@ class Api extends CI_Controller {
     }
 
 
-    public function insert_customer(){
-       
-        $data = array(
-            'customer_name'    => $this->input->get('customer_name'),
-            'customer_address' => $this->input->get('address'),
-            'customer_mobile'  => $this->input->get('mobile'),
-            'customer_email'   => $this->input->get('email'),
-            'status'           => 1
-        );
-
-        $checkC = $this->db->where('customer_mobile',$this->input->get('mobile'))->get('customer_information')->row();
-        if(empty($checkC)){
-
-
-            if ($this->Api_model->customer_create($data)) { 
-
-                $customer_id = $this->db->insert_id();
-                $vouchar_no = $this->occational->generator(10);
-                //Customer  basic information adding.
-                $coa = $this->Api_model->customerheadcode();
-                if($coa->HeadCode!=NULL){
-                    $headcode=$coa->HeadCode+1;
-                }else{
-                    $headcode="102030000001";
-                }
-                $c_acc=$customer_id.'-'.$this->input->get('customer_name');
-                $createby=1;
-                $createdate=date('Y-m-d H:i:s');
-
-                    $customer_coa = [
-                        'HeadCode'         => $headcode,
-                        'HeadName'         => $c_acc,
-                        'PHeadName'        => 'Merchant Receivable',
-                        'HeadLevel'        => '4',
-                        'IsActive'         => '1',
-                        'IsTransaction'    => '1',
-                        'IsGL'             => '0',
-                        'customer_id'      => $customer_id,
-                        'HeadType'         => 'A',
-                        'IsBudget'         => '0',
-                        'IsDepreciation'   => '0',
-                        'DepreciationRate' => '0',
-                        'CreateBy'         => $createby,
-                        'CreateDate'       => $createdate,
-                    ];
-
-                    $this->db->insert('acc_coa',$customer_coa);
-                     $this->Api_model->customer_previous_balance_add($this->input->get('previous_balance'), $customer_id);
-                    
-                    $json['response'] = [
-                        'status'     => 'ok',
-                        'message'    => 'Successfully Added',
-                        'permission' => 'write'
-                    ];
-
+    public function insert_customer() {
+        // Handle file upload
+        $sales_permit = '';
+        if (!empty($_FILES['sales_permit']['name'])) {
+            $config['upload_path']   = './uploads/sales_permits/';
+            $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
+            $config['max_size']      = 2048; // 2MB max
+            $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
+    
+            // Create directory if not exists
+            if (!is_dir($config['upload_path'])) {
+                mkdir($config['upload_path'], 0755, true);
+            }
+    
+            $this->load->library('upload', $config);
+    
+            if ($this->upload->do_upload('sales_permit')) {
+                $upload_data = $this->upload->data();
+                $sales_permit = $upload_data['file_name'];
             } else {
-
+                echo json_encode([
+                    'response' => [
+                        'status' => 'error',
+                        'message' => 'File upload failed: ' . strip_tags($this->upload->display_errors())
+                    ]
+                ]);
+                return;
+            }
+        }
+    
+        // Build data from request
+        $data = array(
+            'customer_name'        => $this->input->post('customer_name'),
+            'customer_address'     => $this->input->post('address'),
+            'address2'             => $this->input->post('address2'),
+            'customer_mobile'      => $this->input->post('mobile'),
+            'customer_email'       => $this->input->post('email'),
+            'email_address'        => $this->input->post('email_address'),
+            'contact'              => $this->input->post('contact'),
+            'phone'                => $this->input->post('phone'),
+            'fax'                  => $this->input->post('fax'),
+            'city'                 => $this->input->post('city'),
+            'state'                => $this->input->post('state'),
+            'zip'                  => $this->input->post('zip'),
+            'country'              => $this->input->post('country'),
+            'sales_permit'         => $sales_permit,
+            'sales_permit_number'  => $this->input->post('sales_permit_number'),
+            'status'               => 0,
+            'create_date'          => date('Y-m-d H:i:s'),
+            'create_by'            => 1 // Set session user ID if needed
+        );
+    
+        $checkC = $this->db->where('customer_mobile', $this->input->post('mobile'))->get('customer_information')->row();
+    
+        if (empty($checkC)) {
+            if ($this->Api_model->customer_create($data)) {
+                $customer_id = $this->db->insert_id();
+    
+                $coa = $this->Api_model->customerheadcode();
+                $headcode = ($coa && $coa->HeadCode != NULL) ? $coa->HeadCode + 1 : "102030000001";
+                $c_acc = $customer_id . '-' . $this->input->post('customer_name');
+    
+                $customer_coa = [
+                    'HeadCode'         => $headcode,
+                    'HeadName'         => $c_acc,
+                    'PHeadName'        => 'Merchant Receivable',
+                    'HeadLevel'        => '4',
+                    'IsActive'         => '1',
+                    'IsTransaction'    => '1',
+                    'IsGL'             => '0',
+                    'customer_id'      => $customer_id,
+                    'HeadType'         => 'A',
+                    'IsBudget'         => '0',
+                    'IsDepreciation'   => '0',
+                    'DepreciationRate' => '0',
+                    'CreateBy'         => 1,
+                    'CreateDate'       => date('Y-m-d H:i:s')
+                ];
+    
+                $this->db->insert('acc_coa', $customer_coa);
+    
+                // Previous balance
+                $this->Api_model->customer_previous_balance_add($this->input->post('previous_balance'), $customer_id);
+    
+                $json['response'] = [
+                    'status'     => 'ok',
+                    'message'    => 'Successfully Added',
+                    'permission' => 'write'
+                ];
+            } else {
                 $json['response'] = [
                     'status'     => 'error',
                     'message'    => 'Please try again',
                     'permission' => 'read'
                 ];
-
             }
-
-        }else{
+        } else {
             $json['response'] = [
-                'status'     => 'error',
-                'message'    => 'This customer already exist'
+                'status'  => 'error',
+                'message' => 'This customer already exists'
             ];
         }
-
-        echo json_encode($json,JSON_UNESCAPED_UNICODE);
+    
+        echo json_encode($json, JSON_UNESCAPED_UNICODE);
     }
 
 
@@ -1108,6 +1139,39 @@ class Api extends CI_Controller {
        echo json_encode($json,JSON_UNESCAPED_UNICODE);
     }
 
+
+    public function customer_search_by_email() {
+        $email = $this->input->get('email');
+    
+        if (empty($email)) {
+            echo json_encode([
+                'response' => [
+                    'status'     => 'error',
+                    'message'    => 'Email parameter is missing',
+                    'permission' => 'read'
+                ]
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+    
+        $customerdata = $this->Api_model->get_customer_by_email($email);
+    
+        if (!empty($customerdata)) {
+            $json['response'] = [
+                'status'     => 'ok',
+                'customers'  => $customerdata,
+                'permission' => 'write'
+            ];
+        } else {
+            $json['response'] = [
+                'status'     => 'error',
+                'message'    => 'No customer found with this email',
+                'permission' => 'read'
+            ];
+        }
+    
+        echo json_encode($json, JSON_UNESCAPED_UNICODE);
+    }
 
     public function customer_update() {
             $customer_id = $this->input->get('customer_id');
@@ -1759,269 +1823,185 @@ class Api extends CI_Controller {
         echo json_encode($json,JSON_UNESCAPED_UNICODE);
     }
 
-
-
-    public function insert_sale(){
-            $invoice_id = date('YmdHis');
-            $invoice_id = strtoupper($invoice_id);
-            $createby   = $this->input->get('createby');
-            $createdate = date('Y-m-d H:i:s');
-            $detailsinfo= $this->input->get('detailsinfo');
-            $saledetails= json_decode($detailsinfo,true);
-            $products[] = '';
-            $quant[]    = '';
-            $rate[]     = '';
-            $total[]    = '';
-            $serialn[]  = '';
-            $i=0;
-            foreach ($saledetails as $key => $value) {
-                $products[$i]   = $saledetails[$i]['product_id'];
-                $quant[$i]      = $saledetails[$i]['product_quantity'];
-                $rate[$i]       = $saledetails[$i]['product_rate'];
-                $serialn[$i]    = $saledetails[$i]['serial_no'];
-
-            $i++;}
-
-            $product_id   = $products;
-            $quantity     = $quant;
-            $prrate       = $rate;
-            $serial_no    = $serialn;
-            $totalamount  = $total;
-            
-        
-            $customer_id = $this->input->get('customer_id');
-            $transection_id = $this->occational->generator(15);
-
-            // Account table info
-            $transactiondata = array(
-                'transaction_id'      => $transection_id,
-                'relation_id'         => $customer_id,
-                'transection_type'    => 2,
-                'date_of_transection' => (!empty($this->input->get('invoice_date'))?$this->input->get('invoice_date'):date('Y-m-d')),
-                'transection_category'=> 2,
-                'amount'              => $this->input->get('paid_amount'),
-                'transection_mood'    => 1,
-                'is_transaction'      => 0,
-                'description'         => 'Paid by customer'
-            );
-
-
-
-
-            //Data inserting into invoice table
-            $datainv = array(
-                'invoice_id'      => $invoice_id,
-                'customer_id'     => $customer_id,
-                'date'            => (!empty($this->input->get('invoice_date'))?$this->input->get('invoice_date'):date('Y-m-d')),
-                'total_amount'    => $this->input->get('grand_total_price')-$this->input->get('total_discount'),
-                'total_tax'       => $this->input->get('total_tax'),
-                'invoice'         => $this->invoice_generator(),
-                'invoice_details' => (!empty($this->input->get('inva_details'))?$this->input->get('inva_details'):'text'),
-                'invoice_discount'=> 0,
-                'total_discount'  => $this->input->get('total_discount'),
-                'prevous_due'     => 0,
-                'shipping_cost'   => 0,
-                'sales_by'        => $this->input->get('createby'),
-                'status'          => 1,
-                'payment_type'    => 1,
-                'bank_id'         => null,
-            );
-            
-
-      
-                 
-            $this->db->insert('invoice', $datainv);
-
-            $prinfo  = $this->db->select('product_id,Avg(rate) as product_rate')->from('product_purchase_details')->where_in('product_id',$product_id)->group_by('product_id')->get()->result(); 
-            $purchase_ave = [];
-            $i=0;
-            foreach ($prinfo as $avg) {
-              $purchase_ave [] =  $avg->product_rate*$quantity[$i];
-              $i++;
+    public function get_payment_methods() {
+        header('Content-Type: application/json');
+    
+        $data = $this->db->select('HeadName, HeadCode')
+            ->from('acc_coa')
+            ->where('PHeadName', 'Cash')
+            ->or_where('PHeadName', 'Cash at Bank')
+            ->get()
+            ->result();
+    
+        $list = [];
+        if (!empty($data)) {
+            $list[] = [
+                'HeadCode' => '0',
+                'HeadName' => 'Credit Sale'
+            ];
+            foreach ($data as $value) {
+                $list[] = [
+                    'HeadCode' => $value->HeadCode,
+                    'HeadName' => $value->HeadName
+                ];
             }
-            $sumval = array_sum($purchase_ave);
-
-                $cusifo = $this->db->select('*')->from('customer_information')->where('customer_id',$customer_id)->get()->row();
-                $headn = $customer_id.'-'.$cusifo->customer_name;
-                $coainfo = $this->db->select('*')->from('acc_coa')->where('HeadName',$headn)->get()->row();
-                $customer_headcode = $coainfo->HeadCode;
-                // Cash in Hand debit
-                $cc = array(
-                  'VNo'            =>  $invoice_id,
-                  'Vtype'          =>  'INV',
-                  'VDate'          =>  $createdate,
-                  'COAID'          =>  111000001,
-                  'Narration'      =>  'Cash in Hand in Sale for '.$cusifo->customer_name,
-                  'Debit'          =>  $this->input->get('paid_amount'),
-                  'Credit'         =>  0,
-                  'IsPosted'       =>  1,
-                  'CreateBy'       =>  $createby,
-                  'CreateDate'     =>  $createdate,
-                  'IsAppove'       =>  1
-                ); 
-                 
-
-           ///Inventory credit
-            $coscr = array(
-              'VNo'            =>  $invoice_id,
-              'Vtype'          =>  'INV',
-              'VDate'          =>  $createdate,
-              'COAID'          =>  1141,
-              'Narration'      =>  'Inventory credit For Invoice No'.$invoice_id,
-              'Debit'          =>  0,
-              'Credit'         =>  $sumval,//purchase price asbe
-              'IsPosted'       => 1,
-              'CreateBy'       => $createby,
-              'CreateDate'     => $createdate,
-              'IsAppove'       => 1
-            ); 
-            $this->db->insert('acc_transaction',$coscr);
-           
-            // Customer Transactions
-            //Customer debit for Product Value
-            $customer_debit = array(
-              'VNo'            =>  $invoice_id,
-              'Vtype'          =>  'INV',
-              'VDate'          =>  $createdate,
-              'COAID'          =>  $customer_headcode, //$customer_headcode,
-              'Narration'      =>  'Merchant debit For  '.$cusifo->customer_name,
-              'Debit'          =>  $this->input->get('grand_total_price')-$this->input->get('total_discount'),
-              'Credit'         =>  0,
-              'IsPosted'       => 1,
-              'CreateBy'       => $createby,
-              'CreateDate'     => $createdate,
-              'IsAppove'       => 1
-            );  
-
-            $this->db->insert('acc_transaction',$customer_debit);
-            
-        $total_saleamnt = $this->input->get('grand_total_price',TRUE)-(!empty($this->input->get('total_discount',TRUE))?$this->input->get('total_discount',TRUE):0);
-  $withoutinventory = $total_saleamnt - $sumval;
-  $income = $withoutinventory - $this->input->get('total_tax',TRUE);
-
-            $pro_sale_income = array(
-              'VNo'            => $invoice_id,
-              'Vtype'          => 'INVOICE',
-              'VDate'          => $createdate,
-              'COAID'          => 511001,
-              'Narration'      => 'Product sales Revenue For '.$cusifo->customer_name,
-              'Debit'          => 0,
-              'Credit'         => $income,
-              'IsPosted'       => 1,
-              'CreateBy'       => $createby,
-              'CreateDate'     => $createdate,
-              'IsAppove'       => 1
-            ); 
-            $this->db->insert('acc_transaction',$pro_sale_income);
-               $tax_info = array(
-              'VNo'            => $invoice_id,
-              'Vtype'          => 'INVOICE',
-              'VDate'          => $createdate,
-              'COAID'          => 2114,
-              'Narration'      => 'Tax from sale invoice id-'.$invoice_id,
-              'Debit'          => $this->input->get('total_tax',TRUE),
-              'Credit'         => 0,
-              'IsPosted'       => 1,
-              'CreateBy'       => $createby,
-              'CreateDate'     => $createdate,
-              'IsAppove'       => 1
-               ); 
-       $this->db->insert('acc_transaction',$tax_info);
-
-           ///Customer credit for Paid Amount
-            $cuscredit = array(
-              'VNo'            => $invoice_id,
-              'Vtype'          => 'INV',
-              'VDate'          => $createdate,
-              'COAID'          => $customer_headcode,
-              'Narration'      => 'Merchant credit for Paid Amount For Merchant '.$cusifo->customer_name,
-              'Debit'          => 0,
-              'Credit'         => $this->input->get('paid_amount'),
-              'IsPosted'       => 1,
-              'CreateBy'       => $createby,
-              'CreateDate'     => $createdate,
-              'IsAppove'       => 1
-            ); 
-
-            if(!empty($this->input->get('paid_amount'))){
-                $this->db->insert('acc_transaction',$cuscredit);
-                $this->db->insert('acc_transaction',$cc);
-                 
-            }
-            $customerinfo = $this->db->select('*')->from('customer_information')->where('customer_id',$customer_id)->get()->row();
-            $p_id                = $product_id;
-            $total_amount        = $totalamount;
-            $discount_rate       = 0;
-            $discount_per        = 0;
-            $tax_amount          = 0;
-            $invoice_description = '';
-            $serial_n            = $serial_no;
-
-       
-            for ($i = 0, $n = count($p_id); $i < $n; $i++) {
-                $product_quantity  = $quantity[$i];
-                $product_rate      = $prrate[$i];
-                $product_id        = $p_id[$i];
-                $serial_no         = (!empty($serial_n[$i])?$serial_n[$i]:null);
-                $total_price       = $product_rate*$product_quantity;
-                $supplier_rate     = $this->supplier_rate($product_id);
-                $disper            = $discount_per[$i];
-                $discount          = is_numeric($product_quantity) * is_numeric($product_rate) * is_numeric($disper) / 100;
-                $tax               = $tax_amount[$i];
-            
-               
-                $invdetails = array(
-                'invoice_details_id' => $this->generator(15),
-                'invoice_id'         => $invoice_id,
-                'product_id'         => $product_id,
-                'serial_no'          => $serial_no,
-                'quantity'           => $product_quantity,
-                'rate'               => $product_rate,
-                'discount'           => '',
-                'description'        => '',
-                'discount_per'       => '',
-                'tax'                => 0,
-                'paid_amount'        => $this->input->get('paid_amount'),
-                'due_amount'         => $this->input->get('due_amount'),
-                'supplier_rate'      => $supplier_rate[0]['supplier_price'],
-                'total_price'        => $total_price,
-                'status'             => 1
-                );
-                // print_r($invdetails);exit();
-                $this->db->insert('invoice_details', $invdetails);
-            }
-
-            $message = 'Mr.'.$customerinfo->customer_name.',
-            '.'You have purchase  '.$this->input->get('grand_total_price').' You have paid .'.$this->input->get('paid_amount');
-               $config_data = $this->db->select('*')->from('sms_settings')->get()->row();
-        if($config_data->isinvoice == 1){
-          $this->smsgateway->send([
-            'apiProvider' => 'nexmo',
-            'username'    => $config_data->api_key,
-            'password'    => $config_data->api_secret,
-            'from'        => $config_data->from,
-            'to'          => $customerinfo->customer_mobile,
-            'message'     => $message
-        ]);
-      }
-           
-            $message_sent = true ; 
-             if($message_sent == true){
-                  $json['response'] = [
-                             'status'     => 'ok',
-                             'message'    => 'Successfully Added',
-                             'permission' => 'write'
-                        ];
-             }else{
-                    $json['response'] = [
-                             'status'     => 'error',
-                             'message'    => 'Please Try Again',
-                             'permission' => 'read'
-                        ];
-            }
-
-            echo json_encode($json,JSON_UNESCAPED_UNICODE);
+            echo json_encode(['status' => 'success', 'payment_methods' => $list]);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'No payment methods found']);
+        }
     }
+
+    
+    public function autoapprove($invoice_id){
+        $this->load->model('account/Accounts_model', 'accounts_model');
+        
+        $vouchers = $this->db->select('referenceNo, VNo')->from('acc_vaucher')
+                      ->where('referenceNo', $invoice_id)
+                      ->where('status', 0)
+                      ->get()->result();
+        
+        log_message('debug', '🎯 Vouchers to approve: ' . json_encode($vouchers));
+    
+        foreach ($vouchers as $value) {
+            log_message('debug', '🟢 Approving voucher: VNo=' . $value->VNo . ', Ref=' . $value->referenceNo);
+            $result = $this->accounts_model->approved_vaucher($value->VNo, 'active');
+            log_message('debug', '✅ Voucher approved: ' . json_encode($result));
+        }
+    
+        return true;
+    }
+
+
+    public function insert_sale() {
+        header('Content-Type: application/json');
+        log_message('debug', '✅ API insert_sale called');
+    
+        $input = json_decode(file_get_contents("php://input"), true);
+        log_message('debug', '🧾 Raw request body: ' . print_r($input, true));
+    
+        if (empty($input)) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid JSON input']);
+            return;
+        }
+    
+        $this->load->library('session');
+        $this->load->library('occational');
+        $this->load->library('smsgateway');
+    
+        $createby = $input['createby'];
+        $this->session->set_userdata('id', $createby);
+    
+        $this->load->model('invoice/Invoice_model', 'invoice_model');
+        $this->load->model('account/Accounts_model', 'accounts_model');
+        
+        
+        // ✅ Financial year check
+        $finyear = financial_year();
+        if ($finyear <= 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Please Create Financial Year First']);
+            return;
+        }
+    
+        // ✅ Generate invoice number and insert
+        $invoice_id = $this->invoice_generator(); // Same as `invoice` value
+        log_message('debug', "🧾 Generated invoice_id = $invoice_id");
+    
+        // ✅ Store essential POST vars in $_POST to reuse form-based logic
+        $_POST['invoice_id']         = $invoice_id;
+        $_POST['invoice']            = $invoice_id;
+        $_POST['customer_id']        = $input['customer_id'];
+        $_POST['paid_amount']        = $input['paid_amount'];
+        $_POST['due_amount']         = $input['due_amount'] ?? 0;
+        $_POST['total_discount']     = $input['total_discount'] ?? 0;
+        $_POST['total_tax']          = $input['total_tax'] ?? 0;
+        $_POST['invoice_date']       = $input['invoice_date'] ?? date('Y-m-d');
+        $_POST['inva_details']       = $input['inva_details'] ?? 'API Invoice';
+        $_POST['payment_type']       = $input['payment_type'];
+        $_POST['status']             = $input['status'] ?? 1;
+        $_POST['invoice_discount']   = 0;
+        $_POST['total_vat_amnt']     = 0;
+        $_POST['previous']           = 0;
+        $_POST['shipping_cost']      = 0;
+        $_POST['is_credit']          = ($_POST['payment_type'] == 0) ? 1 : 0;
+    
+        $_POST['multipaytype'][0]      = $_POST['payment_type'];
+        $_POST['pamount_by_method'][0] = $_POST['paid_amount'];
+    
+        $_POST['product_id']         = [];
+        $_POST['product_quantity']   = [];
+        $_POST['product_rate']       = [];
+        $_POST['serial_no']          = [];
+        $_POST['total_price']        = [];
+        $_POST['discount']           = [];
+        $_POST['discountvalue']      = [];
+        $_POST['vatvalue']           = [];
+        $_POST['vatpercent']         = [];
+        $_POST['desc']               = [];
+        $_POST['available_quantity'] = [];
+    
+        $grand_total = 0;
+    
+        foreach ($input['detailsinfo'] as $item) {
+            $qty = floatval($item['product_quantity']);
+            $rate = floatval($item['product_rate']);
+            $total = $qty * $rate;
+            $grand_total += $total;
+    
+            $_POST['product_id'][]         = $item['product_id'];
+            $_POST['product_quantity'][]   = $qty;
+            $_POST['product_rate'][]       = $rate;
+            $_POST['serial_no'][]          = $item['serial_no'] ?? '';
+            $_POST['total_price'][]        = $total;
+            $_POST['discount'][]           = 0;
+            $_POST['discountvalue'][]      = 0;
+            $_POST['vatvalue'][]           = 0;
+            $_POST['vatpercent'][]         = 0;
+            $_POST['desc'][]               = '';
+            $_POST['available_quantity'][] = $qty + 100; // Simulated stock
+        }
+    
+        $_POST['grand_total_price'] = $grand_total;
+    
+        // ✅ Insert invoice and get returned invoice_id (same as input)
+        $inserted_invoice_id = $this->invoice_model->invoice_entry($invoice_id);
+        log_message('debug', '✅ Invoice inserted, returned invoice_id: ' . $inserted_invoice_id);
+    
+        // ✅ Auto approve voucher if enabled in settings
+        $setting_data = $this->db->select('is_autoapprove_v')->from('web_setting')->where('setting_id', 1)->get()->row();
+        
+        if ($setting_data && $setting_data->is_autoapprove_v == 1) {
+            log_message('debug', '✅ Auto-approving voucher for invoice_id: ' . $inserted_invoice_id);
+            $this->autoapprove($inserted_invoice_id);
+        }
+    
+        // ✅ Send SMS if enabled
+        $config_data = $this->db->get('sms_settings')->row();
+        if ($config_data->isinvoice == 1) {
+            $cusinfo = $this->db->get_where('customer_information', ['customer_id' => $input['customer_id']])->row();
+            if (!empty($cusinfo)) {
+                $message = 'Mr.' . $cusinfo->customer_name . ', You have purchased ' . number_format($grand_total, 2) . ' and paid ' . $_POST['paid_amount'];
+                $this->smsgateway->send([
+                    'apiProvider' => 'nexmo',
+                    'username'    => $config_data->api_key,
+                    'password'    => $config_data->api_secret,
+                    'from'        => $config_data->from,
+                    'to'          => $cusinfo->customer_mobile,
+                    'message'     => $message
+                ]);
+                log_message('debug', '✅ SMS sent to customer');
+            }
+        }
+    
+        echo json_encode([
+            'status'     => 'success',
+            'invoice_id' => $invoice_id,
+            'message'    => 'Invoice created successfully via API'
+        ]);
+    }   
+        
+    
+    
+    
 
 
 

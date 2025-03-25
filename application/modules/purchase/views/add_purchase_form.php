@@ -221,13 +221,15 @@
                                         name="total_discount" value="0.00" readonly="readonly" />
                                 </td>
                             </tr>
-                            <tr>
+                            <input type="hidden" id="total_vat_amnt" class="form-control text-right"
+                                        name="total_vat_amnt" value="0.00" readonly="readonly" />
+                            <!-- <tr>
                                 <td class="text-right" colspan="8"><b><?php echo display('ttl_val') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="total_vat_amnt" class="form-control text-right"
                                         name="total_vat_amnt" value="0.00" readonly="readonly" />
                                 </td>
-                            </tr>
+                            </tr> -->
 
                             <tr>
 

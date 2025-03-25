@@ -1,4 +1,28 @@
+<script type="text/javascript">
+function printDiv() {
+    var divName = "printArea";
+    var printContents = document.getElementById(divName).innerHTML;
+    var originalContents = document.body.innerHTML;
+    document.body.innerHTML = printContents;
+    window.print();
+    document.body.innerHTML = originalContents;
+}
+</script>
 <div class="content-wrapper">
+<section class="content-header">
+        <div class="header-icon">
+            <i class="pe-7s-note2"></i>
+        </div>
+        <div class="header-title">
+            <h1><?php echo display('accounts') ?></h1>
+            <small><?php echo display('general_ledger') ?></small>
+            <ol class="breadcrumb">
+                <li><a href="#"><i class="pe-7s-home"></i> <?php echo display('home') ?></a></li>
+                <li><a href="#"><?php echo display('accounts') ?></a></li>
+                <li class="active"><?php echo display('general_ledger') ?></li>
+            </ol>
+        </div>
+    </section>
 	<section class="content">
 		<!-- Manage Purchase report -->
 		<div class="row">

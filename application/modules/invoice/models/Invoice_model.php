@@ -33,10 +33,10 @@ class Invoice_model extends CI_Model {
                 ->from('customer_information')
                 ->where('customer_name', 'Walking Merchant')
                 ->get();
-        if ($query->num_rows() > 0) {
-            return $query->result_array();
-        }
-        return false;
+                if ($query->num_rows() > 0) {
+                    return $query->result_array();
+                }
+            return false;
     }
  
       public function allproduct(){
@@ -47,17 +47,18 @@ class Invoice_model extends CI_Model {
         $query   = $this->db->get();
         $itemlist=$query->result();
         return $itemlist;
-        }
+    }
 
-        public function vat_tax_setting(){
+    public function vat_tax_setting(){
         $this->db->select('*');
         $this->db->from('vat_tax_setting');
         $query   = $this->db->get();
         return $query->row();
-        }
+    }
 
 
-   public function todays_invoice(){
+   
+    public function todays_invoice(){
         $this->db->select('a.*,b.customer_name');
         $this->db->from('invoice a');
         $this->db->join('customer_information b', 'b.customer_id = a.customer_id','left');
@@ -70,8 +71,7 @@ class Invoice_model extends CI_Model {
         return false;
     }
 
-        public function customer_dropdown()
-    {
+    public function customer_dropdown(){
         $data = $this->db->select("*")
             ->from('customer_information')
             ->get()
@@ -87,7 +87,7 @@ class Invoice_model extends CI_Model {
         }
     }
 
-        public function customer_search($customer_id){
+    public function customer_search($customer_id){
         $query = $this->db->select('*')
                           ->from('customer_information')
                           ->group_start()
@@ -102,7 +102,7 @@ class Invoice_model extends CI_Model {
                           return false;
     }
 
-      public function count_invoice() {
+    public function count_invoice() {
         return $this->db->count_all("invoice");
     }
 
@@ -235,7 +235,7 @@ class Invoice_model extends CI_Model {
     }
 
 
-public function invoice_taxinfo($invoice_id){
+    public function invoice_taxinfo($invoice_id){
        return $this->db->select('*')   
             ->from('tax_collection')
             ->where('relation_id',$invoice_id)
@@ -243,7 +243,7 @@ public function invoice_taxinfo($invoice_id){
             ->result_array(); 
     }
 
-        public function retrieve_invoice_editdata($invoice_id) {
+    public function retrieve_invoice_editdata($invoice_id) {
         $this->db->select('a.*, sum(c.quantity) as sum_quantity,a.id as dbinv_id, a.total_tax as taxs,a. prevous_due,b.customer_name,c.*,c.tax as total_tax,c.product_id,d.product_name,d.product_model,d.tax,d.unit,d.*');
         $this->db->from('invoice a');
         $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
@@ -260,7 +260,22 @@ public function invoice_taxinfo($invoice_id){
         return false;
     }
 
-    public function pmethod_dropdown(){
+    public function number_generator() {
+        $this->db->select_max('invoice', 'invoice_no');
+        $query      = $this->db->get('invoice');
+        $result     = $query->result_array();
+        $invoice_no = $result[0]['invoice_no'];
+        
+        if ($invoice_no != '') {
+            $invoice_no = $invoice_no + 1;
+        } else {
+            $invoice_no = 1000;
+        }
+        
+        return $invoice_no;
+    }
+
+public function pmethod_dropdown(){
         
         $data = $this->db->select('HeadName, HeadCode')
                 ->from('acc_coa')
@@ -278,8 +293,8 @@ public function invoice_taxinfo($invoice_id){
        } else {
            return false; 
        }
-    }
-    public function pmethod_dropdown_new(){
+}
+public function pmethod_dropdown_new(){
         $data = $this->db->select('*')
                 ->from('acc_coa')
                 ->where('PHeadName','Cash')
@@ -296,8 +311,9 @@ public function invoice_taxinfo($invoice_id){
        } else {
            return false; 
        }
-    }
-     public function invoice_entry($incremented_id) {
+}
+     
+public function invoice_entry($incremented_id) {
         $tablecolumn         = $this->db->list_fields('tax_collection');
         $num_column          = count($tablecolumn)-4;
         
@@ -511,9 +527,12 @@ public function invoice_taxinfo($invoice_id){
                 $this->db->where('product_id', $product_id)->update('product_information', $product_price);
             }
         }
+
+        if (!empty($cusinfo)) {
         $message = 'Mr.'.$customerinfo->customer_name.',
         '.'You have purchase  '.$this->input->post('grand_total_price',TRUE).' '. $currency_details[0]['currency'].' You have paid .'.$this->input->post('paid_amount',TRUE).' '. $currency_details[0]['currency'];
-       
+        }
+        
         $config_data = $this->db->select('*')->from('sms_settings')->get()->row();
         if($config_data->isinvoice == 1){
            $smsapi =   $this->smsgateway->send([

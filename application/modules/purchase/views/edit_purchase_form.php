@@ -123,8 +123,7 @@
                                 <th class="text-center invoice_fields"><?php echo display('fixed_dis') ?> </th>
                                 <?php } ?>
                                 <th class="text-center invoice_fields"><?php echo display('dis_val') ?> </th>
-                                <th class="text-center invoice_fields"><?php echo display('vat').' %' ?> </th>
-                                <th class="text-center invoice_fields"><?php echo display('vat_val') ?> </th>
+                                
                                 <th class="text-center"><?php echo display('total') ?></th>
                                 <th class="text-center"><?php echo display('action') ?></th>
                             </tr>
@@ -195,18 +194,7 @@
                                 </td>
                                 <!-- Discount end-->
                                 <!-- VAT  start-->
-                                <td>
-                                    <input type="text" name="vatpercent[]" onkeyup="calculate_store(<?php echo $purchases['sl']?>);"
-                                        onchange="calculate_store(<?php echo $purchases['sl']?>);" id="vat_percent_<?php echo $purchases['sl']?>"
-                                        value="<?php echo $purchases['vat_amnt_per']?>" class="form-control text-right" min="0" tabindex="13" placeholder="0.00" />
-
-
-                                </td>
-                                <td>
-                                    <input type="text" name="vatvalue[]" id="vat_value_<?php echo $purchases['sl']?>"
-                                        class="form-control text-right total_vatamnt" min="0" tabindex="14"
-                                        value="<?php echo $purchases['vat_amnt']?>" placeholder="0.00" readonly />
-                                </td>
+                                
                                 <!-- VAT  end-->
 
                                 <td class="text-right">
@@ -229,7 +217,7 @@
                             <tfoot>
                                 <tr>
 
-                                    <td class="text-right" colspan="10"><b><?php echo display('total') ?>:</b></td>
+                                    <td class="text-right" colspan="8"><b><?php echo display('total') ?>:</b></td>
                                     <td class="text-right">
                                         <input type="text" id="Total" class="text-right form-control" name="total"
                                             value="<?php echo $total;?>" readonly="readonly" />
@@ -244,7 +232,7 @@
                                 </tr>
                                 <tr>
 
-                                    <td class="text-right" colspan="10">
+                                    <td class="text-right" colspan="8">
                                         <b><?php echo display('purchase_discount') ?>:</b>
                                     </td>
                                     <td class="text-right">
@@ -257,23 +245,18 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td class="text-right" colspan="10"><b><?php echo display('total_discount') ?>:</b>
+                                    <td class="text-right" colspan="8"><b><?php echo display('total_discount') ?>:</b>
                                     </td>
                                     <td class="text-right">
                                         <input type="text" id="total_discount_ammount" class="form-control text-right"
                                         value="<?php echo $invoice_discount;?>" name="total_discount" value="0.00" readonly="readonly" />
                                     </td>
                                 </tr>
-                                <tr>
-                                    <td class="text-right" colspan="10"><b><?php echo display('ttl_val') ?>:</b></td>
-                                    <td class="text-right">
-                                        <input type="text" id="total_vat_amnt" class="form-control text-right"
+                                <input type="hidden" id="total_vat_amnt" class="form-control text-right"
                                         value="<?php echo $total_vat_amnt;?>"  name="total_vat_amnt" value="0.00" readonly="readonly" />
-                                    </td>
-                                </tr>
                                 <tr>
 
-                                    <td class="text-right" colspan="10"><b><?php echo display('grand_total') ?>:</b>
+                                    <td class="text-right" colspan="8"><b><?php echo display('grand_total') ?>:</b>
                                     </td>
                                     <td class="text-right">
                                         <input type="text" id="grandTotal"
@@ -284,7 +267,7 @@
                                 </tr>
                                 <tr>
 
-                                    <td class="text-right" colspan="10"><b><?php echo display('paid_amount') ?>:</b>
+                                    <td class="text-right" colspan="8"><b><?php echo display('paid_amount') ?>:</b>
                                     </td>
                                     <td class="text-right">
                                         <input type="text" id="paidAmount" class="text-right form-control"
@@ -295,7 +278,7 @@
                                 </tr>
                                 <tr>
                                    
-                                    <td class="text-right" colspan="10"><b><?php echo display('due_amount') ?>:</b></td>
+                                    <td class="text-right" colspan="8"><b><?php echo display('due_amount') ?>:</b></td>
                                     <td class="text-right">
                                         <input type="text" id="dueAmmount" class="text-right form-control"
                                             name="due_amount" value="<?php echo $due_amount;?>" readonly="readonly" />

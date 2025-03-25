@@ -20,6 +20,14 @@ class Api_model extends CI_Model {
         return false;
     }
 
+
+    public function get_customer_by_email($email) {
+        return $this->db->select('*')
+            ->from('customer_information')
+            ->where('customer_email', $email)
+            ->get()
+            ->row_array();
+    }
     
     public function user_entry($data) {
         $users = array(

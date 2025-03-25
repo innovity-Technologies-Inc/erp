@@ -35,6 +35,7 @@ class Customer extends MX_Controller {
         $postData = $this->input->post();
         $data     = $this->customer_model->getCustomerList($postData);
         
+        // 🔴 Debugging: Print JSON output to check if balance is included
         header('Content-Type: application/json');
         echo json_encode($data, JSON_PRETTY_PRINT);
         exit;
@@ -137,7 +138,7 @@ class Customer extends MX_Controller {
         'customer_address'   => $this->input->post('customer_address', true),
         'address2'           => !empty($this->input->post('address2', true)) ? $this->input->post('address2', true) : NULL,
         'sales_permit_number'=> $this->input->post('sales_permit_number', true),
-        'status'             => 1,
+        'status'             => $this->input->post('status', true), // ✅ Fix here
         'create_by'          => $this->session->userdata('id')
     ];
 
