@@ -227,100 +227,142 @@ class Report_model extends CI_Model {
         }
         return false;
     }
-    public function getSalesReportList($postData=null){
+    
 
-        $response = array();
+public function getSalesReportList($postData = null) {
+    $response = array();
 
-        $fromdate = $this->input->post('fromdate');
-        $todate   = $this->input->post('todate');
-        if(!empty($fromdate)){
-           $datbetween = "(a.date BETWEEN '$fromdate' AND '$todate')";
-        }else{
-           $datbetween = "";
-        }
+    // Get input parameters
+    $fromdate = $this->input->post('fromdate');
+    $todate = $this->input->post('todate');
 
-        ## Read value
-        $draw = $postData['draw'];
-        $start = $postData['start'];
-        $rowperpage = $postData['length']; // Rows display per page
-        $columnIndex = $postData['order'][0]['column']; // Column index
-        $columnName = $postData['columns'][$columnIndex]['data']; // Column name
-        $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
-        $searchValue = $postData['search']['value']; // Search value
+    // Apply Date Range Filter
+    $dateFilter = (!empty($fromdate) && !empty($todate)) 
+        ? " DATE(i.date) BETWEEN '".$this->db->escape_str($fromdate)."' AND '".$this->db->escape_str($todate)."'" 
+        : "";
 
-        ## Search 
-        $searchQuery = "";
-        if($searchValue != ''){
-           $searchQuery = " (a.date like '%".$searchValue."%' or a.invoice_id like '%".$searchValue."%' or a.total_amount like'%".$searchValue."%' or b.customer_name like'%".$searchValue."%') ";
-        }
+    // Fetch valid payment methods based on `pmethod_dropdown()`
+    $this->load->model('account/Accounts_model');
+    $paymentMethods = $this->Accounts_model->pmethod_dropdown();
+    $paymentCodes = array_keys($paymentMethods); // Extract valid payment HeadCodes
 
-        ## Total number of records without filtering
-        $this->db->select('count(*) as allcount');
-        $this->db->from('invoice a');
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
-        if(!empty($fromdate) && !empty($todate)){
-            $this->db->where($datbetween);
-        }
-         if($searchValue != '')
-        $this->db->where($searchQuery);
-        $records = $this->db->get()->result();
-        $totalRecords = $records[0]->allcount;
+    ## Read values
+    $draw = isset($postData['draw']) ? intval($postData['draw']) : 0;
+    $start = isset($postData['start']) ? intval($postData['start']) : 0;
+    $rowperpage = isset($postData['length']) ? intval($postData['length']) : 10;
+    $columnIndex = isset($postData['order'][0]['column']) ? intval($postData['order'][0]['column']) : 0;
+    $columnName = isset($postData['columns'][$columnIndex]['data']) ? $postData['columns'][$columnIndex]['data'] : 'invoice_id';
+    $columnSortOrder = isset($postData['order'][0]['dir']) ? $postData['order'][0]['dir'] : 'desc';
+    $searchValue = isset($postData['search']['value']) ? $this->db->escape_like_str($postData['search']['value']) : '';
 
-        ## Total number of record with filtering
-        $this->db->select('count(*) as allcount');
-        $this->db->from('invoice a');
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
-        if(!empty($fromdate) && !empty($todate)){
-            $this->db->where($datbetween);
-        }
-        if($searchValue != '')
-           $this->db->where($searchQuery);
-        $records = $this->db->get()->result();
-        $totalRecordwithFilter = $records[0]->allcount;
+    $sql = "
+        WITH PaymentMethods AS (
+            SELECT HeadCode, HeadName
+            FROM acc_coa
+            WHERE PHeadName IN ('Cash', 'Cash at Bank', 'Accounts Receivable')
+        ),
+        PaymentDetails AS (
+            SELECT 
+                i.invoice_id, 
+                MAX(i.date) AS date, 
+                MAX(i.total_amount) AS total_amount, 
+                MAX(i.total_discount) AS total_discount, 
+                MAX(i.total_amount - i.total_discount) AS payable_amount, 
+                MAX(i.paid_amount) AS paid_amount, 
+                MAX(i.due_amount) AS due_amount, 
+                c.customer_name, 
+                MAX(v.Vtype) AS voucher_type,  
+                MAX(t.VNo) AS voucher_no,  
+                COALESCE(MAX(pm.HeadName), 'Unknown') AS payment_type  
+            FROM invoice i
+            LEFT JOIN customer_information c ON c.customer_id = i.customer_id
+            LEFT JOIN acc_vaucher v ON v.referenceNo = i.invoice_id  
+            LEFT JOIN acc_transaction t ON v.VNo = t.VNo  
+            LEFT JOIN PaymentMethods pm ON t.COAID = pm.HeadCode  
+            WHERE t.Debit > 0  
+            GROUP BY i.invoice_id, c.customer_name
+        )
+        SELECT * FROM (
+            SELECT 
+                i.invoice_id,
+                COALESCE(p.date, i.date) AS date, 
+                COALESCE(p.total_amount, i.total_amount) AS total_amount, 
+                COALESCE(p.total_discount, i.total_discount) AS total_discount, 
+                COALESCE(p.payable_amount, (i.total_amount - i.total_discount)) AS payable_amount, 
+                COALESCE(p.paid_amount, i.paid_amount) AS paid_amount, 
+                COALESCE(p.due_amount, i.due_amount) AS due_amount, 
+                COALESCE(p.customer_name, c.customer_name) AS customer_name, 
+                COALESCE(p.voucher_type, 'N/A') AS voucher_type, 
+                COALESCE(p.voucher_no, 'N/A') AS voucher_no, 
+                COALESCE(p.payment_type, 'Unknown') AS payment_type
+            FROM invoice i
+            LEFT JOIN customer_information c ON c.customer_id = i.customer_id
+            LEFT JOIN PaymentDetails p ON p.invoice_id = i.invoice_id
+            WHERE 1=1";
 
-        ## Fetch records
-        $this->db->select("a.*,b.customer_id,b.customer_name");
-        $this->db->from('invoice a');
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
-        if(!empty($fromdate) && !empty($todate)){
-            $this->db->where($datbetween);
-        }
-        if($searchValue != '')
-        $this->db->where($searchQuery);
-        $this->db->order_by($columnName, $columnSortOrder);
-        $this->db->limit($rowperpage, $start);
-        $records = $this->db->get()->result();
-        $data = array();
-        $sl =1;
- 
-        $sales_amount = 0;
-        foreach($records as $record ){
-         $button = '';
-         $base_url = base_url();
-        $customer = $record->customer_name;
-              
-           $data[] = array( 
-               'date'                   =>$record->date,               
-               'invoice_id'             =>$record->invoice_id,               
-               'customer_name'          =>$customer,
-               'due_amount'             =>$record->due_amount,               
-               'total_amount'     =>$record->total_amount,               
-           ); 
-           $sales_amount += $record->total_amount;
-           $sl++;
-        }
+    // Apply Date Filter
+    if (!empty($dateFilter)) {
+        $sql .= " AND " . $dateFilter;
+    }
 
-        ## Response
-        $response = array(
-           "draw" => intval($draw),
-           "iTotalRecords" => $totalRecordwithFilter,
-           "iTotalDisplayRecords" => $totalRecords,
-           "sales_amount" => $sales_amount,
-           "aaData" => $data
+    $sql .= ") AS finalResult WHERE 1=1";
+
+    // Apply Search
+    if (!empty($searchValue)) {
+        $sql .= " AND (
+            invoice_id LIKE '%{$searchValue}%' OR
+            customer_name LIKE '%{$searchValue}%' OR
+            payment_type LIKE '%{$searchValue}%' OR
+            voucher_no LIKE '%{$searchValue}%' OR
+            date LIKE '%{$searchValue}%'
+        )";
+    }
+
+    // Count filtered records
+    $countQuery = $this->db->query("SELECT COUNT(*) AS totalFiltered FROM ({$sql}) AS filteredTable");
+    $totalFiltered = $countQuery->row()->totalFiltered;
+
+    // Run main query with pagination
+    $sql .= " ORDER BY invoice_id {$columnSortOrder} LIMIT {$start}, {$rowperpage}";
+    $query = $this->db->query($sql);
+    $records = $query->result();
+
+    $data = [];
+    $sales_amount = 0;
+
+    foreach ($records as $record) {
+        $data[] = array(
+            'date' => !empty($record->date) ? $record->date : 'N/A',
+            'invoice_id' => $record->invoice_id,
+            'customer_name' => !empty($record->customer_name) ? $record->customer_name : 'Unknown',
+            'total_amount' => number_format($record->total_amount, 2),
+            'total_discount' => number_format($record->total_discount, 2),
+            'payable_amount' => number_format($record->payable_amount, 2),
+            'paid_amount' => number_format($record->paid_amount, 2),
+            'due_amount' => number_format($record->due_amount, 2),
+            'payment_type' => !empty($record->payment_type) ? $record->payment_type : 'Unknown',
+            'voucher_type' => !empty($record->voucher_type) ? $record->voucher_type : 'N/A',
+            'voucher_no' => !empty($record->voucher_no) ? $record->voucher_no : 'N/A'
         );
+        $sales_amount += $record->total_amount;
+    }
 
-        return $response; 
-   }
+    // Response
+    $response = array(
+        "draw" => $draw,
+        "iTotalRecords" => $totalFiltered,
+        "iTotalDisplayRecords" => $totalFiltered,
+        "sales_amount" => number_format($sales_amount, 2),
+        "aaData" => !empty($data) ? $data : []
+    );
+
+    // Logs
+    error_log("📤 API Response Sent: " . json_encode($response));
+    error_log("🔍 Search Value: " . $searchValue);
+    error_log("🔢 Total Filtered Records: " . $totalFiltered);
+
+    return $response;
+}
 
     //Retrieve all Report
     public function retrieve_dateWise_SalesReports($from_date, $to_date) {
@@ -573,102 +615,128 @@ class Report_model extends CI_Model {
         }
         return false;
     }
-    public function getReportList($postData=null){
 
-        $response = array();
+public function getReportList($postData = null) {
+    $response = array();
 
-        $fromdate = $this->input->post('fromdate');
-        $todate   = $this->input->post('todate');
-        if(!empty($fromdate)){
-           $datbetween = "(a.purchase_date BETWEEN '$fromdate' AND '$todate')";
-        }else{
-           $datbetween = "";
-        }
-        // dd($datbetween);
+    // Get input parameters
+    $fromdate = $this->input->post('fromdate');
+    $todate   = $this->input->post('todate');
 
-        ## Read value
-        $draw = $postData['draw'];
-        $start = $postData['start'];
-        $rowperpage = $postData['length']; // Rows display per page
-        $columnIndex = $postData['order'][0]['column']; // Column index
-        $columnName = $postData['columns'][$columnIndex]['data']; // Column name
-        $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
-        $searchValue = $postData['search']['value']; // Search value
+    // Date range filter
+    $dateFilter = (!empty($fromdate) && !empty($todate)) ? " (p.purchase_date BETWEEN '$fromdate' AND '$todate')" : "";
 
-        ## Search 
-        $searchQuery = "";
-        if($searchValue != ''){
-           $searchQuery = " (a.purchase_date like '%".$searchValue."%' or a.purchase_id like '%".$searchValue."%' or a.grand_total_amount like'%".$searchValue."%' or b.supplier_name like'%".$searchValue."%') ";
-        }
+    ## Read values
+    $draw = isset($postData['draw']) ? intval($postData['draw']) : 0;
+    $start = isset($postData['start']) ? intval($postData['start']) : 0;
+    $rowperpage = isset($postData['length']) ? intval($postData['length']) : 10;
+    $columnIndex = isset($postData['order'][0]['column']) ? intval($postData['order'][0]['column']) : 0;
+    $columnName = isset($postData['columns'][$columnIndex]['data']) ? $postData['columns'][$columnIndex]['data'] : 'purchase_id';
+    $columnSortOrder = isset($postData['order'][0]['dir']) ? $postData['order'][0]['dir'] : 'desc';
+    $searchValue = isset($postData['search']['value']) ? $this->db->escape_like_str($postData['search']['value']) : '';
 
-        ## Total number of records without filtering
-        $this->db->select('count(*) as allcount');
-        $this->db->from('product_purchase a');
-        $this->db->join('supplier_information b', 'b.supplier_id = a.supplier_id');
-        if(!empty($fromdate) && !empty($todate)){
-            $this->db->where($datbetween);
-        }
-         if($searchValue != '')
-        $this->db->where($searchQuery);
-        $records = $this->db->get()->result();
-        $totalRecords = $records[0]->allcount;
+    ## Build base query
+    $sql = "
+        WITH PaymentMethods AS (
+            SELECT HeadCode, HeadName, PHeadName
+            FROM acc_coa
+            WHERE PHeadName IN ('Cash', 'Cash at Bank', 'Accounts Payable', 'Inventory')
+        ),
+        PaymentDetails AS (
+            SELECT 
+                p.purchase_id, 
+                MAX(p.purchase_date) AS date, 
+                MAX(p.chalan_no) AS chalan_no,  
+                MAX(p.grand_total_amount) AS total_amount, 
+                MAX(p.paid_amount) AS paid_amount, 
+                MAX(p.due_amount) AS due_amount, 
+                s.supplier_name, 
+                MAX(t.VNo) AS voucher_no,  
+                COALESCE(MAX(pm.PHeadName), MAX(pm.HeadName), 'Unknown') AS payment_type  
+            FROM product_purchase p
+            LEFT JOIN supplier_information s ON s.supplier_id = p.supplier_id
+            LEFT JOIN acc_transaction t ON t.VNo = CONCAT('DV-', p.purchase_id)  
+            LEFT JOIN PaymentMethods pm ON t.COAID = pm.HeadCode  
+            WHERE t.Credit > 0  
+            GROUP BY p.purchase_id, s.supplier_name
+        )
+        SELECT * FROM (
+            SELECT 
+                p.purchase_id,
+                COALESCE(pd.date, p.purchase_date) AS date, 
+                COALESCE(pd.chalan_no, p.chalan_no) AS chalan_no, 
+                COALESCE(pd.total_amount, p.grand_total_amount) AS total_amount, 
+                COALESCE(pd.paid_amount, p.paid_amount) AS paid_amount, 
+                COALESCE(pd.due_amount, p.due_amount) AS due_amount, 
+                COALESCE(pd.supplier_name, s.supplier_name) AS supplier_name, 
+                COALESCE(pd.voucher_no, 'N/A') AS voucher_no, 
+                COALESCE(pd.payment_type, 'Unknown') AS payment_type
+            FROM product_purchase p
+            LEFT JOIN supplier_information s ON s.supplier_id = p.supplier_id
+            LEFT JOIN PaymentDetails pd ON pd.purchase_id = p.purchase_id
+            WHERE 1=1";
 
-        ## Total number of record with filtering
-        $this->db->select('count(*) as allcount');
-        $this->db->from('product_purchase a');
-        $this->db->join('supplier_information b','b.supplier_id = a.supplier_id','left');
-        if(!empty($fromdate) && !empty($todate)){
-            $this->db->where($datbetween);
-        }
-        if($searchValue != '')
-           $this->db->where($searchQuery);
-        $records = $this->db->get()->result();
-        $totalRecordwithFilter = $records[0]->allcount;
+    // Apply Date Filter
+    if (!empty($dateFilter)) {
+        $sql .= " AND $dateFilter";
+    }
 
-        ## Fetch records
-        $this->db->select("a.*,b.supplier_id,b.supplier_name");
-        $this->db->from('product_purchase a');
-        $this->db->join('supplier_information b','b.supplier_id = a.supplier_id','left');
-        if(!empty($fromdate) && !empty($todate)){
-            $this->db->where($datbetween);
-        }
-        if($searchValue != '')
-        $this->db->where($searchQuery);
-        $this->db->order_by($columnName, $columnSortOrder);
-        $this->db->limit($rowperpage, $start);
-        $records = $this->db->get()->result();
-        $data = array();
-        $sl =1;
- 
-        $purchase_amount = 0;
-        // dd($records);
-        foreach($records as $record ){
-         $button = '';
-         $base_url = base_url();
-        $supplier = $record->supplier_name;
-              
-           $data[] = array( 
-               'purchase_date'          =>$record->purchase_date,               
-               'purchase_id'            =>$record->purchase_id,               
-               'supplier_name'          =>$supplier,
-               'due_amount'             =>$record->due_amount,               
-               'grand_total_amount'     =>$record->grand_total_amount,               
-           ); 
-           $purchase_amount += $record->grand_total_amount;
-           $sl++;
-        }
+    $sql .= ") AS finalResult WHERE 1=1";
 
-        ## Response
-        $response = array(
-           "draw" => intval($draw),
-           "iTotalRecords" => $totalRecordwithFilter,
-           "iTotalDisplayRecords" => $totalRecords,
-           "purchase_amount" => $purchase_amount,
-           "aaData" => $data
+    // Apply Search Query
+    if (!empty($searchValue)) {
+        $sql .= " AND (
+            purchase_id LIKE '%$searchValue%' OR
+            chalan_no LIKE '%$searchValue%' OR
+            supplier_name LIKE '%$searchValue%' OR
+            payment_type LIKE '%$searchValue%' OR
+            date LIKE '%$searchValue%' OR
+            total_amount LIKE '%$searchValue%'
+        )";
+    }
+
+    // Count filtered records
+    $countQuery = $this->db->query("SELECT COUNT(*) AS totalFiltered FROM ({$sql}) AS filteredTable");
+    $totalFiltered = $countQuery->row()->totalFiltered;
+
+    // Apply sorting and pagination
+    $sql .= " ORDER BY purchase_id $columnSortOrder LIMIT $start, $rowperpage";
+    $records = $this->db->query($sql)->result();
+
+    $data = array();
+    $purchase_amount = 0;
+
+    foreach ($records as $record) {
+        $data[] = array( 
+            'purchase_date'      => !empty($record->date) ? $record->date : 'N/A',
+            'purchase_id'        => $record->purchase_id,
+            'chalan_no'          => !empty($record->chalan_no) ? $record->chalan_no : 'N/A',
+            'supplier_name'      => !empty($record->supplier_name) ? $record->supplier_name : 'Unknown',
+            'total_amount'       => number_format($record->total_amount, 2),
+            'paid_amount'        => number_format($record->paid_amount, 2),
+            'due_amount'         => number_format($record->due_amount, 2),
+            'voucher_no'         => !empty($record->voucher_no) ? $record->voucher_no : 'N/A',
+            'payment_type'       => !empty($record->payment_type) ? $record->payment_type : 'Unknown'
         );
+        $purchase_amount += $record->total_amount;
+    }
 
-        return $response; 
-   }
+    ## Response
+    $response = array(
+        "draw" => intval($draw),
+        "iTotalRecords" => $totalFiltered,
+        "iTotalDisplayRecords" => $totalFiltered,
+        "purchase_amount" => number_format($purchase_amount, 2),
+        "aaData" => $data
+    );
+
+    // Logging (optional)
+    error_log("📤 Purchase Report Response: " . json_encode($response));
+    error_log("🔍 Search: " . $searchValue);
+    error_log("📦 Total: " . $totalFiltered);
+
+    return $response;
+}
 
 
         public function category_list_product() {

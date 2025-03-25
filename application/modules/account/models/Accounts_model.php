@@ -1812,7 +1812,10 @@ public function journal()
                       'IsAppove'       =>  1,                      
                       'CreateBy'       => $ApprovedBy,
                       'CreateDate'     => $approvedDate
-                    );          
+                    );
+            
+            log_message('debug', '📥 acc_transaction insert: ' . json_encode($transationinsert));          
+            
             $instran = $this->db->insert('acc_transaction',$transationinsert); 
              addActivityLog("approved_vaucher_transation", "create",$this->db->insert_id(), "acc_transaction",1, $transationinsert);
             // update Monthly record
@@ -1842,6 +1845,9 @@ public function journal()
                       'CreateBy'       => $ApprovedBy,
                       'CreateDate'     => $approvedDate
                     ); 
+
+                    log_message('debug', '📥 acc_transaction insert: ' . json_encode($revercetransationinsert));
+
                      $this->db->insert('acc_transaction',$revercetransationinsert); 
                      addActivityLog("approved_vaucher_reversetransation", "create",$this->db->insert_id(), "acc_transaction",1, $revercetransationinsert);
                      // update Monthly record
@@ -4318,14 +4324,20 @@ public function fixed_assets()
                 ->get()
                 ->result(); 
     
-      
-       if (!empty($data)) {
-           foreach($data as $value)
-               $list[$value->HeadCode] = $value->HeadName;
-           return $list;
-       } else {
-           return false; 
-       }
+        error_log("🔍 Retrieved Payment Methods: " . print_r($data, true));
+    
+        if (!empty($data)) {
+            $list = [];
+            foreach($data as $value)
+                $list[$value->HeadCode] = $value->HeadName;
+    
+            error_log("📌 Processed Payment Methods Mapping: " . print_r($list, true));
+    
+            return $list;
+        } else {
+            error_log("⚠️ No Payment Methods Found!");
+            return [];
+        }
     }
 
     public function get_customer(){

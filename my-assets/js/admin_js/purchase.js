@@ -58,11 +58,7 @@
             ' text-right" placeholder="0.00" value="" min="0" tabindex="'+tab11+
             '" /><input type="hidden" value="<?php echo $discount_type?>" name="discount_type"id="discount_type_'+ count +'"></td><td class="test"><input type="text" name="discountvalue[]" onkeyup="calculate_store('+ count +
             ');" onchange="calculate_store('+ count +');" id="discount_value_'+ count +'" class="form-control total_discount_val discount_value_'+ count +
-            ' text-right" placeholder="0.00" value="" min="0" tabindex="'+tab12+'" readonly/></td><td class="test"><input type="text" name="vatpercent[]" onkeyup="calculate_store('+ count +
-            ');" onchange="calculate_store('+ count +');" id="vat_percent_'+ count +'" class="form-control vat_percent_'+ count +
-            ' text-right" placeholder="0.00" value="" min="0" tabindex="'+tab13+'"/></td><td class="test"><input type="text" name="vatvalue[]" onkeyup="calculate_store('+ count +
-            ');" onchange="calculate_store('+ count +');" id="vat_value_'+ count +'" class="form-control total_vatamnt vat_value_'+ count +
-            ' text-right" placeholder="0.00" value="" min="0" tabindex="'+tab14+'" readonly/></td><td class="text-right"><input class="form-control total_price text-right total_price_'+ count +
+            ' text-right" placeholder="0.00" value="" min="0" tabindex="'+tab12+'" readonly/></td><td class="text-right"><input class="form-control total_price text-right total_price_'+ count +
             '" type="text" name="total_price[]" id="total_price_'+ count +
             '" value="0.00" readonly="readonly" /> </td><td> <input type="hidden" id="total_discount_1" class="" /><input type="hidden" id="all_discount_1" class="total_discount" /><button style="text-align: right;" class="btn btn-danger red" type="button"  onclick="deleteRow(this)" tabindex="8"><i class="fa fa-close"></i></button></td>';
 

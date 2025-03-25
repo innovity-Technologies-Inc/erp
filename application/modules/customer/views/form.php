@@ -189,6 +189,15 @@
                          </div>
 
                      </div>
+                     <label for="status" class="col-sm-2 text-right col-form-label"><?php echo display('status')?>:</label>
+                        <div class="col-sm-4">
+                            <div class="">
+                                <select name="status" id="status" class="form-control">
+                                    <option value="1" <?php echo $customer->status == 1 ? 'selected' : ''; ?>>Active</option>
+                                    <option value="0" <?php echo $customer->status == 0 ? 'selected' : ''; ?>>Inactive</option>
+                                </select>
+                            </div>
+                        </div>
                      <?php if(empty($customer->customer_id)){?>
 
                      <!-- <label for="previous_balance"

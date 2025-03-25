@@ -33,7 +33,13 @@ class Supplier extends MX_Controller {
     public function paysenz_ChecksupplierList(){
         $postData = $this->input->post();
         $data     = $this->supplier_model->getsupplierList($postData);
-        echo json_encode($data);
+    
+        ## DEBUG LOGGING
+        log_message('error', 'DEBUG: Supplier List JSON Response -> ' . json_encode($data));
+    
+        header('Content-Type: application/json');
+        echo json_encode($data, JSON_PRETTY_PRINT);
+        exit;
     }
 
 

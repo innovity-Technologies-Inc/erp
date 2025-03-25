@@ -101,97 +101,122 @@ class Supplier_model extends CI_Model {
     }
 
 
-      public function getsupplierList($postData=null){
+    public function getsupplierList($postData=null){
 
-         $response = array();
-         $supplier_id =  $this->input->post('supplier_id');
-         $custom_data = $this->input->post('customfiled');
-         if(!empty($custom_data)){
-         $cus_data = [''];
-         foreach ($custom_data as $cusd) {
-           $cus_data[] = $cusd;
-         }
-       }
-    
-         ## Read value
-         $draw = $postData['draw'];
-         $start = $postData['start'];
-         $rowperpage = $postData['length']; // Rows display per page
-         $columnIndex = $postData['order'][0]['column']; // Column index
-         $columnName = $postData['columns'][$columnIndex]['data']; // Column name
-         $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
-         $searchValue = $postData['search']['value']; // Search value
-
-         ## Search 
-         $searchQuery = "";
-         if($searchValue != ''){
-            $searchQuery = " (a.supplier_name like '%".$searchValue."%' or a.mobile like '%".$searchValue."%' or a.emailnumber like '%".$searchValue."%'or a.phone like '%".$searchValue."%' or a.address like '%".$searchValue."%' or a.country like '%".$searchValue."%' or a.state like '%".$searchValue."%' or a.zip like '%".$searchValue."%' or a.city like '%".$searchValue."%') ";
-         }
-
-         ## Total number of records without filtering
-         $this->db->select('count(*) as allcount');
-         $this->db->from('supplier_information a');
-         $this->db->join('acc_coa b','a.supplier_id = b.supplier_id','left');
-         
-         if(!empty($supplier_id)){
-             $this->db->where('a.supplier_id',$supplier_id);
-         }
-         if(!empty($custom_data)){
-             $this->db->where_in('a.supplier_id',$cus_data);
-         }
-          if($searchValue != '')
-         $this->db->where($searchQuery);
-         $this->db->group_by('a.supplier_id');
-         $totalRecords =$this->db->get()->num_rows();
-
-         ## Total number of record with filtering
-         $this->db->select('count(*) as allcount');
-         $this->db->from('supplier_information a');
-         $this->db->join('acc_coa b','a.supplier_id = b.supplier_id','left');
-         if(!empty($supplier_id)){
-             $this->db->where('a.supplier_id',$supplier_id);
-         }
-          if(!empty($custom_data)){
-             $this->db->where_in('a.supplier_id',$cus_data);
-         }
-         if($searchValue != '')
-            $this->db->where($searchQuery);
-           $this->db->group_by('a.supplier_id');
-         $totalRecordwithFilter = $this->db->get()->num_rows();
-
-         ## Fetch records
-         $this->db->select("a.*,b.HeadCode,((select ifnull(sum(Debit),0) from acc_transaction where COAID= `b`.`HeadCode` AND IsAppove = 1)-(select ifnull(sum(Credit),0) from acc_transaction where COAID= `b`.`HeadCode` AND IsAppove = 1)) as balance");
-         $this->db->from('supplier_information a');
-         $this->db->join('acc_coa b','a.supplier_id = b.supplier_id','left');
-         $this->db->group_by('a.supplier_id');
-          if(!empty($supplier_id)){
-             $this->db->where('a.supplier_id',$supplier_id);
-         }
-          if(!empty($custom_data)){
-             $this->db->where_in('a.supplier_id',$cus_data);
-         }
-         if($searchValue != '')
-         $this->db->where($searchQuery);
-         $this->db->order_by($columnName, $columnSortOrder);
-         $this->db->limit($rowperpage, $start);
-         $records = $this->db->get()->result();
-         $data = array();
-         $sl =1;
-  
-         foreach($records as $record ){
-          $button = '';
-          $base_url = base_url();
- 
-          if($this->permission1->method('manage_supplier','update')->access()){
-              $button .=' <a href="'.$base_url.'edit_supplier/'.$record->supplier_id.'" class="btn btn-info btn-xs m-b-5 custom_btn" data-toggle="tooltip" data-placement="left" title="Update"><i class="pe-7s-note" aria-hidden="true"></i></a>';
+        $response = array();
+        $supplier_id =  $this->input->post('supplier_id');
+        $custom_data = $this->input->post('customfiled');
+        if(!empty($custom_data)){
+            $cus_data = [''];
+            foreach ($custom_data as $cusd) {
+                $cus_data[] = $cusd;
             }
-        if($this->permission1->method('manage_supplier','delete')->access()){
-            $button .=' <a onclick="supplierdelete('.$record->supplier_id.')" href="javascript:void(0)"  class="btn btn-danger btn-xs m-b-5 custom_btn" data-toggle="tooltip" data-placement="right" title="Delete "><i class="pe-7s-trash" aria-hidden="true"></i></a>';
         }
-
-
+    
+        ## Read value
+        $draw = $postData['draw'];
+        $start = $postData['start'];
+        $rowperpage = $postData['length'];
+        $columnIndex = $postData['order'][0]['column'];
+        $columnName = $postData['columns'][$columnIndex]['data'];
+        $columnSortOrder = $postData['order'][0]['dir'];
+        $searchValue = $postData['search']['value'];
+    
+        ## Search Query
+        $searchQuery = "";
+        if($searchValue != ''){
+            $searchQuery = " (a.supplier_name like '%".$searchValue."%' 
+                            or a.mobile like '%".$searchValue."%' 
+                            or a.emailnumber like '%".$searchValue."%'
+                            or a.phone like '%".$searchValue."%' 
+                            or a.address like '%".$searchValue."%' 
+                            or a.country like '%".$searchValue."%' 
+                            or a.state like '%".$searchValue."%' 
+                            or a.zip like '%".$searchValue."%' 
+                            or a.city like '%".$searchValue."%') ";
+        }
+    
+        ## Total number of records without filtering
+        $this->db->select('count(*) as allcount');
+        $this->db->from('supplier_information a');
+        $this->db->join('acc_coa b','a.supplier_id = b.supplier_id','left');
+    
+        if(!empty($supplier_id)){
+            $this->db->where('a.supplier_id',$supplier_id);
+        }
+        if(!empty($custom_data)){
+            $this->db->where_in('a.supplier_id',$cus_data);
+        }
+        if($searchValue != '')
+            $this->db->where($searchQuery);
+        $this->db->group_by('a.supplier_id');
+        $totalRecords =$this->db->get()->num_rows();
+    
+        ## Total number of record with filtering
+        $this->db->select('count(*) as allcount');
+        $this->db->from('supplier_information a');
+        $this->db->join('acc_coa b','a.supplier_id = b.supplier_id','left');
+        if(!empty($supplier_id)){
+            $this->db->where('a.supplier_id',$supplier_id);
+        }
+        if(!empty($custom_data)){
+            $this->db->where_in('a.supplier_id',$cus_data);
+        }
+        if($searchValue != '')
+            $this->db->where($searchQuery);
+        $this->db->group_by('a.supplier_id');
+        $totalRecordwithFilter = $this->db->get()->num_rows();
+    
+        ## Fetch records
+        $this->db->select("
+            a.supplier_id, 
+            a.supplier_name, 
+            a.address, 
+            a.mobile, 
+            a.emailnumber AS email, 
+            a.city, 
+            a.state, 
+            a.zip, 
+            a.country, 
+            (
+                COALESCE((
+                    SELECT SUM(t.Debit) - SUM(t.Credit) + SUM(pp.due_amount) 
+                    FROM acc_transaction t
+                    JOIN product_purchase pp ON pp.purchase_id = t.referenceNo
+                    WHERE pp.supplier_id = a.supplier_id
+                    AND t.IsAppove = 1
+                ), 0)
+            ) AS balance
+        ");
+        $this->db->from('supplier_information a');
+        $this->db->group_by('a.supplier_id');
+    
+        if(!empty($supplier_id)){
+            $this->db->where('a.supplier_id',$supplier_id);
+        }
+        if(!empty($custom_data)){
+            $this->db->where_in('a.supplier_id',$cus_data);
+        }
+        if($searchValue != '')
+            $this->db->where($searchQuery);
+        $this->db->order_by($columnName, $columnSortOrder);
+        $this->db->limit($rowperpage, $start);
+        $records = $this->db->get()->result();
         
-               
+        $data = array();
+        $sl =1;
+    
+        foreach($records as $record ){
+            $button = '';
+            $base_url = base_url();
+    
+            if($this->permission1->method('manage_supplier','update')->access()){
+                $button .=' <a href="'.$base_url.'edit_supplier/'.$record->supplier_id.'" class="btn btn-info btn-xs m-b-5 custom_btn" data-toggle="tooltip" data-placement="left" title="Update"><i class="pe-7s-note" aria-hidden="true"></i></a>';
+            }
+            if($this->permission1->method('manage_supplier','delete')->access()){
+                $button .=' <a onclick="supplierdelete('.$record->supplier_id.')" href="javascript:void(0)"  class="btn btn-danger btn-xs m-b-5 custom_btn" data-toggle="tooltip" data-placement="right" title="Delete "><i class="pe-7s-trash" aria-hidden="true"></i></a>';
+            }
+    
             $data[] = array( 
                 'sl'               =>$sl,
                 'supplier_name'    =>$record->supplier_name,
@@ -207,27 +232,32 @@ class Supplier_model extends CI_Model {
                 'state'            =>$record->state,
                 'zip'              =>$record->zip,
                 'country'          =>$record->country,
-                'balance'          =>(!empty($record->balance)?$record->balance:0),
+                'balance'          =>(!empty($record->balance) ? $record->balance : 0),
                 'button'           =>$button,
-                
             ); 
             $sl++;
-         }
-
-         ## Response
-         $response = array(
+        }
+    
+        ## Response
+        $response = array(
             "draw" => intval($draw),
             "iTotalRecords" => $totalRecordwithFilter,
             "iTotalDisplayRecords" => $totalRecords,
             "aaData" => $data
-         );
-
-         return $response; 
+        );
+    
+        return $response;
     }
 
 
 
-        
+    // Get all suppliers
+    public function get_all_suppliers() {
+        $this->db->select('supplier_id, supplier_name');
+        $this->db->from('suppliers'); // Make sure your supplier table name is correct
+        $query = $this->db->get();
+        return $query->result_array();
+    }    
     
     public function individual_info($id){
       return $result = $this->db->select("a.*,b.HeadCode,((select ifnull(sum(Debit),0) from acc_transaction where COAID= `b`.`HeadCode`)-(select ifnull(sum(Credit),0) from acc_transaction where COAID= `b`.`HeadCode`)) as balance")

@@ -91,16 +91,24 @@
                                 <tr>
                                     <th><?php echo display('date') ?></th>
                                     <th><?php echo display('invoice_no') ?></th>
+                                    <th><?php echo display('chalan_no') ?></th>
                                     <th><?php echo display('supplier_name') ?></th>
-                                    <th><?php echo display('due_amount') ?> </th>
                                     <th><?php echo display('total_ammount') ?> </th>
+                                    <th><?php echo display('paid_ammount') ?> </th>
+                                    <th><?php echo display('due_amount') ?> </th>
+                                    <th><?php echo display('payment_type') ?> </th>
                                 </tr>
                             </thead>
                             <tbody>
                             </tbody>
                             <tfoot>
-                                <th colspan="4" class="text-right"><?php echo display('total_purchase') ?>:</th>
-                                <th></th>
+                                <tr>
+                                    <th colspan="4" class="text-right"><?php echo display('total_purchase') ?>:</th>
+                                    <th class="text-right" id="total_sales_amount">0.00</th>
+                                    <th class="text-right" id="total_paid">0.00</th>
+                                    <th class="text-right" id="total_due">0.00</th>
+                                    <th></th> <!-- Payment Type Column (No Totals Needed) -->
+                                </tr>
                             </tfoot>
                         </table>
                     </div>

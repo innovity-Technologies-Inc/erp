@@ -1300,76 +1300,81 @@ $("#customsearch").on('change', function(){
     }
 
     $(document).ready(function() { 
-    // supplier list
-   var CSRF_TOKEN = $('#CSRF_TOKEN').val();
-   var supplier_id = $('#supplier_id').val();
-   var base_url     = $("#base_url").val();
-    var mydatatable = $('#supplierList').DataTable({ 
-             responsive: true,
-
-             "aaSorting": [[ 1, "asc" ]],
-             "columnDefs": [
-                { "bSortable": false, "aTargets": [0,2,3,4,5,6,7,8,9] },
-
-            ],
-           'processing': true,
-           'serverSide': true,
-
-          
-           'lengthMenu':[[10, 25, 50,100,250,500, -1], [10, 25, 50,100,250,500, "All"]],
-
-            
-            'serverMethod': 'post',
-            'ajax': {
-               'url': base_url + 'supplier/supplier/paysenz_ChecksupplierList',
-            "data": function ( data) {
-         data.csrf_test_name = CSRF_TOKEN;
-         data.supplier_id =  $('#supplier_id').val();
-         data.customfiled =  $("select[name='customsearch[]']").val();
-},    
-            },
-          'columns': [
-             { data: 'sl' },
-             { data: 'supplier_name' },
-             { data: 'address'},
-             { data: 'mobile' },
-             { data: 'email'},
-             { data: 'city'},
-             { data: 'state'},
-             { data: 'zip'},
-             { data: 'country'},
-             { data: 'balance',class:"balance" },
-             { data: 'button'},
+      // Supplier list
+      var CSRF_TOKEN = $('#CSRF_TOKEN').val();
+      var supplier_id = $('#supplier_id').val();
+      var base_url = $("#base_url").val();
+  
+      var mydatatable = $('#supplierList').DataTable({ 
+          responsive: true,
+          "aaSorting": [[ 1, "asc" ]],
+          "columnDefs": [
+              { "bSortable": false, "aTargets": [0,2,3,4,5,6,7,8,9] },
           ],
-
-  "footerCallback": function(row, data, start, end, display) {
-  var api = this.api();
- 
-  api.columns('.balance', {
-    page: 'current'
-  }).every(function() {
-    var sum = this
-      .data()
-      .reduce(function(a, b) {
-        var x = parseFloat(a) || 0;
-        var y = parseFloat(b) || 0;
-        return x + y;
-      }, 0);
-    $(this.footer()).html(sum.toFixed(2, 2));
+          'processing': true,
+          'serverSide': true,
+          'lengthMenu': [[10, 25, 50,100,250,500, -1], [10, 25, 50,100,250,500, "All"]],
+          'serverMethod': 'post',
+          'ajax': {
+              'url': base_url + 'supplier/supplier/paysenz_ChecksupplierList',
+              "data": function ( data) {
+                  data.csrf_test_name = CSRF_TOKEN;
+                  data.supplier_id = $('#supplier_id').val();
+                  data.customfiled = $("select[name='customsearch[]']").val();
+                  console.log("DEBUG: Sending AJAX Request ->", data);  // ✅ Added Debugging
+              },
+              "dataSrc": function(json) {
+                  console.log("DEBUG: Server Response ->", json);  // ✅ Added Debugging
+                  return json.aaData || [];
+              }
+          },
+          'columns': [
+              { data: 'sl' },
+              { data: 'supplier_name' },
+              { data: 'address'},
+              { data: 'mobile' },
+              { data: 'email'},
+              { data: 'city'},
+              { data: 'state'},
+              { data: 'zip'},
+              { data: 'country'},
+              { data: 'balance', class: "balance" },
+              { data: 'button'},
+          ],
+          "footerCallback": function(row, data, start, end, display) {
+              var api = this.api();
+              api.columns('.balance', { page: 'current' }).every(function() {
+                  var sum = this.data().reduce(function(a, b) {
+                      var x = parseFloat(a) || 0;
+                      var y = parseFloat(b) || 0;
+                      return x + y;
+                  }, 0);
+                  $(this.footer()).html(sum.toFixed(2, 2));
+              });
+          }
+      });
+  
+      // Reload DataTable when supplier_id is changed
+      $("#supplier_id").on('change', function(){
+          console.log("DEBUG: Supplier ID Changed, Reloading DataTable...");
+          mydatatable.ajax.reload();  
+      });
+  
+      // Reload DataTable when custom search is applied
+      $("#customsearch").on('change', function(){
+          console.log("DEBUG: Custom Search Applied, Reloading DataTable...");
+          mydatatable.ajax.reload();  
+      });
+  
+      // Debugging: Log Balance Data on Table Draw
+      $('#supplierList').on('draw.dt', function () {
+          console.log("DEBUG: Table Data Drawn");
+          $('#supplierList tbody tr').each(function () {
+              var balanceCell = $(this).find('.balance');
+              console.log("DEBUG: Balance Field in Table ->", balanceCell.text());
+          });
+      });
   });
-
-
-}
-
-    });
-$("#supplier_id").on('change', function(){
-   mydatatable.ajax.reload();  
-});
-
-$("#customsearch").on('change', function(){
-   mydatatable.ajax.reload();  
-});
-});
 
         "use strict";
 function supplierdelete(id) {

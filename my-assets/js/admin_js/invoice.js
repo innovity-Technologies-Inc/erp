@@ -63,11 +63,7 @@ function addInputField_invoice(t) {
          count + " form-control text-right' required placeholder='0.00' min='0' tabindex='" + tab4 + "'/></td><td><input type='text' name='discount[]' onkeyup='paysenz_invoice_quantity_calculate(" 
          + count + ");' onchange='paysenz_invoice_quantity_calculate(" + count + ");' id='discount_" + count + "' class='form-control text-right common_discount' placeholder='0.00' min='0' tabindex='" + tab5 + 
          "' /><input type='hidden' value='' name='discount_type' id='discount_type_" + count + "'></td><td><input type='text' name='discountvalue[]'  id='discount_value_" + count + 
-         "' class='form-control text-right common_discount' placeholder='0.00' min='0' tabindex='" + tab13 + "' readonly /></td><td><input type='text' name='vatpercent[]'  id='vat_percent_" + count + 
-         "' onkeyup='paysenz_invoice_quantity_calculate(" + count + ");' onchange='paysenz_invoice_quantity_calculate(" + count + ");' class='form-control text-right common_discount' placeholder='0.00' min='0' tabindex='" + tab14 + 
-         "'  /></td><td><input type='text' name='vatvalue[]'  id='vat_value_" + count + 
-         "' class='form-control text-right common_discount total_vatamnt' placeholder='0.00' min='0' tabindex='" + tab15 + 
-         "' readonly /></td><td class='text-right'><input class='common_total_price total_price form-control text-right' type='text' name='total_price[]' id='total_price_" + 
+         "' class='form-control text-right common_discount' placeholder='0.00' min='0' tabindex='" + tab13 + "' readonly /></td><td class='text-right'><input class='common_total_price total_price form-control text-right' type='text' name='total_price[]' id='total_price_" + 
          count + "' value='0.00' readonly='readonly'/></td><td>"+tbfild+"<input type='hidden' id='all_discount_" + count 
          + "' class='total_discount dppr' name='discount_amount[]'/><button tabindex='" + tab5 + 
          "' style='text-align: right;' class='btn btn-danger' type='button' value='Delete' onclick='deleteRow_invoice(this)'><i class='fa fa-close'></i></button></td>",

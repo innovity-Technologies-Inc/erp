@@ -83,6 +83,7 @@ class Backup_restore extends MX_Controller {
     }
 
     public function restore() {
+        ini_set('max_execution_time', 300);
         $isi_file     = file_get_contents($this->savePath . $this->fileName);
         $string_query = rtrim($isi_file, "\n;");
         $array_query  = explode(";", $string_query);
