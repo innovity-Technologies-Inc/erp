@@ -50,10 +50,8 @@ application/config/database.php
 # ========================
 #  Ignore Generated & Uploaded Files
 # ========================
-assets/data/outgoing/
-assets/data/outgoing/*.sql
-assets/data/pdf/
-assets/uploads/
-assets/generated/
-assets/dist/
+vendor/*
+assets/*
 my-assets/image/employee/
+uploads/*
+
