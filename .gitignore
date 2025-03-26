@@ -52,6 +52,6 @@ application/config/database.php
 # ========================
 vendor/*
 assets/*
-my-assets/image/employee/
+my-assets/image/*
 uploads/*
 

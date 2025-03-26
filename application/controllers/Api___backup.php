@@ -1669,24 +1669,20 @@ class Api extends CI_Controller {
 
 
 
-    public function product_stock() {
-        log_message('debug', '==== [API] product_stock() called ====');
-    
-        $start = $this->input->get('start', TRUE);
-        log_message('debug', 'Received GET param start: ' . var_export($start, true));
-    
-        $start = is_numeric($start) ? (int)$start : 0;
-        log_message('debug', 'Normalized start value: ' . $start);
-    
-        $stok_report = $this->Api_model->product_stock(15, $start);
-        log_message('debug', 'Raw stok_report from model: ' . var_export($stok_report, true));
-    
+    public function product_stock(){
+
+        $start=$this->input->get('start', TRUE); 
+        if($start==0){
+            $stok_report = $this->Api_model->product_stock($limit=15,$start);
+        }else{
+            $stok_report = $this->Api_model->product_stock($limit=15,$start);
+        }
+
         if (!empty($stok_report)) {
             $sub_total_in = 0;
             $sub_total_out = 0;
             $sub_total_stock = 0;
             $i = 0;
-    
             foreach ($stok_report as $k => $v) {
                 $i++;
                 $stok_report[$k]['sl'] = $i;
@@ -1695,33 +1691,28 @@ class Api extends CI_Controller {
                 $sub_total_out = $stok_report[$k]['SubTotalOut'];
                 $stok_report[$k]['SubTotalIn'] = ($sub_total_in + $stok_report[$k]['totalPurchaseQnty']);
                 $sub_total_in = $stok_report[$k]['SubTotalIn'];
-    
-                // ✅ Sanitize price before multiplication
-                $price = is_numeric($stok_report[$k]['price']) ? (float) $stok_report[$k]['price'] : 0;
-                $stok_report[$k]['total_sale_price'] = $stok_report[$k]['stock_qty'] * $price;
-    
+                 $stok_report[$k]['total_sale_price'] = $stok_report[$k]['stock_qty'] * $stok_report[$k]['price'];
                 $stok_report[$k]['SubTotalStock'] = ($sub_total_stock + $stok_report[$k]['stock_qty']);
                 $sub_total_stock = $stok_report[$k]['SubTotalStock'];
             }
-    
+        }
+
+        if (!empty($stok_report)) {
             $json['response'] = [
                 'status'     => 'ok',
                 'stock'      => $stok_report,
                 'total_val'  => $this->db->count_all('product_information'),
                 'permission' => 'read'
             ];
-            log_message('debug', 'Returning response with stock data: ' . json_encode($json['response']));
-        } else {
+        }else{
             $json['response'] = [
                 'status'     => 'error',
                 'message'    => 'No Record Found',
                 'permission' => 'read'
-            ];
-            log_message('error', 'Stock report is empty or null. Returning error response.');
+            ]; 
         }
-    
-        echo json_encode($json, JSON_UNESCAPED_UNICODE);
-        log_message('debug', 'Final JSON output: ' . json_encode($json));
+         echo json_encode($json,JSON_UNESCAPED_UNICODE);
+
     }
 
 
