@@ -433,6 +433,38 @@ public function check_product($id){
             ->result_array();
     }
 
+
+    public function get_category_hierarchy($category_id) {
+        $result = [
+            'parent_category_id' => '',
+            'sub_category_id' => '',
+            'child_category_id' => '',
+        ];
+    
+        // Get current category as object
+        $category = $this->single_category_data($category_id);
+        if (!$category) return $result;
+    
+        if (!empty($category->parent_id)) {
+            $sub_category = $this->single_category_data($category->parent_id);
+            if (!empty($sub_category->parent_id)) {
+                // 3 layers: parent → sub → child
+                $result['parent_category_id'] = $sub_category->parent_id;
+                $result['sub_category_id'] = $category->parent_id;
+                $result['child_category_id'] = $category_id;
+            } else {
+                // 2 layers: parent → child
+                $result['parent_category_id'] = $category->parent_id;
+                $result['sub_category_id'] = $category_id;
+            }
+        } else {
+            // 1 layer: only parent
+            $result['parent_category_id'] = $category_id;
+        }
+    
+        return $result;
+    }
+
 // New Function added by Faiz
 public function get_category_name($category_id) {
     if ($category_id == 0 || empty($category_id)) {
