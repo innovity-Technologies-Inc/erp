@@ -360,6 +360,10 @@ class Product extends MX_Controller {
             if (!empty($id)) {
                 $data['title'] = display('edit_product');
                 $data['product'] = $this->product_model->single_product_data($id);
+
+                // Fetch parent/sub/child category ids
+                $category_ids = $this->product_model->get_category_hierarchy($data['product']->category_id);
+                $data = array_merge($data, $category_ids);
             }
     
             # ✅ Fetch Parent & Child Categories

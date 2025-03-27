@@ -55,47 +55,64 @@
                 <!-- Dynamic Category Selection -->
                 <div class="row">
                     <!-- Parent Category -->
-                    <!-- Parent Category -->
                     <div class="col-sm-6">
                         <div class="form-group row">
-                            <label for="parent_category" class="col-sm-4 col-form-label"><?php echo display('parent_category') ?> <i class="text-danger">*</i></label>
+                            <label for="parent_category" class="col-sm-4 col-form-label">
+                                <?php echo display('parent_category') ?> <i class="text-danger">*</i>
+                            </label>
                             <div class="col-sm-8">
-                                <select class="form-control" id="parent_category" name="parent_category" required>
-                                    <option value=""><?php echo display('select_parent_category') ?></option>
-                                    <?php foreach ($parent_categories as $category) { ?>
-                                        <option value="<?php echo $category['category_id']; ?>"><?php echo $category['category_name']; ?></option>
+                                <select name="parent_category" id="parent_category" class="form-control" required>
+                                    <option value=""><?= display('select_parent_category') ?></option>
+                                    <?php foreach ($parent_categories as $parent) { ?>
+                                        <option value="<?= $parent['category_id'] ?>" <?= ($parent['category_id'] == $parent_category_id) ? 'selected' : '' ?>>
+                                            <?= $parent['category_name'] ?>
+                                        </option>
                                     <?php } ?>
                                 </select>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Sub Category (Initially Hidden) -->
-                    <div class="col-sm-6" id="sub_category_section" style="display: none;">
+                    <!-- Sub Category -->
+                    <div class="col-sm-6" id="sub_category_section" style="<?= !empty($sub_category_id) ? '' : 'display:none;' ?>">
                         <div class="form-group row">
-                            <label for="sub_category" class="col-sm-4 col-form-label"><?php echo display('sub_category') ?></label>
+                            <label for="sub_category" class="col-sm-4 col-form-label">
+                                <?php echo display('sub_category') ?>
+                            </label>
                             <div class="col-sm-8">
-                                <select class="form-control" id="sub_category" name="sub_category">
-                                    <option value=""><?php echo display('select_sub_category') ?></option>
+                                <select name="sub_category" id="sub_category" class="form-control">
+                                    <option value=""><?= display('select_sub_category') ?></option>
+                                    <?php foreach ($sub_categories as $sub) { ?>
+                                        <option value="<?= $sub['category_id'] ?>" <?= ($sub['category_id'] == $sub_category_id) ? 'selected' : '' ?>>
+                                            <?= $sub['category_name'] ?>
+                                        </option>
+                                    <?php } ?>
                                 </select>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Child Category (Initially Hidden) -->
-                    <div class="col-sm-6" id="child_category_section" style="display: none;">
+                    <!-- Child Category -->
+                    <div class="col-sm-6" id="child_category_section" style="<?= !empty($child_category_id) ? '' : 'display:none;' ?>">
                         <div class="form-group row">
-                            <label for="child_category" class="col-sm-4 col-form-label"><?php echo display('child_category') ?></label>
+                            <label for="child_category" class="col-sm-4 col-form-label">
+                                <?php echo display('child_category') ?>
+                            </label>
                             <div class="col-sm-8">
-                                <select class="form-control" id="child_category" name="child_category">
-                                    <option value=""><?php echo display('select_child_category') ?></option>
+                                <select name="child_category" id="child_category" class="form-control">
+                                    <option value=""><?= display('select_child_category') ?></option>
+                                    <?php foreach ($child_categories as $child) { ?>
+                                        <option value="<?= $child['category_id'] ?>" <?= ($child['category_id'] == $child_category_id) ? 'selected' : '' ?>>
+                                            <?= $child['category_name'] ?>
+                                        </option>
+                                    <?php } ?>
                                 </select>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Hidden field to store the last selected category -->
-                    <input type="hidden" id="category_id" name="category_id" required>
+                    <!-- Hidden field to store the final selected category ID -->
+                    <input type="hidden" id="category_id" name="category_id" value="<?= $child_category_id ?>" required>
                 </div>
 
 
