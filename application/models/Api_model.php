@@ -137,17 +137,29 @@ class Api_model extends CI_Model {
     }
 
     // Category List
-    public function category_list($limit = null,$start = null){
+    // public function category_list($limit = null,$start = null){
 
+    //     $this->db->select('*');
+    //     $this->db->from('product_category');
+    //     $this->db->order_by('category_name','asc');
+    //     $this->db->limit($limit, $start);
+    //     $query = $this->db->get();
+    //     if ($query->num_rows() > 0) {
+    //         return $query->result_array();
+    //     }
+    //     return false;  
+    // }
+
+    public function category_list() {
         $this->db->select('*');
         $this->db->from('product_category');
-        $this->db->order_by('category_name','asc');
-        $this->db->limit($limit, $start);
+        $this->db->order_by('category_name', 'asc');
         $query = $this->db->get();
+    
         if ($query->num_rows() > 0) {
             return $query->result_array();
         }
-        return false;  
+        return false;
     }
 
 // category Entry
@@ -475,9 +487,8 @@ class Api_model extends CI_Model {
     }
 
     //update customer
-    public function update_customer($data, $customer_id) {
-
-        $this->db->where('customer_id', $customer_id);
+    public function update_customer($data, $customer_email) {
+        $this->db->where('customer_email', $customer_email);
         $this->db->update('customer_information', $data);
         return true;
     }

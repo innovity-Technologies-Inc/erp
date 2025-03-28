@@ -739,33 +739,52 @@ class Api extends CI_Controller {
 
     }
     
+    // public function category_list() {
+    //     $start=$this->input->get('start', TRUE);   
+    //     if($start==0){
+    //       $category_list = $this->Api_model->category_list($limit=15,$start);
+    //     }else{
+    //         $category_list = $this->Api_model->category_list($limit=15,$start);
+    //     } 
+    //     if(!empty($category_list)){
+
+    //         $json['response'] = [
+    //                 'status'     => 'ok',
+    //                 'categories' => $category_list,
+    //                 'total_val'  => $this->db->count_all('product_category'),
+    //         ];
+
+    //     }else{
+
+    //         $json['response'] = [
+    //             'status'     => 'error',
+    //             'message'    => 'No Record found'
+    //         ]; 
+
+    //     }
+
+    //     echo json_encode($json,JSON_UNESCAPED_UNICODE);
+    // }
+
+
     public function category_list() {
-        $start=$this->input->get('start', TRUE);   
-        if($start==0){
-          $category_list = $this->Api_model->category_list($limit=15,$start);
-        }else{
-            $category_list = $this->Api_model->category_list($limit=15,$start);
-        } 
-        if(!empty($category_list)){
-
+        $category_list = $this->Api_model->category_list(); // now returns all
+    
+        if (!empty($category_list)) {
             $json['response'] = [
-                    'status'     => 'ok',
-                    'categories' => $category_list,
-                    'total_val'  => $this->db->count_all('product_category'),
+                'status'     => 'ok',
+                'categories' => $category_list,
+                'total_val'  => count($category_list), // since we are not paginating
             ];
-
-        }else{
-
+        } else {
             $json['response'] = [
-                'status'     => 'error',
-                'message'    => 'No Record found'
-            ]; 
-
+                'status'  => 'error',
+                'message' => 'No Record found'
+            ];
         }
-
-        echo json_encode($json,JSON_UNESCAPED_UNICODE);
+    
+        echo json_encode($json, JSON_UNESCAPED_UNICODE);
     }
-
 
     public function insert_category(){
 
@@ -1119,13 +1138,13 @@ class Api extends CI_Controller {
     // }
 
     public function delete_customer() {
-        $id = $this->input->get('id');
+        $customer_email = $this->input->get('customer_email', TRUE);
     
         $data = [
             'status' => 2
         ];
     
-        if ($this->Api_model->update_customer($data, $id)) {
+        if ($this->Api_model->update_customer($data, $customer_email)) {
             $json['response'] = [
                 'status'     => 'ok',
                 'message'    => 'Customer status updated to deleted',

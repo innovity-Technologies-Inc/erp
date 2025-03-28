@@ -100,11 +100,8 @@ class Product extends MX_Controller {
             ? $parent_category_name . '->' . $sub_category_name
             : $sub_category_name;
     
-        // ✅ Check for duplicate category BEFORE saving
-        if ($this->product_model->is_duplicate_category($final_category_name)) {
-            log_message('error', "ERROR: Duplicate category found -> " . $final_category_name);
-            
-            // ✅ Set Flash Message for duplicate category
+        // ✅ Check for duplicate only when inserting new category
+        if (empty($id) && $this->product_model->is_duplicate_category($final_category_name)) {
             $this->session->set_flashdata('exception', 'Error: This category already exists!');
             redirect($_SERVER['HTTP_REFERER']); 
             exit;
@@ -120,32 +117,41 @@ class Product extends MX_Controller {
         if ($this->form_validation->run() === true) {
             if (empty($id)) {
                 if ($this->product_model->create_category($postData)) {
-                    log_message('info', "INFO: Category Created Successfully -> " . $final_category_name);
                     $this->session->set_flashdata('message', 'Category saved successfully!');
                 } else {
-                    log_message('error', "ERROR: Failed to create category.");
                     $this->session->set_flashdata('exception', 'Error: Could not save the category!');
                 }
             } else {
                 if ($this->product_model->update_category($postData)) {
-                    log_message('info', "INFO: Category Updated Successfully -> " . $final_category_name);
                     $this->session->set_flashdata('message', 'Category updated successfully!');
                 } else {
-                    log_message('error', "ERROR: Failed to update category.");
                     $this->session->set_flashdata('exception', 'Error: Could not update the category!');
                 }
             }
-            redirect("category_list");
+    
+            // ✅ Use submit_action to determine redirection
+            $submit_action = $this->input->post('submit_action');
+            if ($submit_action == 'add_another') {
+                redirect('product/paysenz_category_form');
+            } else {
+                redirect('category_list');
+            }
         } else {
+            // ✅ Load form with correct category name for editing
             if (!empty($id)) {
                 $data['title'] = display('edit_category');
-                $data['category'] = $this->product_model->single_category_data($id);
+                $category_data = $this->product_model->single_category_data($id);
+    
+                // ✅ Extract only the last part of category_name
+                $name_parts = explode('->', $category_data->category_name);
+                $category_data->category_name = trim(end($name_parts));
+    
+                $data['category'] = $category_data;
             }
     
             $data['categories'] = $this->product_model->get_all_categories();
             $data['module'] = "product";
             $data['page'] = "category_form";
-            log_message('debug', "DEBUG: Loading category_form page with data -> " . json_encode($data));
     
             echo Modules::run('template/layout', $data);
         }
