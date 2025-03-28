@@ -1099,26 +1099,49 @@ class Api extends CI_Controller {
         echo json_encode($json,JSON_UNESCAPED_UNICODE);
     }
 
-    public function delete_customer(){
+    // public function delete_customer(){
 
+    //     $id = $this->input->get('id');
+    //     if ($this->Api_model->delete_customer($id)) {
+    //         $json['response'] = [
+    //             'status'     => 'ok',
+    //             'message'    => 'Successfully Deleted',
+    //             'permission' => 'read'
+    //         ];
+    //     } else {
+    //         $json['response'] = [
+    //                 'status'     => 'error',
+    //                 'message'    => 'please_try_again',
+    //                 'permission' => 'read'
+    //         ];
+    //     }
+    //     echo json_encode($json,JSON_UNESCAPED_UNICODE);
+    // }
+
+    public function delete_customer() {
         $id = $this->input->get('id');
-        if ($this->Api_model->delete_customer($id)) {
+    
+        $data = [
+            'status' => 2
+        ];
+    
+        if ($this->Api_model->update_customer($data, $id)) {
             $json['response'] = [
                 'status'     => 'ok',
-                'message'    => 'Successfully Deleted',
+                'message'    => 'Customer status updated to deleted',
                 'permission' => 'read'
             ];
         } else {
             $json['response'] = [
-                    'status'     => 'error',
-                    'message'    => 'please_try_again',
-                    'permission' => 'read'
+                'status'     => 'error',
+                'message'    => 'Please try again',
+                'permission' => 'read'
             ];
         }
-        echo json_encode($json,JSON_UNESCAPED_UNICODE);
+    
+        echo json_encode($json, JSON_UNESCAPED_UNICODE);
     }
-
-
+    
     public function customer_edit() {
 
         $id = $this->input->get('id');

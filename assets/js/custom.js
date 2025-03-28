@@ -1045,9 +1045,18 @@ $(document).ready(function() {
           { data: 'zip' },
           { data: 'country' },
           { data: 'balance', class: "balance" },
-          { data: 'status', render: function(data, type, row) { 
-            return data == 1 ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>';
-          }},
+          { 
+            data: 'status', 
+            render: function(data, type, row) { 
+              if (data == 1) {
+                return '<span class="badge badge-success">Active</span>';
+              } else if (data == 2) {
+                return '<span class="badge badge-danger">Deleted</span>';
+              } else {
+                return '<span class="badge badge-secondary">Inactive</span>';
+              }
+            }
+          },
           { 
             data: 'button', 
             render: function(data, type, row) {

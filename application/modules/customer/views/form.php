@@ -193,6 +193,7 @@
                         <div class="col-sm-4">
                             <div class="">
                                 <select name="status" id="status" class="form-control">
+                                    <option value="2" <?php echo $customer->status == 2 ? 'selected' : ''; ?>>Deleted</option>
                                     <option value="1" <?php echo $customer->status == 1 ? 'selected' : ''; ?>>Active</option>
                                     <option value="0" <?php echo $customer->status == 0 ? 'selected' : ''; ?>>Inactive</option>
                                 </select>
