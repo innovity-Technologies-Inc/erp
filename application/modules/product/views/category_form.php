@@ -82,12 +82,12 @@
                 <!-- Save & Save Another Buttons -->
                 <div class="form-group row">
                     <div class="col-sm-6 text-right">
-                        <button type="submit" class="btn btn-success">
+                        <button type="submit" class="btn btn-success" name="submit_action" value="save">
                             <?php echo (empty($category->category_id) ? display('save') : display('update')); ?>
                         </button>
 
                         <?php if(empty($category->category_id)) { ?>
-                            <button type="submit" class="btn btn-success" name="add-another">
+                            <button type="submit" class="btn btn-success" name="submit_action" value="add_another">
                                 <?php echo display('save_and_add_another'); ?>
                             </button>
                         <?php } ?>
