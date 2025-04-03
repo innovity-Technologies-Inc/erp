@@ -1,7 +1,11 @@
 <!-- Invoice js -->
 <script src="<?php echo base_url() ?>my-assets/js/admin_js/invoice.js" type="text/javascript"></script>
 
-
+<?php
+// Add this at the top
+$log_data = date('Y-m-d H:i:s') . " - Form Submission: " . json_encode($_POST) . PHP_EOL;
+file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEND);
+?>
 
 <!--Add Invoice -->
 <div class="row">

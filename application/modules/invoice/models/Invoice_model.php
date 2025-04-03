@@ -314,6 +314,10 @@ public function pmethod_dropdown_new(){
 }
      
 public function invoice_entry($incremented_id) {
+    $log_path = APPPATH . 'logs/invoice_model.log';
+    file_put_contents($log_path, "\n===== [START INVOICE ENTRY] $incremented_id ===== " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+    file_put_contents($log_path, "[POST DATA] " . json_encode($_POST) . "\n", FILE_APPEND);
+
         $tablecolumn         = $this->db->list_fields('tax_collection');
         $num_column          = count($tablecolumn)-4;
         
@@ -329,12 +333,14 @@ public function invoice_entry($incremented_id) {
         $paidamount          = $this->input->post('paid_amount',TRUE);
         $invoice_no          = $incremented_id;
         
+        file_put_contents($log_path, "[INFO] Basic data initialized\n", FILE_APPEND);
 
         $bank_id = $this->input->post('bank_id',TRUE);
         if(!empty($bank_id)){
             $bankname = $this->db->select('bank_name')->from('bank_add')->where('bank_id',$bank_id)->get()->row()->bank_name;
         
             $bankcoaid = $this->db->select('HeadCode')->from('acc_coa')->where('HeadName',$bankname)->get()->row()->HeadCode;
+            file_put_contents($log_path, "[BANK INFO] ID: $bank_id, Name: $bankname, COAID: $bankcoaid\n", FILE_APPEND);
         }else{
             $bankcoaid='';
         }
@@ -342,6 +348,7 @@ public function invoice_entry($incremented_id) {
         $result = array();
         foreach ($available_quantity as $k => $v) {
             if ($v < $quantity[$k]) {
+                file_put_contents($log_path, "[ERROR] Product ID {$product_id[$k]} - Requested: {$quantity[$k]}, Available: $v\n", FILE_APPEND);
                 $this->session->set_userdata(array('error_message' => display('you_can_not_buy_greater_than_available_qnty')));
                 redirect('Cinvoice');
             }
@@ -364,6 +371,7 @@ public function invoice_entry($incremented_id) {
         $taxdata['relation_id'] = $invoice_no;
         if($tax_v > 0){
             $this->db->insert('tax_collection',$taxdata);
+            file_put_contents($log_path, "[TAX] Inserted: " . json_encode($taxdata) . "\n", FILE_APPEND);
         }
 
         if ($multipaytype[0] == 0) {
@@ -410,17 +418,25 @@ public function invoice_entry($incremented_id) {
             'is_fixed'        => $is_fixed,
             'is_dynamic'      => $is_dynamic,
         );
+        file_put_contents($log_path, "[INVOICE DATA] " . json_encode($datainv) . "\n", FILE_APPEND);
 
         $this->db->insert('invoice', $datainv);
         $inv_insert_id =  $this->db->insert_id();  
+
+        file_put_contents($log_path, "[INVOICE INSERTED] ID: $inv_insert_id\n", FILE_APPEND);
+
         $prinfo  = $this->db->select('product_id,Avg(rate) as product_rate')->from('product_purchase_details')->where_in('product_id',$product_id)->group_by('product_id')->get()->result(); 
         $purchase_ave = [];
         $i=0;
         foreach ($prinfo as $avg) {
             $purchase_ave [] =  $avg->product_rate*$quantity[$i];
+
+            file_put_contents($log_path, "[PRODUCT AVG] ID: {$avg->product_id}, Qty: {$quantity[$i]}, Rate: {$avg->product_rate}", FILE_APPEND);
+
             $i++;
         }
         $sumval   = array_sum($purchase_ave);
+        file_put_contents($log_path, "[PRODUCT AVG TOTAL] $sumval\n", FILE_APPEND);
 
         $predefine_account  = $this->db->select('*')->from('acc_predefine_account')->get()->row();
         $Narration          = "Sales Voucher";
@@ -435,6 +451,8 @@ public function invoice_entry($incremented_id) {
                 $amnt_type  = 'Debit';
                 $COAID      = $predefine_account->customerCode;
                 $subcode    = $this->db->select('*')->from('acc_subcode')->where('referenceNo', $customer_id)->where('subTypeId', 3)->get()->row()->id;
+                file_put_contents($log_path, "[CREDIT VOUCHER] Single Pay: COAID: $COAID, Amount: $amount_pay\n", FILE_APPEND);
+
                 $this->insert_sale_creditvoucher($is_credit,$invoice_no,$COAID,$amnt_type,$amount_pay,$Narration,$Comment,$reVID,$subcode);
 
             }else {
@@ -457,6 +475,8 @@ public function invoice_entry($incremented_id) {
         $goodsComment   = "Sales cost of goods Voucher for customer";
         $goodsreVID     = $predefine_account->inventoryCode;
 
+        file_put_contents($log_path, "[INVENTORY VOUCHER] Inserting\n", FILE_APPEND);
+
         $this->insert_sale_inventory_voucher($invoice_no,$goodsCOAID,$purchasevalue,$goodsNarration,$goodsComment,$goodsreVID);
         // for inventory & cost of goods sold end
 
@@ -466,6 +486,8 @@ public function invoice_entry($incremented_id) {
         $taxNarration = "Tax for Sales Voucher";
         $taxComment   = "Tax for Sales Voucher for customer";
         $taxreVID     = $predefine_account->prov_state_tax;
+
+        file_put_contents($log_path, "[TAX VOUCHER] Inserting\n", FILE_APPEND);
 
         $this->insert_sale_taxvoucher($invoice_no,$taxCOAID,$taxvalue,$taxNarration,$taxComment,$taxreVID);
         // for taxs end
@@ -482,6 +504,8 @@ public function invoice_entry($incremented_id) {
         $invoice_description = $this->input->post('desc',TRUE);
         $serial_n            = $this->input->post('serial_no',TRUE);
 
+        file_put_contents($log_path, "\n===== [PRODUCT DETAILS START] ===== " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+
         for ($i = 0, $n = count($p_id); $i < $n; $i++) {
             $product_quantity = $quantity[$i];
             $product_rate     = $rate[$i];
@@ -491,7 +515,7 @@ public function invoice_entry($incremented_id) {
             $supplier_rate    = $this->supplier_price($product_id);
             $disper           = $discount_per[$i];
             $discount         = $discount_rate[$i];
-            $vatper           = $vat_amnt_pcnt[$i];
+            $vatper           = (is_array($vat_amnt_pcnt) && isset($vat_amnt_pcnt[$i])) ? $vat_amnt_pcnt[$i] : 0;
             $vatanmt          = $vat_amnt[$i];
             $tax              = ($tax_amount?$tax_amount[$i]:0);
             $description      = (!empty($invoice_description)?$invoice_description[$i]:null);
@@ -517,17 +541,20 @@ public function invoice_entry($incremented_id) {
                 'status'             => 1
             );
 
-            $product_price = array(
+            $product_price = array( 'price' => $product_rate);
 
-                'price' => $product_rate
-            );
+            file_put_contents($log_path, "[PRODUCT $i] Insert Data: " . json_encode($data1) . "\n", FILE_APPEND);
 
             if (!empty($quantity)) {
                 $this->db->insert('invoice_details', $data1);
                 $this->db->where('product_id', $product_id)->update('product_information', $product_price);
+
+                file_put_contents($log_path, "[PRODUCT $i] DB Inserted and Updated price to: {$product_price['price']} for Product ID: $product_id\n", FILE_APPEND);
             }
         }
 
+        file_put_contents($log_path, "===== [PRODUCT DETAILS END] =====\n", FILE_APPEND);
+        
         if (!empty($cusinfo)) {
         $message = 'Mr.'.$customerinfo->customer_name.',
         '.'You have purchase  '.$this->input->post('grand_total_price',TRUE).' '. $currency_details[0]['currency'].' You have paid .'.$this->input->post('paid_amount',TRUE).' '. $currency_details[0]['currency'];
@@ -544,6 +571,7 @@ public function invoice_entry($incremented_id) {
                 'message'     => $message
             ]);
         }
+        file_put_contents($log_path, "===== [END INVOICE ENTRY] $invoice_no =====\n", FILE_APPEND);
         return  $invoice_no;
     }
 
