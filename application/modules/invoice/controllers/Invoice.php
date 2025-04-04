@@ -743,70 +743,129 @@ class Invoice extends MX_Controller {
         
     }
 
-    public function paysenz_manual_sales_insert(){
-        $this->form_validation->set_rules('customer_id', display('customer_name') ,'required|max_length[15]');
-        $this->form_validation->set_rules('product_id[]',display('product'),'required|max_length[20]');
-        $this->form_validation->set_rules('multipaytype[]',display('payment_type'),'required');
-        $this->form_validation->set_rules('product_quantity[]',display('quantity'),'required|max_length[20]');
-        $this->form_validation->set_rules('product_rate[]',display('rate'),'required|max_length[20]');
-        $normal = $this->input->post('is_normal');
+    public function paysenz_manual_sales_insert()
+    {
+        $log_path = APPPATH . 'logs/invoice_submission.log';
 
-        $finyear = $this->input->post('finyear',true);
-        if($finyear<=0){
+        // 🔹 Log raw POST input
+        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [START] Manual Sales Insert Request\n", FILE_APPEND);
+        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [POST] " . json_encode($_POST) . PHP_EOL, FILE_APPEND);
+
+        // Validation
+        $this->form_validation->set_rules('customer_id', display('customer_name'), 'required|max_length[15]');
+        $this->form_validation->set_rules('product_id[]', display('product'), 'required|max_length[20]');
+        $this->form_validation->set_rules('multipaytype[]', display('payment_type'), 'required');
+        $this->form_validation->set_rules('product_quantity[]', display('quantity'), 'required|max_length[20]');
+        $this->form_validation->set_rules('product_rate[]', display('rate'), 'required|max_length[20]');
+
+        $normal = $this->input->post('is_normal');
+        $finyear = $this->input->post('finyear', true);
+
+        if ($finyear <= 0) {
             $data['status'] = false;
             $data['exception'] = 'Please Create Financial Year First';
-        }else {
+
+            file_put_contents($log_path, date('Y-m-d H:i:s') . " - [ERROR] Financial year not set.\n", FILE_APPEND);
+        } else {
             if ($this->form_validation->run() === true) {
+                file_put_contents($log_path, date('Y-m-d H:i:s') . " - [VALIDATION] Success\n", FILE_APPEND);
+
                 $incremented_id = $this->number_generator();
-                $invoice_id     = $this->invoice_model->invoice_entry($incremented_id);
-                if(!empty($invoice_id)){
-                    $setting_data = $this->db->select('is_autoapprove_v')->from('web_setting')->where('setting_id', 1)->get()->result_array();
+                file_put_contents($log_path, date('Y-m-d H:i:s') . " - [INVOICE NO] Generated: $incremented_id\n", FILE_APPEND);
+
+                $invoice_id = $this->invoice_model->invoice_entry($incremented_id);
+                file_put_contents($log_path, date('Y-m-d H:i:s') . " - [MODEL] invoice_entry() returned: $invoice_id\n", FILE_APPEND);
+
+                if (!empty($invoice_id)) {
+                    $setting_data = $this->db->select('is_autoapprove_v')
+                                            ->from('web_setting')
+                                            ->where('setting_id', 1)
+                                            ->get()
+                                            ->result_array();
+
                     if ($setting_data[0]['is_autoapprove_v'] == 1) {
-                        
-                        $new = $this->autoapprove($invoice_id);
+                        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [AUTOAPPROVE] Enabled. Calling autoapprove() for $invoice_id\n", FILE_APPEND);
+                        $auto = $this->autoapprove($invoice_id);
+                        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [AUTOAPPROVE] Result: " . json_encode($auto) . PHP_EOL, FILE_APPEND);
                     }
 
-                    $data['status']     = true;
+                    $data['status'] = true;
                     $data['invoice_id'] = $invoice_id;
-                    $data['message']    = display('save_successfully');
-                    $mailsetting        = $this->db->select('*')->from('email_config')->get()->result_array();
+                    $data['message'] = display('save_successfully');
 
-                    if($mailsetting[0]['isinvoice']==1){
-                        $mail  = $this->invoice_pdf_generate($invoice_id);
-                        if($mail == 0){
-                            $data['exception'] = $this->session->set_userdata(array('error_message' => display('please_config_your_mail_setting')));
+                    $mailsetting = $this->db->select('*')->from('email_config')->get()->result_array();
+                    if ($mailsetting[0]['isinvoice'] == 1) {
+                        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [EMAIL] Invoice Email Sending Enabled\n", FILE_APPEND);
+                        $mail = $this->invoice_pdf_generate($invoice_id);
+
+                        if ($mail == 0) {
+                            file_put_contents($log_path, date('Y-m-d H:i:s') . " - [EMAIL ERROR] PDF Generation failed or mail settings issue\n", FILE_APPEND);
+                            $data['exception'] = $this->session->set_userdata(array(
+                                'error_message' => display('please_config_your_mail_setting')
+                            ));
+                        } else {
+                            file_put_contents($log_path, date('Y-m-d H:i:s') . " - [EMAIL] Invoice mail sent\n", FILE_APPEND);
                         }
                     }
-                    if($normal == 1){
-                        $printdata       = $this->invoice_model->paysenz_invoice_pos_print_direct($invoice_id);
+
+                    $printdata = $this->invoice_model->paysenz_invoice_pos_print_direct($invoice_id);
+                    if ($normal == 1) {
                         $data['details'] = $this->load->view('invoice/invoice_html_manual', $printdata, true);
-                    }else{
-                        $printdata       = $this->invoice_model->paysenz_invoice_pos_print_direct($invoice_id);
+                        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [PRINT] Rendered HTML Manual Invoice View\n", FILE_APPEND);
+                    } else {
                         $data['details'] = $this->load->view('invoice/pos_print', $printdata, true);
+                        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [PRINT] Rendered POS Invoice View\n", FILE_APPEND);
                     }
-            
-                }else{
-                    $data['status']    = false;
+                } else {
+                    $data['status'] = false;
                     $data['exception'] = 'Please Try Again';
+
+                    file_put_contents($log_path, date('Y-m-d H:i:s') . " - [ERROR] invoice_entry() failed. Invoice not saved.\n", FILE_APPEND);
                 }
-            
-            }else{
-                $data['status']    = false;
-                $data['exception'] = validation_errors();  
+            } else {
+                $data['status'] = false;
+                $data['exception'] = validation_errors();
+
+                file_put_contents($log_path, date('Y-m-d H:i:s') . " - [VALIDATION ERROR] " . $data['exception'] . PHP_EOL, FILE_APPEND);
             }
         }
+
+        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [RESPONSE] " . json_encode($data) . PHP_EOL, FILE_APPEND);
+        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [END] Manual Sales Insert Complete\n\n", FILE_APPEND);
+
         echo json_encode($data);
     }
 
-    public function autoapprove($invoice_id){
+    public function autoapprove($invoice_id)
+    {
+        $log_path = APPPATH . 'logs/invoice_submission.log';
+        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [AUTOAPPROVE] Started for Invoice: $invoice_id\n", FILE_APPEND);
 
-        $vouchers = $this->db->select('referenceNo, VNo')->from('acc_vaucher')->where('referenceNo',$invoice_id)->where('status',0)->get()->result();
+        // Query to find pending vouchers
+        $vouchers = $this->db->select('referenceNo, VNo')
+                            ->from('acc_vaucher')
+                            ->where('referenceNo', $invoice_id)
+                            ->where('status', 0)
+                            ->get()
+                            ->result();
+
+        // Log how many vouchers found
+        $voucher_count = count($vouchers);
+        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [AUTOAPPROVE] Found $voucher_count voucher(s)\n", FILE_APPEND);
+
         foreach ($vouchers as $value) {
-            # code...
+            // Log each voucher before approval
+            file_put_contents($log_path, date('Y-m-d H:i:s') . " - [AUTOAPPROVE] Approving Voucher: {$value->VNo} (Ref: {$value->referenceNo})\n", FILE_APPEND);
+
+            // Approve the voucher
             $data = $this->Accounts_model->approved_vaucher($value->VNo, 'active');
+
+            // Log approval result
+            file_put_contents($log_path, date('Y-m-d H:i:s') . " - [AUTOAPPROVE] Approval Result for {$value->VNo}: " . json_encode($data) . PHP_EOL, FILE_APPEND);
         }
+
+        file_put_contents($log_path, date('Y-m-d H:i:s') . " - [AUTOAPPROVE] Completed for Invoice: $invoice_id\n", FILE_APPEND);
         return true;
-        
     }
 
     public function paysenz_showpaymentmodal(){
