@@ -10,46 +10,67 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 class Customer_model extends CI_Model {
 
      
-  public function create($data = array()) {
-    // Insert customer record
-    $add_customer =  $this->db->insert('customer_information', $data);
+    public function create($data = array())
+{
+    // Extract commission-related fields (if present)
+    $commission_data = [];
+    if (isset($data['comission_type']) || isset($data['commision_value']) || isset($data['comission_note'])) {
+        $commission_data = [
+            'comission_type'  => $data['comission_type'],
+            'commision_value' => $data['commision_value'],
+            'notes'           => $data['comission_note'],
+            'create_by'       => $this->session->userdata('id'),
+            'status'          => 1,
+            'create_date'     => date('Y-m-d H:i:s'),
+            'update_date'     => date('Y-m-d H:i:s'),
+        ];
+        unset($data['comission_type'], $data['commision_value'], $data['comission_note']);
+    }
+
+    $data['create_by'] = $this->session->userdata('id');
+
+    // Insert into customer_information
+    $this->db->insert('customer_information', $data);
     $customer_id = $this->db->insert_id();
 
-    // Generate COA HeadCode
-    $coa = $this->headcode();
-    $headcode = ($coa->HeadCode != NULL) ? $coa->HeadCode + 1 : "113100000001";
+    if ($customer_id) {
+        // Create COA entry
+        $coa = $this->headcode();
+        $headcode = ($coa->HeadCode != NULL) ? $coa->HeadCode + 1 : "113100000001";
 
-    $c_acc = $customer_id . '-' . $data['customer_name'];
-    $createby = $this->session->userdata('id');
-    $createdate = date('Y-m-d H:i:s');
+        $c_acc = $customer_id . '-' . $data['customer_name'];
+        $createdate = date('Y-m-d H:i:s');
 
-    $customer_coa = [
-        'HeadCode'         => $headcode,
-        'HeadName'         => $c_acc,
-        'PHeadName'        => 'Merchants',
-        'HeadLevel'        => '4',
-        'IsActive'         => '1',
-        'IsTransaction'    => '1',
-        'IsGL'             => '0',
-        'HeadType'         => 'A',
-        'IsBudget'         => '0',
-        'IsDepreciation'   => '0',
-        'DepreciationRate' => '0',
-        'customer_id'      => $customer_id,
-        'CreateBy'         => $createby,
-        'CreateDate'       => $createdate,
-    ];
+        $customer_coa = [
+            'HeadCode'         => $headcode,
+            'HeadName'         => $c_acc,
+            'PHeadName'        => 'Merchants',
+            'HeadLevel'        => '4',
+            'IsActive'         => '1',
+            'IsTransaction'    => '1',
+            'IsGL'             => '0',
+            'HeadType'         => 'A',
+            'IsBudget'         => '0',
+            'IsDepreciation'   => '0',
+            'DepreciationRate' => '0',
+            'customer_id'      => $customer_id,
+            'CreateBy'         => $this->session->userdata('id'),
+            'CreateDate'       => $createdate,
+        ];
 
-    $sub_acc = [
-        'subTypeId'   => 3,
-        'name'        => $data['customer_name'],
-        'referenceNo' => $customer_id,
-        'status'      => 1,
-        'created_date'=> date("Y-m-d"),
-    ];
+        $this->db->insert('acc_subcode', [
+            'subTypeId'    => 3,
+            'name'         => $data['customer_name'],
+            'referenceNo'  => $customer_id,
+            'status'       => 1,
+            'created_date' => date("Y-m-d"),
+        ]);
 
-    if ($add_customer) {
-        $this->db->insert('acc_subcode', $sub_acc);
+        // Insert into customer_comission
+        if (!empty($commission_data)) {
+            $commission_data['customer_id'] = $customer_id;
+            $this->db->insert('customer_comission', $commission_data);
+        }
     }
 
     return true;
@@ -578,32 +599,36 @@ public function getCreditCustomerList($postData=null){
       ->result();
   }
 
-  public function update($data = array()) {
-    // ✅ Ensure status is included, even if 0 (inactive)
+  public function update($data = array())
+{
+    // ✅ Ensure status is included
     if (!array_key_exists('status', $data)) {
-        $data['status'] = $this->input->post('status', TRUE); // Add if missing
+        $data['status'] = $this->input->post('status', TRUE);
     }
+
+    // ✅ Extract customer_id early
+    $customer_id = $data["customer_id"];
 
     // Retrieve existing sales_permit filename
     $this->db->select('sales_permit');
     $this->db->from('customer_information');
-    $this->db->where('customer_id', $data["customer_id"]);
+    $this->db->where('customer_id', $customer_id);
     $existing = $this->db->get()->row();
 
-    // If new file is uploaded, replace existing file name
+    // Handle file upload
     if (!empty($_FILES['sales_permit']['name'])) {
         $config['upload_path']   = './uploads/sales_permits/';
         $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
-        $config['max_size']      = 2048; // 2MB max
+        $config['max_size']      = 2048;
         $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
 
         $this->load->library('upload', $config);
 
         if ($this->upload->do_upload('sales_permit')) {
             $upload_data = $this->upload->data();
-            $data['sales_permit'] = $upload_data['file_name']; // ✅ Save filename
+            $data['sales_permit'] = $upload_data['file_name'];
 
-            // Delete old file if exists
+            // Delete old file
             if (!empty($existing->sales_permit)) {
                 $old_file = './uploads/sales_permits/' . $existing->sales_permit;
                 if (file_exists($old_file)) {
@@ -616,19 +641,17 @@ public function getCreditCustomerList($postData=null){
             return false;
         }
     } else {
-        // If no new file is uploaded, retain existing file name
         $data['sales_permit'] = $existing->sales_permit;
     }
 
-    // ✅ Update customer record
-    $updatecustomer = $this->db->where('customer_id', $data["customer_id"])
-                               ->update("customer_information", $data);
+    // ✅ Update customer_information
+    $this->db->where('customer_id', $customer_id)
+             ->update("customer_information", $data);
 
-    $customer_id = $data["customer_id"];
+    // ✅ Update COA & Sub Code
     $old_headnam = $customer_id . '-' . $this->input->post("old_name");
     $c_acc = $customer_id . '-' . $data["customer_name"];
 
-    // ✅ Update COA & Sub Code
     $customer_coa = [
         'HeadName' => $c_acc
     ];
@@ -640,6 +663,35 @@ public function getCreditCustomerList($postData=null){
     $this->db->where('referenceNo', $customer_id)
              ->where('subTypeId', 3)
              ->update('acc_subcode', $sub_acc);
+
+    // ✅ Handle customer_comission insert with update of old status
+    // ✅ Handle customer_comission insert with previous row deactivation
+    if (!empty($this->input->post('comission_type')) || !empty($this->input->post('comission_value')) || !empty($this->input->post('comission_note'))) {
+        if (!empty($customer_id)) {
+
+            // ✅ First: deactivate previous active rows
+            $this->db->where('customer_id', $customer_id);
+            $this->db->where('status', 1); // Only active ones
+            $this->db->update('customer_comission', ['status' => 0]);
+
+            // ✅ Now: insert new row as active
+            $commission_data = [
+                'customer_id'     => $customer_id,
+                'comission_type'  => $this->input->post('comission_type', true),
+                'commision_value' => $this->input->post('comission_value', true),
+                'notes'           => $this->input->post('comission_note', true),
+                'create_by'       => $this->session->userdata('id'),
+                'status'          => 1,
+                'create_date'     => date('Y-m-d H:i:s'),
+                'update_date'     => date('Y-m-d H:i:s'),
+            ];
+
+            $this->db->insert('customer_comission', $commission_data);
+
+            // ✅ DEBUG LOG
+            log_message('info', "Inserted new commission for customer_id={$customer_id} and set all previous to status=0");
+        }
+    }
 
     return true;
 }

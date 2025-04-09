@@ -1182,6 +1182,68 @@ class Api extends CI_Controller {
     }
 
 
+    public function customer_comission_by_email()
+{
+    $email = $this->input->get('email');
+
+    log_message('debug', 'API Request: customer_comission_by_email | Email: ' . $email);
+
+    if (empty($email)) {
+        log_message('error', 'API Error: Email parameter is missing');
+
+        echo json_encode([
+            'response' => [
+                'status'     => 'error',
+                'message'    => 'Email parameter is missing',
+                'permission' => 'read'
+            ]
+        ], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+
+    $customerdata = $this->Api_model->get_customer_by_email($email);
+
+    if (!empty($customerdata) && isset($customerdata->customer_id)) {
+        $customer_id = $customerdata->customer_id;
+        log_message('debug', "Customer Found: ID = {$customer_id}");
+
+        // ✅ Fetch latest active commission
+        $commission = $this->db->select('commision_value, comission_type')
+                               ->from('customer_comission')
+                               ->where('customer_id', $customer_id)
+                               ->where('status', 1)
+                               ->order_by('id', 'DESC')
+                               ->limit(1)
+                               ->get()
+                               ->row();
+
+        if ($commission) {
+            log_message('debug', "Commission Found for Customer ID {$customer_id} | Value = {$commission->commision_value}, Type = {$commission->comission_type}");
+        } else {
+            log_message('debug', "No active commission found for Customer ID {$customer_id}");
+        }
+
+        $customerdata->commision_value = $commission ? $commission->commision_value : null;
+        $customerdata->comission_type  = $commission ? $commission->comission_type : null;
+
+        $json['response'] = [
+            'status'     => 'ok',
+            'customers'  => $customerdata,
+            'permission' => 'write'
+        ];
+    } else {
+        log_message('error', "No customer found with email: {$email}");
+
+        $json['response'] = [
+            'status'     => 'error',
+            'message'    => 'No customer found with this email',
+            'permission' => 'read'
+        ];
+    }
+
+    echo json_encode($json, JSON_UNESCAPED_UNICODE);
+}
+
     public function customer_search_by_email() {
         $email = $this->input->get('email');
     
@@ -1923,6 +1985,118 @@ class Api extends CI_Controller {
     }
 
 
+    public function insert_invoice_payment() {
+        header('Content-Type: application/json');
+        log_message('debug', '🧾 insert_invoice_payment API called');
+    
+        $input = $this->input->post();
+    
+        // ✅ Decode 'detailsinfo' JSON string to array
+        if (!empty($input['detailsinfo'])) {
+            $input['detailsinfo'] = json_decode($input['detailsinfo'], true);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'Missing product details']);
+            return;
+        }
+    
+        log_message('debug', '📥 Parsed Input: ' . print_r($input, true));
+        log_message('debug', '📦 Parsed Products: ' . print_r($input['detailsinfo'], true));
+    
+        // ✅ Check for duplicate transaction_ref
+        if (!isset($input['transaction_ref']) || empty($input['transaction_ref'])) {
+            echo json_encode(['status' => 'error', 'message' => 'transaction_ref is required']);
+            return;
+        }
+    
+        $existing = $this->db->get_where('invoice_payment', ['transaction_ref' => $input['transaction_ref']])->row();
+        if (!empty($existing)) {
+            echo json_encode(['status' => 'error', 'message' => 'Duplicate transaction_ref']);
+            return;
+        }
+    
+        // ✅ Handle file upload with dynamic name
+        $input['payment_ref_doc'] = '';
+        if (!empty($_FILES['payment_ref_doc']['name'])) {
+            $original_name = $_FILES['payment_ref_doc']['name'];
+            $tmp_name = $_FILES['payment_ref_doc']['tmp_name'];
+    
+            $upload_path = 'uploads/payment_refs/';
+            if (!is_dir($upload_path)) {
+                mkdir($upload_path, 0777, true);
+            }
+    
+            $ext = pathinfo($original_name, PATHINFO_EXTENSION);
+            $safe_filename = preg_replace('/[^a-zA-Z0-9_-]/', '', pathinfo($original_name, PATHINFO_FILENAME));
+            $unique_id = uniqid();
+            $new_filename = $safe_filename . '_' . time() . '_' . $unique_id . '.' . $ext;
+    
+            $file_path = $upload_path . $new_filename;
+    
+            if (move_uploaded_file($tmp_name, $file_path)) {
+                $input['payment_ref_doc'] = $file_path;
+            } else {
+                log_message('error', '❌ Failed to move uploaded file.');
+            }
+        }
+    
+        $this->load->database();
+        $this->db->trans_begin();
+    
+        try {
+            $invoice_data = [
+                'invoice_date'     => $input['invoice_date'] ?? date('Y-m-d'),
+                'createby'         => $input['createby'],
+                'customer_id'      => $input['customer_id'],
+                'paid_amount'      => $input['paid_amount'],
+                'due_amount'       => $input['due_amount'] ?? 0,
+                'total_discount'   => $input['total_discount'] ?? 0,
+                'total_tax'        => $input['total_tax'] ?? 0,
+                'total_amount'     => $input['total_amount'],
+                'payment_type'     => $input['payment_type'],
+                'payment_ref_doc'  => $input['payment_ref_doc'],
+                'payment_ref'      => $input['payment_ref'] ?? '',
+                'transaction_ref'  => $input['transaction_ref'],
+                'status'           => $input['status'] ?? 2,
+                'created_at'       => date('Y-m-d H:i:s'),
+            ];
+    
+            $this->db->insert('invoice_payment', $invoice_data);
+            $invoice_id = $this->db->insert_id();
+            log_message('debug', "✅ Invoice payment inserted with ID: $invoice_id");
+    
+            foreach ($input['detailsinfo'] as $item) {
+                $details_data = [
+                    'invoice_id'       => $invoice_id,
+                    'product_id'       => $item['product_id'],
+                    'product_quantity' => $item['product_quantity'],
+                    'product_rate'     => $item['product_rate'],
+                    'serial_no'        => $item['serial_no'] ?? '',
+                    'created_at'       => date('Y-m-d H:i:s')
+                ];
+    
+                $this->db->insert('invoice_payment_details', $details_data);
+            }
+    
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                log_message('error', '❌ Transaction failed, rolling back');
+                echo json_encode(['status' => 'error', 'message' => 'Failed to insert invoice']);
+                return;
+            }
+    
+            $this->db->trans_commit();
+            echo json_encode([
+                'status'     => 'success',
+                'invoice_id' => $invoice_id,
+                'message'    => 'Invoice inserted successfully'
+            ]);
+        } catch (Exception $e) {
+            $this->db->trans_rollback();
+            log_message('error', '❌ Exception: ' . $e->getMessage());
+            echo json_encode(['status' => 'error', 'message' => 'Something went wrong']);
+        }
+    }
+
     public function insert_sale() {
         header('Content-Type: application/json');
         log_message('debug', '✅ API insert_sale called');
@@ -1968,6 +2142,7 @@ class Api extends CI_Controller {
         $_POST['invoice_date']       = $input['invoice_date'] ?? date('Y-m-d');
         $_POST['inva_details']       = $input['inva_details'] ?? 'API Invoice';
         $_POST['payment_type']       = $input['payment_type'];
+        $_POST['delivery_note']       = $input['delivery_note'];
         $_POST['status']             = $input['status'] ?? 1;
         $_POST['invoice_discount']   = 0;
         $_POST['total_vat_amnt']     = 0;

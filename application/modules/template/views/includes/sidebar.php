@@ -27,59 +27,114 @@
         </li>
 
         <!-- Invoice menu start -->
-        <?php if($this->permission1->method('new_invoice','create')->access() || $this->permission1->method('manage_invoice','read')->access() || $this->permission1->method('pos_invoice','create')->access() || $this->permission1->method('gui_pos','create')->access() || $this->permission1->method('terms_list','read')->access()  || $this->permission1->method('terms_add','read')->access()){?>
-        <li class="treeview <?php
-            if ($this->uri->segment('1') == ("add_invoice") || $this->uri->segment('1') == ("invoice_list") || $this->uri->segment('1') == ("invoice_details") || $this->uri->segment('1') == ("invoice_pad_print") || $this->uri->segment('1') == ("invoice_edit") || $this->uri->segment('1') == ("terms_list")  || $this->uri->segment('1') == ("terms_add") ) {
-                echo "active";
-            } else {
-                echo " ";
-            }
+        <?php 
+            if(
+                $this->permission1->method('new_invoice','create')->access() || 
+                $this->permission1->method('manage_invoice','read')->access() ||
+                $this->permission1->method('manage_invoice_payment','read')->access() || 
+                $this->permission1->method('pos_invoice','create')->access() || 
+                $this->permission1->method('gui_pos','create')->access() || 
+                $this->permission1->method('terms_list','read')->access()  || 
+                $this->permission1->method('terms_add','read')->access()
+                ){
+        ?>
+        <li class="treeview 
+            <?php
+                if (
+                    $this->uri->segment('1') == ("add_invoice") || 
+                    $this->uri->segment('1') == ("invoice_list") ||
+                    $this->uri->segment('1') == ("invoice_payment_list") || 
+                    $this->uri->segment('1') == ("invoice_details") || 
+                    $this->uri->segment('1') == ("invoice_pad_print") || 
+                    $this->uri->segment('1') == ("invoice_edit") || 
+                    $this->uri->segment('1') == ("terms_list")  || 
+                    $this->uri->segment('1') == ("terms_add") 
+                    ) {
+                    echo "active";
+                } else {
+                    echo " ";
+                }
             ?>">
             <a href="#">
-                <i class="fa fa-balance-scale"></i><span><?php echo display('invoice') ?></span>
-                <span class="pull-right-container">
-                    <i class="fa fa-angle-left pull-right"></i>
-                </span>
+                <i class="fa fa-balance-scale"></i><span><?php echo display('invoice') ?></span><span class="pull-right-container"><i class="fa fa-angle-left pull-right"></i></span>
             </a>
-            <ul class="treeview-menu">
-                <?php if($this->permission1->method('new_invoice','create')->access()){ ?>
-                <li class="treeview <?php
-            if ($this->uri->segment('1') == ("add_invoice")) {
-                echo "active";
-            } else {
-                echo " ";
-            }
-            ?>"><a href="<?php echo base_url('add_invoice') ?>"><?php echo display('new_invoice') ?></a></li>
-                <?php } ?>
-                <?php if($this->permission1->method('manage_invoice','read')->access()){ ?>
-                <li class="treeview <?php
-            if ($this->uri->segment('1') == ("invoice_list")) {
-                echo "active";
-            } else {
-                echo " ";
-            }
-            ?>"><a href="<?php echo base_url('invoice_list') ?>"><?php echo display('manage_invoice') ?></a></li>
-                <?php } ?>
+                <ul class="treeview-menu">
+                    <!-- start -->
+                    <?php if($this->permission1->method('new_invoice','create')->access()){ ?>
+                    <li class="treeview 
+                    <?php
+                        if ($this->uri->segment('1') == ("add_invoice")) 
+                        {
+                            echo "active";
+                        } else {
+                            echo " ";
+                        }
+                    ?>">
+                    <a href="<?php echo base_url('add_invoice') ?>"><?php echo display('new_invoice') ?></a></li>
+                    
+                    <?php } ?>
+                    <!-- close -->
+                    <!-- start  -->
+                    <?php if($this->permission1->method('manage_invoice','read')->access()){ ?>
+                    <li class="treeview 
+                    <?php
+                        if ($this->uri->segment('1') == ("invoice_list")) 
+                        {
+                            echo "active";
+                        } else {
+                            echo " ";
+                        }
+                    ?>">
+                    <a href="<?php echo base_url('invoice_list') ?>"><?php echo display('manage_invoice') ?></a></li>
+                    
+                    <?php } ?>
+                    
+                    <!-- close -->
+                     <!-- start  -->
+                    <?php if($this->permission1->method('manage_invoice_payment','read')->access()){ ?>
+                    <li class="treeview 
+                    <?php
+                        if ($this->uri->segment('1') == ("invoice_payment_list")) 
+                        {
+                            echo "active";
+                        } else {
+                            echo " ";
+                        }
+                    ?>">
+                    <a href="<?php echo base_url('invoice_payment_list') ?>"><?php echo display('manage_invoice_payment') ?></a></li>
+                    
+                    <?php } ?>
+                    
+                    <!-- close -->
+                    <!-- start -->
+                    <?php if($this->permission1->method('terms_list','create')->access()){ ?>
+                    <li class="treeview <?php
+                        if ($this->uri->segment('1') == ("terms_list")) {
+                            echo "active";
+                        } else {
+                            echo " ";
+                        }
+                    ?>">
+                    
+                    <a href="<?php echo base_url('terms_list') ?>"><?php echo display('terms_list') ?></a></li>
+                    
+                    <?php } ?>
+                    <!-- close -->
+                    <!-- start -->
+                    <?php if($this->permission1->method('terms_add','create')->access()){ ?>
+                    <li class="treeview <?php
+                        if ($this->uri->segment('1') == ("terms_add")) {
+                            echo "active";
+                        } else {
+                            echo " ";
+                        }
+                    ?>">
                 
-                <?php if($this->permission1->method('terms_list','create')->access()){ ?>
-                <li class="treeview <?php
-            if ($this->uri->segment('1') == ("terms_list")) {
-                echo "active";
-            } else {
-                echo " ";
-            }
-            ?>"><a href="<?php echo base_url('terms_list') ?>"><?php echo display('terms_list') ?></a></li>
-                <?php } ?>
-                <?php if($this->permission1->method('terms_add','create')->access()){ ?>
-                <li class="treeview <?php
-            if ($this->uri->segment('1') == ("terms_add")) {
-                echo "active";
-            } else {
-                echo " ";
-            }
-            ?>"><a href="<?php echo base_url('terms_add') ?>"><?php echo display('terms_add') ?></a></li>
-                <?php } ?>
-            </ul>
+                    <a href="<?php echo base_url('terms_add') ?>"><?php echo display('terms_add') ?></a></li>
+                    
+                    <?php } ?>
+                    <!-- close -->
+                </ul>
         </li>
         <?php } ?>
 

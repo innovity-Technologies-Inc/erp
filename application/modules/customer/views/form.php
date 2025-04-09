@@ -189,6 +189,7 @@
                          </div>
 
                      </div>
+
                      <label for="status" class="col-sm-2 text-right col-form-label"><?php echo display('status')?>:</label>
                         <div class="col-sm-4">
                             <div class="">
@@ -218,7 +219,40 @@
                      <?php }?>
 
                  </div>
+                 <div class="form-group row">
+                    <!-- Comission Value -->
+                    <label for="comission_value" class="col-sm-2 text-right col-form-label">
+                        <?php echo display('comission_value'); ?>:
+                    </label>
+                    <div class="col-sm-4">
+                        <input type="text" name="comission_value" class="form-control" id="comission_value"
+                            placeholder="<?php echo display('comission_value'); ?>"
+                            value="<?php echo !empty($customer->comission_value) ? $customer->comission_value : ''; ?>">
+                    </div>
 
+                    <!-- Comission Type -->
+                    <label for="comission_type" class="col-sm-2 text-right col-form-label">
+                        <?php echo display('comission_type'); ?>:
+                    </label>
+                    <div class="col-sm-4">
+                        <select name="comission_type" id="comission_type" class="form-control">
+                            <option value="1" <?php echo (isset($customer->comission_type) && $customer->comission_type == 1) ? 'selected' : ''; ?>>Percent</option>
+                            <option value="0" <?php echo (isset($customer->comission_type) && $customer->comission_type == 0) ? 'selected' : ''; ?>>Flat</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group row">
+                    <!-- Comission Note -->
+                    <label for="comission_note" class="col-sm-2 text-right col-form-label">
+                        <?php echo display('comission_note'); ?>:
+                    </label>
+                    <div class="col-sm-4">
+                        <input type="text" name="comission_note" class="form-control" id="comission_note"
+                            placeholder="<?php echo display('comission_note'); ?>"
+                            value="<?php echo !empty($customer->comission_note) ? $customer->comission_note : ''; ?>">
+                    </div>
+                </div>
 
 
                  <div class="form-group row">

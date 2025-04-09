@@ -99,20 +99,20 @@ class Customer extends MX_Controller {
     $this->form_validation->set_rules('sales_permit_number', display('sales_permit_number'), 'max_length[50]');
 
     #-------------------------------#
-    
+
     // Handle file upload
     $sales_permit = "";
     if (!empty($_FILES['sales_permit']['name'])) {
         $config['upload_path']   = './uploads/sales_permits/';
         $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
-        $config['max_size']      = 2048; // 2MB max
+        $config['max_size']      = 2048;
         $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
 
         $this->load->library('upload', $config);
 
         if ($this->upload->do_upload('sales_permit')) {
             $upload_data = $this->upload->data();
-            $sales_permit = $upload_data['file_name']; // Save filename in DB
+            $sales_permit = $upload_data['file_name'];
         } else {
             log_message('error', 'File Upload Error: ' . $this->upload->display_errors());
             $this->session->set_flashdata('exception', 'File upload failed: ' . $this->upload->display_errors());
@@ -138,62 +138,84 @@ class Customer extends MX_Controller {
         'customer_address'   => $this->input->post('customer_address', true),
         'address2'           => !empty($this->input->post('address2', true)) ? $this->input->post('address2', true) : NULL,
         'sales_permit_number'=> $this->input->post('sales_permit_number', true),
-        'status'             => $this->input->post('status', true), // ✅ Fix here
+        'status'             => $this->input->post('status', true),
         'create_by'          => $this->session->userdata('id')
     ];
 
-    // Save file name only if a file was uploaded
     if (!empty($sales_permit)) {
         $postData['sales_permit'] = $sales_permit;
     }
-
-    log_message('error', 'DEBUG: File Upload Attempt - Filename: ' . ($_FILES['sales_permit']['name'] ?? 'No File'));
 
     #-------------------------------#
     if ($this->form_validation->run() === true) {
         if (empty($postData['customer_id'])) {
             if ($this->customer_model->create($postData)) {
-                $info['msg']    = display('save_successfully');
+                $customer_id = $this->db->insert_id();
+
+                // ✅ Insert commission manually during create, because insert_id is needed
+                $commission_data = [
+                    'customer_id'     => $customer_id,
+                    'comission_type'  => $this->input->post('comission_type', true),
+                    'commision_value' => $this->input->post('comission_value', true),
+                    'notes'           => $this->input->post('comission_note', true),
+                    'create_by'       => $this->session->userdata('id'),
+                    'status'          => 1,
+                    'create_date'     => date('Y-m-d H:i:s'),
+                    'update_date'     => date('Y-m-d H:i:s')
+                ];
+
+                $this->db->insert('customer_comission', $commission_data);
+
+                $info['msg'] = display('save_successfully');
                 $info['status'] = 1;
             } else {
-                $info['msg']    = display('please_try_again');
+                $info['msg'] = display('please_try_again');
                 $info['status'] = 0;
             }
         } else {
+            // ✅ Don't manually handle commission on update — it's handled in the model
             if ($this->customer_model->update($postData)) {
-                $info['msg']    = display('update_successfully');
+                $info['msg'] = display('update_successfully');
                 $info['status'] = 1;
             } else {
-                $info['msg']    = display('please_try_again');
+                $info['msg'] = display('please_try_again');
                 $info['status'] = 0;
             }
         }
 
-        // ✅ Handle JSON or Redirect Based on Request Type
         if ($this->input->is_ajax_request()) {
-            echo json_encode($info); // ✅ Send JSON response for AJAX
+            echo json_encode($info);
         } else {
             if ($info['status'] == 1) {
                 $this->session->set_flashdata('message', $info['msg']);
-                redirect('customer_list'); // ✅ Redirect to customer list page
+                redirect('customer_list');
             } else {
                 $this->session->set_flashdata('exception', $info['msg']);
-                redirect($_SERVER['HTTP_REFERER']); // ✅ Stay on form if there's an error
+                redirect($_SERVER['HTTP_REFERER']);
             }
         }
     } else {
         if ($this->input->is_ajax_request()) {
-            $info['msg']    = validation_errors();
+            $info['msg'] = validation_errors();
             $info['status'] = 0;
-            echo json_encode($info); // ✅ Send JSON validation errors
+            echo json_encode($info);
         } else {
             if (!empty($id)) {
-                $data['title']    = display('edit_customer');
+                $data['title'] = display('edit_customer');
                 $data['customer'] = $this->customer_model->singledata($id);
+
+                // load commission data into form
+                $commission = $this->db->get_where('customer_comission', ['customer_id' => $id, 'status' => 1])->row();
+                if ($commission) {
+                    $data['customer']->comission_value = $commission->commision_value;
+                    $data['customer']->comission_type = $commission->comission_type;
+                    $data['customer']->comission_note = $commission->notes;
+                }
             }
-            $data['module']   = "customer";
-            $data['page']     = "form";
-            echo Modules::run('template/layout', $data); // ✅ Show form with errors
+
+            $data['module'] = "customer";
+            $data['page']   = "form";
+            echo Modules::run('template/layout', $data);
         }
     }
 }

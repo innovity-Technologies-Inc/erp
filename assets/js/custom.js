@@ -174,7 +174,7 @@ var twelveHour = $('.timepicker-12-hr').wickedpicker();
 
 
 
-$(document).ready(function() { 
+$(document).ready(function() {
       "use strict";
    var csrf_test_name = $('[name="csrf_test_name"]').val();
    var base_url = $('#base_url').val();
