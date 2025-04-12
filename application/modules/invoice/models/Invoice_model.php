@@ -106,134 +106,291 @@ class Invoice_model extends CI_Model {
         return $this->db->count_all("invoice");
     }
 
-     public function getInvoiceList($postData=null){
-         $response = array();
-         $usertype = $this->session->userdata('user_type');
-         $fromdate = $this->input->post('fromdate',TRUE);
-         $todate   = $this->input->post('todate',TRUE);
-         if(!empty($fromdate)){
-            $datbetween = "(a.date BETWEEN '$fromdate' AND '$todate')";
-         }else{
-            $datbetween = "";
-         }
-         ## Read value
-         $draw         = $postData['draw'];
-         $start        = $postData['start'];
-         $rowperpage   = $postData['length']; // Rows display per page
-         $columnIndex  = $postData['order'][0]['column']; // Column index
-         $columnName   = $postData['columns'][$columnIndex]['data']; 
-         $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
-         $searchValue  = $postData['search']['value']; // Search value
+     public function getInvoiceList($postData = null) {
+    $response = array();
+    $usertype = $this->session->userdata('user_type');
+    $user_id = $this->session->userdata('user_id');
+    $fromdate = $this->input->post('fromdate', TRUE);
+    $todate = $this->input->post('todate', TRUE);
 
-         ## Search 
-         $searchQuery = "";
-         if($searchValue != ''){
-            $searchQuery = " (b.customer_name like '%".$searchValue."%' or a.invoice like '%".$searchValue."%' or a.date like'%".$searchValue."%' or a.invoice_id like'%".$searchValue."%' or u.first_name like'%".$searchValue."%'or u.last_name like'%".$searchValue."%')";
-         }
-
-         ## Total number of records without filtering
-         $this->db->select('count(*) as allcount');
-         $this->db->from('invoice a');
-         $this->db->join('customer_information b', 'b.customer_id = a.customer_id','left');
-         $this->db->join('users u', 'u.user_id = a.sales_by','left');
-         if($usertype == 2){
-          $this->db->where('a.sales_by',$this->session->userdata('user_id'));
-         }
-          if(!empty($fromdate) && !empty($todate)){
-             $this->db->where($datbetween);
-         }
-          if($searchValue != '')
-          $this->db->where($searchQuery);
-          
-         $records = $this->db->get()->result();
-         $totalRecords = $records[0]->allcount;
-
-         ## Total number of record with filtering
-         $this->db->select('count(*) as allcount');
-         $this->db->from('invoice a');
-         $this->db->join('customer_information b', 'b.customer_id = a.customer_id','left');
-         $this->db->join('users u', 'u.user_id = a.sales_by','left');
-         if($usertype == 2){
-          $this->db->where('a.sales_by',$this->session->userdata('user_id'));
-         }
-         if(!empty($fromdate) && !empty($todate)){
-             $this->db->where($datbetween);
-         }
-         if($searchValue != '')
-            $this->db->where($searchQuery);
-          
-         $records = $this->db->get()->result();
-         $totalRecordwithFilter = $records[0]->allcount;
-
-         ## Fetch records
-         $this->db->select("a.*,b.customer_name,u.first_name,u.last_name");
-         $this->db->from('invoice a');
-         $this->db->join('customer_information b', 'b.customer_id = a.customer_id','left');
-         $this->db->join('users u', 'u.user_id = a.sales_by','left');
-         if($usertype == 2){
-          $this->db->where('a.sales_by',$this->session->userdata('user_id'));
-         }
-          if(!empty($fromdate) && !empty($todate)){
-             $this->db->where($datbetween);
-         }
-         if($searchValue != '')
-         $this->db->where($searchQuery);
-       
-         $this->db->order_by($columnName, $columnSortOrder);
-         $this->db->limit($rowperpage, $start);
-         $records = $this->db->get()->result();
-         $data = array();
-         $sl =1;
-  
-         foreach($records as $record ){
-          $button = '';
-          $base_url = base_url();
-          $jsaction = "return confirm('Are You Sure ?')";
-
-           $button .='  <a href="'.$base_url.'invoice_details/'.$record->invoice_id.'" class="btn btn-success btn-sm" data-toggle="tooltip" data-placement="left" title="'.display('invoice').'"><i class="fa fa-window-restore" aria-hidden="true"></i></a>';
-
-         $button .='  <a href="'.$base_url.'invoice_pad_print/'.$record->invoice_id.'" class="btn btn-primary btn-sm" data-toggle="tooltip" data-placement="left" title="'.display('pad_print').'"><i class="fa fa-fax" aria-hidden="true"></i></a>';
-
-         $button .='  <a href="'.$base_url.'pos_print/'.$record->invoice_id.'" class="btn btn-warning btn-sm" data-toggle="tooltip" data-placement="left" title="'.display('pos_invoice').'"><i class="fa fa-fax" aria-hidden="true"></i></a>';
-      if($this->permission1->method('manage_invoice','update')->access()){
-        $approve = $this->db->select('status,referenceNo')->from('acc_vaucher')->where('referenceNo', $record->invoice_id)->where('status', 1)->get()->num_rows();
-        if ($approve == 0) {
-            if ($record->ret_adjust_amnt == '') {
-               
-                $button .=' <a href="'.$base_url.'invoice_edit/'.$record->invoice_id.'" class="btn btn-info btn-sm" data-toggle="tooltip" data-placement="left" title="'. display('update').'"><i class="fa fa-pencil" aria-hidden="true"></i></a> ';
-            }
-        }
-        }
-
-       
-
-          $details ='  <a href="'.$base_url.'invoice_details/'.$record->invoice_id.'" class="" >'.$record->invoice.'</a>';
-               
-            $data[] = array( 
-                'sl'               =>$sl,
-                'invoice'          =>$details,
-                'salesman'         =>$record->first_name.' '.$record->last_name,
-                'customer_name'    =>$record->customer_name,
-                'delivery_note'    =>$record->delivery_note,
-                'final_date'       =>date("d-M-Y",strtotime($record->date)),
-                'total_amount'     =>$record->total_amount,
-                'button'           =>$button,
-                
-            ); 
-            $sl++;
-         }
-
-         ## Response
-         $response = array(
-            "draw" => intval($draw),
-            "iTotalRecords" => $totalRecordwithFilter,
-            "iTotalDisplayRecords" => $totalRecords,
-            "aaData" => $data
-         );
-
-         return $response; 
+    $datbetween = "";
+    if (!empty($fromdate) && !empty($todate)) {
+        $datbetween = "(a.date BETWEEN '$fromdate' AND '$todate')";
     }
 
+    ## Read values
+    $draw            = isset($postData['draw']) ? $postData['draw'] : 1;
+    $start           = isset($postData['start']) ? $postData['start'] : 0;
+    $rowperpage      = isset($postData['length']) ? $postData['length'] : 10;
+    $columnIndex     = isset($postData['order'][0]['column']) ? $postData['order'][0]['column'] : 0;
+    $columnName      = isset($postData['columns'][$columnIndex]['data']) ? $postData['columns'][$columnIndex]['data'] : 'a.date';
+    $columnSortOrder = isset($postData['order'][0]['dir']) ? $postData['order'][0]['dir'] : 'desc';
+    $searchValue     = isset($postData['search']['value']) ? $postData['search']['value'] : '';
+
+    ## Column map
+    $columnMap = [
+        'invoice'       => 'a.invoice',
+        'salesman'      => 'u.first_name',
+        'customer_name' => 'b.customer_name',
+        'delivery_note' => 'a.delivery_note',
+        'final_date'    => 'a.date',
+        'total_amount'  => 'a.total_amount',
+    ];
+
+    $orderColumn = isset($columnMap[$columnName]) ? $columnMap[$columnName] : 'a.date';
+
+    ## Search filter
+    $searchQuery = "";
+    if (!empty($searchValue)) {
+        $searchQuery = " (b.customer_name LIKE '%{$searchValue}%' OR 
+                          a.invoice LIKE '%{$searchValue}%' OR 
+                          a.date LIKE '%{$searchValue}%' OR 
+                          a.invoice_id LIKE '%{$searchValue}%' OR 
+                          u.first_name LIKE '%{$searchValue}%' OR 
+                          u.last_name LIKE '%{$searchValue}%')";
+    }
+
+    ## Count total records
+    $this->db->select('COUNT(*) AS allcount');
+    $this->db->from('invoice a');
+    $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left');
+    $this->db->join('users u', 'u.user_id = a.sales_by', 'left');
+    if ($usertype == 2) {
+        $this->db->where('a.sales_by', $user_id);
+    }
+    if (!empty($datbetween)) {
+        $this->db->where($datbetween);
+    }
+    if (!empty($searchQuery)) {
+        $this->db->where($searchQuery);
+    }
+    $totalRecords = $this->db->get()->row()->allcount;
+
+    ## Fetch filtered data
+    $this->db->select("a.*, b.customer_name, u.first_name, u.last_name");
+    $this->db->from('invoice a');
+    $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left');
+    $this->db->join('users u', 'u.user_id = a.sales_by', 'left');
+    if ($usertype == 2) {
+        $this->db->where('a.sales_by', $user_id);
+    }
+    if (!empty($datbetween)) {
+        $this->db->where($datbetween);
+    }
+    if (!empty($searchQuery)) {
+        $this->db->where($searchQuery);
+    }
+    $this->db->order_by($orderColumn, $columnSortOrder);
+    $this->db->limit($rowperpage, $start);
+    $records = $this->db->get()->result();
+
+    ## Data response
+    $data = array();
+    $sl = $start + 1;
+    $base_url = base_url();
+
+    foreach ($records as $record) {
+        $button = '';
+        $button .= ' <button type="button" class="btn btn-info btn-sm open-delivery-modal" data-id="'.$record->invoice_id.'" data-status="'.$record->delivery_note.'" title="Update Delivery"><i class="fa fa-truck"></i></button>';
+        $button .= '<a href="'.$base_url.'invoice_details/'.$record->invoice_id.'" class="btn btn-success btn-sm" data-toggle="tooltip" title="'.display('invoice').'"><i class="fa fa-window-restore"></i></a>';
+        $button .= ' <a href="'.$base_url.'invoice_pad_print/'.$record->invoice_id.'" class="btn btn-primary btn-sm" data-toggle="tooltip" title="'.display('pad_print').'"><i class="fa fa-fax"></i></a>';
+        $button .= ' <a href="'.$base_url.'pos_print/'.$record->invoice_id.'" class="btn btn-warning btn-sm" data-toggle="tooltip" title="'.display('pos_invoice').'"><i class="fa fa-fax"></i></a>';
+
+        if ($this->permission1->method('manage_invoice','update')->access()) {
+            $approve = $this->db->select('status,referenceNo')
+                        ->from('acc_vaucher')
+                        ->where('referenceNo', $record->invoice_id)
+                        ->where('status', 1)
+                        ->get()->num_rows();
+            if ($approve == 0 && $record->ret_adjust_amnt == '') {
+                $button .= ' <a href="'.$base_url.'invoice_edit/'.$record->invoice_id.'" class="btn btn-info btn-sm" data-toggle="tooltip" title="'.display('update').'"><i class="fa fa-pencil"></i></a>';
+            }
+        }
+
+        $details = '<a href="'.$base_url.'invoice_details/'.$record->invoice_id.'">'.$record->invoice.'</a>';
+
+        $data[] = array(
+            'sl'             => $sl++,
+            'invoice'        => $details,
+            'salesman'       => $record->first_name . ' ' . $record->last_name,
+            'customer_name'  => $record->customer_name,
+            'delivery_note'  => $record->delivery_note,
+            'final_date'     => date("d-M-Y", strtotime($record->date)),
+            'total_amount'   => number_format($record->total_amount, 2),
+            'button'         => $button
+        );
+    }
+
+    ## Final response
+    return array(
+        "draw" => intval($draw),
+        "iTotalRecords" => $totalRecords,
+        "iTotalDisplayRecords" => $totalRecords, // you can separate count if needed
+        "aaData" => $data
+    );
+}
+
+    public function count_invoice_payment() {
+        return $this->db->count_all("invoice_payment");
+    }
+
+    public function getInvoicePaymentList($postData = null) {
+        $response = array();
+        $usertype = $this->session->userdata('user_type');
+        $user_id  = $this->session->userdata('user_id');
+        $fromdate = $this->input->post('fromdate', TRUE);
+        $todate   = $this->input->post('todate', TRUE);
+    
+        $dateBetween = (!empty($fromdate) && !empty($todate)) ? "(ip.invoice_date BETWEEN '$fromdate' AND '$todate')" : "";
+    
+        $draw       = $postData['draw'] ?? 1;
+        $start      = $postData['start'] ?? 0;
+        $rowPerPage = $postData['length'] ?? 10;
+    
+        $columnIndex     = $postData['order'][0]['column'] ?? 0;
+        $columnName      = $postData['columns'][$columnIndex]['data'] ?? 'invoice_date';
+        $columnSortOrder = $postData['order'][0]['dir'] ?? 'desc';
+        $searchValue     = $postData['search']['value'] ?? '';
+    
+        $columnMap = [
+            'invoice_date'  => 'ip.invoice_date',
+            'customer_name' => 'ci.customer_name',
+            'salesman'      => 'u.first_name',
+            'total_amount'  => 'ip.total_amount',
+            'paid_amount'   => 'ip.paid_amount',
+            'due_amount'    => 'ip.due_amount'
+        ];
+        $orderColumn = $columnMap[$columnName] ?? 'ip.invoice_date';
+    
+        $searchQuery = "";
+        if (!empty($searchValue)) {
+            $searchQuery = "(ci.customer_name LIKE '%$searchValue%' 
+                            OR ip.transaction_ref LIKE '%$searchValue%' 
+                            OR ip.invoice_date LIKE '%$searchValue%')";
+        }
+    
+        // Count total records
+        $this->db->select("COUNT(*) as allcount");
+        $this->db->from("invoice_payment ip");
+        $this->db->join("customer_information ci", "ci.customer_id = ip.customer_id", "left");
+        $this->db->join("users u", "u.user_id = ip.createby", "left");
+    
+        if ($usertype == 2) {
+            $this->db->where("ip.createby", $user_id);
+        }
+        if (!empty($dateBetween)) {
+            $this->db->where($dateBetween);
+        }
+        if (!empty($searchQuery)) {
+            $this->db->where($searchQuery);
+        }
+    
+        $totalRecords = $this->db->get()->row()->allcount;
+    
+        // Fetch filtered records
+        $this->db->select("ip.*, ci.customer_name, u.first_name, u.last_name");
+        $this->db->from("invoice_payment ip");
+        $this->db->join("customer_information ci", "ci.customer_id = ip.customer_id", "left");
+        $this->db->join("users u", "u.user_id = ip.createby", "left");
+    
+        if ($usertype == 2) {
+            $this->db->where("ip.createby", $user_id);
+        }
+        if (!empty($dateBetween)) {
+            $this->db->where($dateBetween);
+        }
+        if (!empty($searchQuery)) {
+            $this->db->where($searchQuery);
+        }
+    
+        $this->db->order_by($orderColumn, $columnSortOrder);
+        $this->db->limit($rowPerPage, $start);
+        $records = $this->db->get()->result();
+    
+        // Format response data
+        $data = array();
+        $sl = $start + 1;
+        $totalAmount = $totalPaid = $totalDue = 0;
+    
+        foreach ($records as $record) {
+            $salesman = (!empty($record->first_name) || !empty($record->last_name))
+                        ? $record->first_name . ' ' . $record->last_name : 'N/A';
+        
+            // Detect file type
+            $filePath = $record->payment_ref_doc;
+            $fileUrl  = base_url($filePath);
+            $fileExt  = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+            $fileName = basename($filePath);
+        
+            if (!empty($filePath)) {
+                if (in_array($fileExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    $imageTag = "<a href='$fileUrl' target='_blank' download='$fileName'>
+                                    <img src='$fileUrl' width='50' height='50' style='object-fit:cover;' />
+                                 </a>";
+                } elseif ($fileExt === 'pdf') {
+                    $imageTag = "<a href='$fileUrl' target='_blank' download='$fileName'>
+                                    <i class='fa fa-file-pdf-o fa-2x text-danger'></i>
+                                 </a>";
+                } else {
+                    $imageTag = "<a href='$fileUrl' target='_blank' download='$fileName'>
+                                    <i class='fa fa-download'></i> Download
+                                 </a>";
+                }
+            } else {
+                $imageTag = '<span class="text-muted">No File</span>';
+            }
+        
+            switch ($record->status) {
+                case 1:
+                    $statusText = '<span class="label label-success">Approved</span>';
+                    break;
+                case 2:
+                    $statusText = '<span class="label label-warning">Pending</span>';
+                    break;
+                case 0:
+                    $statusText = '<span class="label label-danger">Unapproved</span>';
+                    break;
+                default:
+                    $statusText = '<span class="label label-default">N/A</span>';
+                    break;
+            }
+        
+            $button = '<button type="button" class="btn btn-warning btn-sm change-status" 
+                data-id="' . $record->id . '" 
+                data-status="' . $record->status . '">
+                <i class="fa fa-pencil"></i> Change Status
+            </button>';
+        
+            $data[] = array(
+                'sl'              => $sl++,
+                'date'            => date("d-M-Y", strtotime($record->invoice_date)),
+                'payment_ref'     => $record->payment_ref ?? 'N/A',
+                'payment_ref_doc' => $imageTag,
+                'transaction_ref' => $record->transaction_ref ?? 'N/A',
+                'salesman'        => $salesman,
+                'customer_name'   => $record->customer_name ?? 'N/A',
+                'total_amount'    => number_format($record->total_amount, 2),
+                'paid_amount'     => number_format($record->paid_amount, 2),
+                'due_amount'      => number_format($record->due_amount, 2),
+                'status'          => $statusText,
+                'button'          => $button
+            );
+        
+            $totalAmount += $record->total_amount;
+            $totalPaid   += $record->paid_amount;
+            $totalDue    += $record->due_amount;
+        }
+    
+        return array(
+            "draw" => intval($draw),
+            "iTotalRecords" => $totalRecords,
+            "iTotalDisplayRecords" => $totalRecords,
+            "aaData" => $data,
+            "total_amount" => number_format($totalAmount, 2),
+            "total_paid"   => number_format($totalPaid, 2),
+            "total_due"    => number_format($totalDue, 2),
+        );
+    }
 
     public function invoice_taxinfo($invoice_id){
        return $this->db->select('*')   
@@ -403,6 +560,7 @@ public function invoice_entry($incremented_id) {
             'total_tax'       => $this->input->post('total_tax',TRUE),
             'invoice'         => $incremented_id,
             'invoice_details' => (!empty($this->input->post('inva_details',TRUE))?$this->input->post('inva_details',TRUE):'Thank you for shopping with us'),
+            'delivery_note'   => $this->input->post('delivery_note',TRUE),
             'invoice_discount'=> $this->input->post('invoice_discount',TRUE),
             'total_discount'  => $this->input->post('total_discount',TRUE),
             'total_vat_amnt'  => $this->input->post('total_vat_amnt',TRUE),

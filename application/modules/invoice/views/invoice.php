@@ -106,4 +106,93 @@
             </div>
         </div>
     </div>
+    <!-- delivery note modal -->
+     <!-- Delivery Status Modal -->
+    <div class="modal fade" id="deliveryStatusModal" tabindex="-1" aria-labelledby="deliveryStatusLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="deliveryStatusForm">
+            <div class="modal-content">
+                <div class="modal-header">
+                <h5 class="modal-title" id="deliveryStatusLabel">Update Delivery Status</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">&times;</button>
+                </div>
+                <div class="modal-body">
+                <input type="hidden" name="invoice_id" id="modal_invoice_id">
+                <div class="form-group">
+                    <label for="delivery_status">Select Delivery Status</label>
+                    <select class="form-control" id="delivery_status" name="delivery_status" required>
+                    <option value="">-- Select --</option>
+                    <option value="0">Pending</option>
+                    <option value="1">Confirmed</option>
+                    <option value="2">Picked Up</option>
+                    <option value="3">On The Way</option>
+                    <option value="4">Delivered</option>
+                    <option value="5">Cancelled</option>
+                    </select>
+                </div>
+                </div>
+                <div class="modal-footer">
+                <button type="submit" class="btn btn-success">Update</button>
+                </div>
+            </div>
+            </form>
+        </div>
+    </div>
  </div>
+
+ <script>
+    $(document).ready(function () {
+
+        // Trigger delivery modal
+        $(document).on('click', '.open-delivery-modal', function () {
+            const invoiceId = $(this).data('id');
+            const currentStatus = $(this).data('status');
+            console.log('Opening modal for Invoice ID:', invoiceId, '| Current Status:', currentStatus);
+
+            $('#modal_invoice_id').val(invoiceId);
+            $('#delivery_status').val(currentStatus);
+            $('#deliveryStatusModal').modal('show');
+        });
+
+        // Submit delivery form
+        $('#deliveryStatusForm').on('submit', function (e) {
+            e.preventDefault();
+
+            const invoice_id = $('#modal_invoice_id').val();
+            const delivery_status = $('#delivery_status').val();
+
+            console.log('Submitting form with Invoice ID:', invoice_id, '| New Status:', delivery_status);
+
+            if (invoice_id && delivery_status !== "") {
+                $.ajax({
+                    url: "<?php echo base_url('invoice/update_delivery_note'); ?>",
+                    type: "POST",
+                    data: {
+                        invoice_id: invoice_id,
+                        delivery_note: delivery_status
+                    },
+                    dataType: "json",
+                    success: function (res) {
+                        console.log('Backend Response:', res);
+
+                        if (res.success) {
+                            $('#deliveryStatusModal').modal('hide');
+                            $('#InvList').DataTable().ajax.reload(null, false);
+                            alert(res.api_message || res.message || 'Delivery status updated.');
+                        } else {
+                            alert('Update failed: ' + (res.message || 'Unknown error'));
+                        }
+                    },
+                    error: function (xhr) {
+                        console.error('AJAX Error:', xhr.responseText);
+                        alert('An error occurred while updating delivery status.');
+                    }
+                });
+            } else {
+                console.warn('Invoice ID or Delivery Status is missing.');
+                alert('Please select a delivery status.');
+            }
+        });
+
+    });
+</script>

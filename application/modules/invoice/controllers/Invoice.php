@@ -53,12 +53,140 @@ class Invoice extends MX_Controller {
         echo modules::run('template/layout', $data);
     }
 
+    public function paysenz_invoice_payment_list(){
+        $data['title']        = display('manage_invoice_payment');
+        $data['total_invoice']= $this->invoice_model->count_invoice_payment();
+        $data['module']       = "invoice";
+        $data['page']         = "invoice_payment"; 
+        echo modules::run('template/layout', $data);
+    }
+
+
+    public function update_status()
+{
+    $id = $this->input->post('invoice_payment_id');
+    $new_status = $this->input->post('new_status');
+
+    if (!empty($id) && in_array($new_status, ['0', '1', '2'])) {
+        // Fetch transaction_ref before updating
+        $this->db->select('transaction_ref');
+        $this->db->from('invoice_payment');
+        $this->db->where('id', $id);
+        $record = $this->db->get()->row();
+
+        if ($record && !empty($record->transaction_ref)) {
+            $ref_id = $record->transaction_ref;
+
+            // Update local DB status
+            $this->db->where('id', $id);
+            $updated = $this->db->update('invoice_payment', ['status' => $new_status]);
+
+            if ($updated) {
+                // Call external API after local update
+                $api_url = "http://demob2b.paysenzhost.xyz/paymentUpdate";
+                $query_params = http_build_query([
+                    'ref_id' => $ref_id,
+                    'status' => $new_status
+                ]);
+
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $api_url . '?' . $query_params);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                $api_response = curl_exec($ch);
+                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                // Optionally: log API response here
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Status updated successfully',
+                    'api_response_code' => $http_code
+                ]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Local update failed']);
+            }
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Transaction reference not found']);
+        }
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Invalid input']);
+    }
+}
+
+
+    public function invoice_payment_list_data() {
+        $this->load->model('invoice_model');
+        $postData = $this->input->post();
+        $jsonData = $this->invoice_model->getInvoicePaymentList($postData);
+    
+        // Optional: if you want to return totals (to update footer)
+        $jsonData['total_amount'] = array_sum(array_column($jsonData['aaData'], 'total_amount'));
+        $jsonData['total_paid'] = array_sum(array_column($jsonData['aaData'], 'paid_amount'));
+        $jsonData['total_due'] = array_sum(array_column($jsonData['aaData'], 'due_amount'));
+    
+        echo json_encode($jsonData);
+    }
+
+    public function getInvoicePaymentList() {
+        $this->load->model('getInvoicePaymentList'); // Update with your model name
+        $postData = $this->input->post();
+        $data = $this->YourModel->getInvoicePaymentList($postData);
+        echo json_encode($data);
+    }
+
      public function CheckInvoiceList(){
         $postData = $this->input->post();
         $data     = $this->invoice_model->getInvoiceList($postData);
         echo json_encode($data);
     } 
 
+    public function update_delivery_note()
+    {
+        $invoice_id = $this->input->post('invoice_id');
+        $delivery_note = $this->input->post('delivery_note');
+
+        if (!empty($invoice_id)) {
+            // 1. Update local DB
+            $this->db->where('invoice_id', $invoice_id);
+            $updated = $this->db->update('invoice', ['delivery_note' => $delivery_note]);
+
+            if ($updated) {
+                // 2. Call external API server-side
+                $api_url = "http://demob2b.paysenzhost.xyz/deliveryUpdate?invoice_id={$invoice_id}&delivery_status={$delivery_note}";
+
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $api_url);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+                $api_response = curl_exec($ch);
+                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                // Try to decode API response if possible
+                $parsed_response = json_decode($api_response, true);
+
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Delivery note updated successfully',
+                    'api_message' => $parsed_response['message'] ?? 'API responded',
+                    'api_status' => $http_code
+                ]);
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Database update failed'
+                ]);
+            }
+        } else {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Invalid invoice ID'
+            ]);
+        }
+    }
+    
     public function delivery_note(){
 
         $data['invoice_no']    =  $this->input->post('invoice_no',TRUE);

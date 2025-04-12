@@ -5,6 +5,11 @@ $route['add_invoice']         = "invoice/invoice/paysenz_invoice_form";
 $route['pos_invoice']         = "invoice/invoice/paysenz_pos_invoice";
 $route['gui_pos']             = "invoice/invoice/paysenz_gui_pos";
 $route['invoice_list']        = "invoice/invoice/paysenz_invoice_list";
+
+$route['invoice_payment_list']        = "invoice/invoice/paysenz_invoice_payment_list";
+$route['invoice/update_delivery_note'] = 'invoice/update_delivery_note';
+$route['invoice_payment_list_data'] = "invoice/invoice/invoice_payment_list_data";
+$route['invoice/update_status'] = 'invoice/invoice/update_status';
 $route['invoice_details/(:num)'] = 'invoice/invoice/paysenz_invoice_details/$1';
 $route['delivery_invoice_details/(:num)'] = 'invoice/invoice/paysenz_delivery_invoice_details/$1';
 $route['invoice_pad_print/(:num)'] = 'invoice/invoice/paysenz_invoice_pad_print/$1';
