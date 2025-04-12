@@ -1,4 +1,11 @@
     <?php
+
+    require_once(APPPATH . 'third_party/JWT/JWT.php');
+    require_once(APPPATH . 'third_party/JWT/Key.php');
+
+    use Firebase\JWT\JWT;
+    use Firebase\JWT\Key;
+
     if (!defined('BASEPATH'))
         exit('No direct script access allowed');
 
@@ -1565,4 +1572,32 @@
             return $query->row();
 
         }
+
+
+    // Apiv2 data models
+
+        public function get_api_user_by_username($username)
+        {
+            return $this->db->from('api_users')
+                            ->where('username', $username)
+                            ->get()
+                            ->row_array();
+        }
+
+        public function verify_api_user_credentials($username, $password)
+        {
+            $user = $this->get_api_user_by_username($username);
+            if ($user && password_verify($password, $user['password'])) {
+                return $user;
+            }
+            return false;
+        }
+        
+        public function get_api_user_by_id($id)
+        {
+            return $this->db->where('id', $id)
+                            ->get('api_users')
+                            ->row_array();
+        }
+
     }
