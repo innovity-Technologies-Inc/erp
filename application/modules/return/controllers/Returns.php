@@ -88,39 +88,45 @@ class Returns extends MX_Controller {
 
 
        public function return_invoice() {
-        $finyear = $this->input->post('finyear',true);
-        
-        if($finyear<=0){
-            $this->session->set_flashdata('exception', 'Please Create Financial Year First');
-            redirect("return_form");
-        }else {
+        $finyear = $this->input->post('finyear', true);
+        log_message('debug', '🔁 return_invoice() called | finyear: ' . $finyear);
 
+        if ($finyear <= 0) {
+            $this->session->set_flashdata('exception', 'Please Create Financial Year First');
+            log_message('error', '❌ Financial year missing or invalid.');
+            redirect("return_form");
+        } else {
+            log_message('debug', '✅ Proceeding with return_invoice_entry()');
             $invoice_id = $this->return_model->return_invoice_entry();
+            log_message('debug', '📦 return_invoice_entry() returned Invoice ID: ' . $invoice_id);
 
             $setting_data = $this->db->select('is_autoapprove_v')->from('web_setting')->where('setting_id', 1)->get()->result_array();
-            if ($setting_data[0]['is_autoapprove_v'] == 1) {	
-                
-                $new = $this->autoapprove($invoice_id);
+            log_message('debug', '⚙️ Web setting loaded: ' . json_encode($setting_data));
+
+            if (!empty($setting_data) && $setting_data[0]['is_autoapprove_v'] == 1) {	
+                log_message('debug', '✅ Auto-approving return with ID: ' . $invoice_id);
+                $this->autoapprove($invoice_id);
             }
 
-            
             $this->session->set_flashdata(array('message' => display('successfully_added')));
-
             redirect("invoice_return_details/".$invoice_id);
         }
     }
 
-    public function autoapprove($invoice_id){
+    public function autoapprove($invoice_id) {
+        log_message('debug', '🔁 autoapprove() called for invoice_id: ' . $invoice_id);
 
-        $vouchers = $this->db->select('referenceNo, VNo')->from('acc_vaucher')->where('referenceNo',$invoice_id)->where('status',0)->get()->result();
+        $vouchers = $this->db->select('referenceNo, VNo')->from('acc_vaucher')->where('referenceNo', $invoice_id)->where('status', 0)->get()->result();
+        log_message('debug', '🧾 Found ' . count($vouchers) . ' vouchers to approve for invoice: ' . $invoice_id);
+
         foreach ($vouchers as $value) {
-            # code...
-            $data = $this->Accounts_model->approved_vaucher($value->VNo, 'active');
+            log_message('debug', '📝 Approving voucher: ' . $value->VNo);
+            $result = $this->Accounts_model->approved_vaucher($value->VNo, 'active');
+            log_message('debug', '✅ Voucher approved: ' . $value->VNo . ' | Result: ' . json_encode($result));
         }
-        return true;
-        
-    }
 
+        return true;
+    }
 
         //wastage return list end
 
