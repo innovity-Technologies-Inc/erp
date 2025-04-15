@@ -83,7 +83,8 @@ class Invoice extends MX_Controller {
 
             if ($updated) {
                 // Call external API after local update
-                $api_url = "https://deshishadusa.com/paymentUpdate";
+                // $api_url = "https://deshishadusa.com/paymentUpdate";
+                $api_url = "http://erp.paysenzhost.xyz/paymentUpdate";
                 $query_params = http_build_query([
                     'ref_id' => $ref_id,
                     'status' => $new_status
@@ -154,7 +155,8 @@ class Invoice extends MX_Controller {
 
             if ($updated) {
                 // 2. Call external API server-side
-                $api_url = "https://deshishadusa.com/deliveryUpdate?invoice_id={$invoice_id}&delivery_status={$delivery_note}";
+                // $api_url = "https://deshishadusa.com/deliveryUpdate?invoice_id={$invoice_id}&delivery_status={$delivery_note}";
+                $api_url = "http://erp.paysenzhost.xyz/deliveryUpdate?invoice_id={$invoice_id}&delivery_status={$delivery_note}";
 
                 $ch = curl_init();
                 curl_setopt($ch, CURLOPT_URL, $api_url);
