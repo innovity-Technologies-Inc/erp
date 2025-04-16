@@ -674,7 +674,7 @@ public function invoice_entry($incremented_id) {
             $disper           = $discount_per[$i];
             $discount         = $discount_rate[$i];
             $vatper           = (is_array($vat_amnt_pcnt) && isset($vat_amnt_pcnt[$i])) ? $vat_amnt_pcnt[$i] : 0;
-            $vatanmt          = $vat_amnt[$i];
+            $vatanmt          = (is_array($vat_amnt) && isset($vat_amnt[$i])) ? $vat_amnt[$i] : 0;
             $tax              = ($tax_amount?$tax_amount[$i]:0);
             $description      = (!empty($invoice_description)?$invoice_description[$i]:null);
            

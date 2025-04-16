@@ -146,14 +146,23 @@ class Return_model extends CI_Model {
                 'total_ret_amount' => $total_price,
                 'net_total_amount' => $this->input->post('grand_total_priceret',TRUE),
                 'reason'        => $this->input->post('details',TRUE),
-                'usablity'      => $this->input->post('radio',TRUE)
+                // 'usablity'      => $this->input->post('radio',TRUE)
+                'usablity'      => $ads
             );
 
             if ($ads == 1) {
                 $this->db->insert('invoice_details', $data1);
             }
             $this->db->insert('product_return', $returns);
+             // ✅ Update stock: increase quantity
+            if ($ads == 1) {
+                $this->db->set('quantity', 'quantity + ' . floatval($product_quantity), false);
+                $this->db->where('product_id', $product_id);
+                $this->db->update('product_information');
 
+                log_message('debug', "✅ Stock updated for return: +{$product_quantity} to product_id = {$product_id}");
+            }
+            
         }
         // product return part end
 
@@ -248,6 +257,7 @@ class Return_model extends CI_Model {
         return $return_id;
     }
 
+    
     // insert sales debitvoucher
     public function insert_sale_creditvoucher($is_credit = null,$invoice_id = null,$dbtid = null,$amnt_type = null,$amnt = null,$Narration = null,$Comment = null,$reVID = null,$subcode = null){  
 
@@ -774,6 +784,21 @@ class Return_model extends CI_Model {
         }
         return false;
     }
+
+    // -------------
+
+    public function update_stock_for_return($invoice_id) {
+        $items = $this->db->get_where('product_return_details', ['invoice_id' => $invoice_id])->result();
+    
+        foreach ($items as $item) {
+            $this->db->set('quantity', 'quantity + '.$item->ret_qty, false)
+                     ->where('product_id', $item->product_id)
+                     ->update('product_information');
+    
+            log_message('debug', "🟢 Updated stock for Product ID {$item->product_id}: +{$item->ret_qty}");
+        }
+    }
+
 
 }
 
