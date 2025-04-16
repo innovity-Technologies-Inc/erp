@@ -347,19 +347,21 @@
                                     </td>
                                 </tr>
 
-                                <?php if (!empty($due_amount) && $due_amount > 0): ?>
-                                    <tr>
-                                        <th class="text-left grand_total"><?php echo display('due') ?> :</th>
-                                        <td class="text-right grand_total">
-                                            <?php 
-                                            echo ($position == 0)
-                                                ? $currency . ' ' . number_format($due_amount, 2)
-                                                : number_format($due_amount, 2) . ' ' . $currency;
-                                            ?>
-                                        </td>
-                                    </tr>
-                                <?php endif; ?>
-
+                                <?php 
+                                    $clean_due_amount = (float) str_replace(',', '', $due_amount);
+                                    if (!empty($clean_due_amount) && $clean_due_amount > 0): 
+                                    ?>
+                                        <tr>
+                                            <th class="text-left grand_total"><?php echo display('due') ?> :</th>
+                                            <td class="text-right grand_total">
+                                                <?php 
+                                                echo ($position == 0)
+                                                    ? $currency . ' ' . number_format($clean_due_amount, 2)
+                                                    : number_format($clean_due_amount, 2) . ' ' . $currency;
+                                                ?>
+                                            </td>
+                                        </tr>
+                                    <?php endif; ?>
                             </table>
                         </div>
                     </div>
