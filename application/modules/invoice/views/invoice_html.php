@@ -111,164 +111,108 @@
 
                     <div class="table-responsive">
                         <table class="table table-striped print-font-size">
-                            <thead>
-                                <tr>
-                                    <th width="8%" class="text-center"><?php echo display('sl') ?></th>
-                                    <th width="22%" class="text-center"><?php echo display('product_name') ?></th>
-                                    <th class="text-center">
-                                        <?php if($is_unit !=0){ echo display('unit');
-                                              }?></th>
-                                    <?php if($is_desc !=0){?>
-                                    <th class="text-center">
-                                        <?php if($is_desc !=0){ echo display('item_description');} ?></th>
-                                    <?php } ?>
-                                    <?php if($is_serial !=0){?>
-                                    <th class="text-center">
-                                        <?php if($is_serial !=0){ echo display('serial_no');} ?>
-                                    </th>
-                                    <?php } ?>
-                                    <th class="text-right"><?php echo display('quantity') ?></th>
-                                    <?php if($is_discount > 0){ ?>
+                        <thead>
+                            <tr>
+                                <th width="8%" class="text-center"><?php echo display('sl') ?></th>
+                                <th width="22%" class="text-center"><?php echo display('product_name') ?></th>
+                                
+                                <?php if($is_unit != 0): ?>
+                                    <th class="text-center"><?php echo display('unit'); ?></th>
+                                <?php endif; ?>
 
-                                    <?php if ($discount_type == 1) { ?>
-                                    <th class="text-right">
-                                        <?php echo display('discount_percentage') .'%'?></th>
-                                    <?php } elseif ($discount_type == 2) { ?>
-                                    <th class="text-right"><?php echo display('discount') ?></th>
-                                    <?php } elseif ($discount_type == 3) { ?>
-                                    <th class="text-right"><?php echo display('fixed_dis') ?></th>
-                                    <?php } ?>
-                                    <?php }else{ ?>
-                                    <th class="text-right"><?php echo ''; ?> </th>
-                                    <?php }?>
-                                    <th class="text-right">
-                                        <?php if($is_dis_val > 0){ echo display('dis_val');?>
-                                        <?php   }else{
-                                                    echo '';
-                                                } ?></th>
-                                    <th class="text-right">
-                                        <?php if($vat_amnt_per > 0){ echo display('vat').' %';?>
-                                        <?php  }else{
-                                                    echo '';
-                                                } ?></th>
-                                    <th class="text-right">
-                                        <?php if($vat_amnt > 0){ echo display('vat_val');?>
-                                        <?php  }else{
-                                                    echo '';
-                                                } ?></th>
-                                    <th class="text-right"><?php echo display('rate') ?></th>
-                                    <th class="text-right"><?php echo display('ammount') ?></th>
-                                </tr>
-                            </thead>
+                                <?php if($is_desc != 0): ?>
+                                    <th class="text-center"><?php echo display('item_description'); ?></th>
+                                <?php endif; ?>
+
+                                <?php if($is_serial != 0): ?>
+                                    <th class="text-center"><?php echo display('serial_no'); ?></th>
+                                <?php endif; ?>
+
+                                <th class="text-right"><?php echo display('quantity') ?></th>
+
+                                <?php if ($discount_type == 1 && $is_discount > 0): ?>
+                                    <th class="text-right"><?php echo display('discount_percentage').'%' ?></th>
+                                <?php elseif (($discount_type == 2 || $discount_type == 3) && $is_dis_val > 0): ?>
+                                    <th class="text-right"><?php echo ($discount_type == 2) ? display('discount') : display('fixed_dis'); ?></th>
+                                <?php endif; ?>
+
+                                <?php if ($vat_amnt_per > 0): ?>
+                                    <th class="text-right"><?php echo display('vat').' %'; ?></th>
+                                <?php endif; ?>
+
+                                <?php if ($vat_amnt > 0): ?>
+                                    <th class="text-right"><?php echo display('vat_val'); ?></th>
+                                <?php endif; ?>
+
+                                <th class="text-right"><?php echo display('rate') ?></th>
+                                <th class="text-right"><?php echo display('ammount') ?></th>
+                            </tr>
+                        </thead>
                             <tbody>
                                 <?php 
                                  $itemprice = 0;
                                 foreach($invoice_all_data as $details){?>
                                 <tr>
                                     <td class="text-center"><?php echo $details['sl']?></td>
-                                    <td class="text-center">
-                                        <div>
-                                            <span class="comp-web">
-                                                <?php
-                                                echo $details['product_name'];
-                                                if (!empty(trim($details['product_model']))) {
-                                                    echo " - (" . $details['product_model'] . ")";
-                                                }
-                                                ?>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="text-center comp-web">
-                                        <div><?php echo $details['unit']?></div>
-                                    </td>
-                                    <?php if ($details['description']) { ?>
-                                    <td align="center" class="comp-web"><?php echo $details['description']?></td>
-                                    <?php } ?>
-                                    <?php if ($details['serial_no']) { ?>
-                                    <td align="center" class="comp-web"><?php echo $details['serial_no']?></td>
-                                    <?php } ?>
-                                    <td align="right" class="comp-web"><?php echo $details['quantity']?></td>
+                                    <td class="text-center"><?php echo $details['product_name']; ?></td>
 
-                                    <?php if ($discount_type == 1) { ?>
-                                    <td class="comp-web" align="right"><?php echo $details['discount_per']?></td>
-                                    <?php } else { ?>
-                                    <td class="comp-web" align="right">
-                                        <?php echo (($position == 0) ? $currency.' '.$details['discount_per'] : $details['discount_per'].' '. $currency) ?>
-                                    </td>
-                                    <?php } ?>
+                                    <?php if($is_unit != 0): ?>
+                                        <td class="text-center"><?php echo $details['unit']; ?></td>
+                                    <?php endif; ?>
 
-                                    <td class="comp-web" align="right">
-                                        <nobr>
-                                            <?php 
-                                                if(!empty($details['discount'])){
-                                                    $curicon = $currency;
-                                                }else{
-                                                    $curicon = '';
-                                                }
-                                            if($position == 0){
-                                            echo  $curicon.' '.html_escape($details['discount']);
-                                            }else{
-                                            echo html_escape($details['discount']).' '.$curicon;
-                                            }
-                                                ?>
-                                        </nobr>
-                                    </td>
-                                    <td class="comp-web" align="right">
-                                        <nobr>
-                                            <?php 
-                                                if(!empty($details['vat_amnt_per'])){
-                                                    $curicon = $currency;
-                                                }else{
-                                                    $curicon = '';
-                                                }
-                                            if($position == 0){
-                                            echo  html_escape($details['vat_amnt_per']);
-                                            }else{
-                                            echo html_escape($details['vat_amnt_per']);
-                                            }
-                                                ?>
-                                        </nobr>
-                                    </td>
+                                    <?php if ($is_desc != 0): ?>
+                                        <td class="text-center"><?php echo $details['description']; ?></td>
+                                    <?php endif; ?>
 
-                                    <td class="comp-web" align="right">
-                                        <nobr>
-                                            <?php 
-                                                if(!empty($details['vat_amnt'])){
-                                                    $curicon = $currency;
-                                                }else{
-                                                    $curicon = '';
-                                                }
-                                            if($position == 0){
-                                            echo  $curicon.' '.html_escape($details['vat_amnt']);
-                                            }else{
-                                            echo html_escape($details['vat_amnt']).' '.$curicon;
-                                            }
-                                                ?>
-                                        </nobr>
-                                    </td>
-                                    <td class="comp-web" align="right">
-                                        <?php echo (($position == 0) ? $currency.' '.$details['rate'] : $details['rate'].' '. $currency);
-                                        $itemprice += $details['rate'] * $details['quantity'];
-                                        
-                                        ?>
-                                    </td>
-                                    <td class="comp-web" align="right">
-                                        <?php echo (($position == 0) ? $currency.' '.$details['total_price'] : $details['total_price'].' '. $currency) ?>
-                                    </td>
+                                    <?php if ($is_serial != 0): ?>
+                                        <td class="text-center"><?php echo $details['serial_no']; ?></td>
+                                    <?php endif; ?>
+
+                                    <td class="text-right"><?php echo $details['quantity']; ?></td>
+
+                                    <?php if ($discount_type == 1 && $is_discount > 0): ?>
+                                        <td class="text-right"><?php echo $details['discount_per']; ?></td>
+                                    <?php elseif (($discount_type == 2 || $discount_type == 3) && $is_dis_val > 0): ?>
+                                        <td class="text-right"><?php echo $details['discount']; ?></td>
+                                    <?php endif; ?>
+
+                                    <?php if ($vat_amnt_per > 0): ?>
+                                        <td class="text-right"><?php echo $details['vat_amnt_per']; ?></td>
+                                    <?php endif; ?>
+
+                                    <?php if ($vat_amnt > 0): ?>
+                                        <td class="text-right"><?php echo $details['vat_amnt']; ?></td>
+                                    <?php endif; ?>
+
+                                    <td class="text-right"><?php echo $details['rate']; ?></td>
+                                    <td class="text-right"><?php echo $details['total_price']; ?></td>
                                 </tr>
                                 <?php }?>
                                 <tr>
-                                    <td class="text-left" colspan="3"><b><?php echo display('grand_total') ?>:</b>
-                                    </td>
+                                    <td class="text-left" colspan="3"><b><?php echo display('grand_total') ?>:</b></td>
+                                    
+                                    <td align="right"><b><?php echo number_format($subTotal_quantity, 2) ?></b></td>
 
-                                    <td align="right"><b><?php echo number_format($subTotal_quantity,2)?></b></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
+                                    <?php if ($discount_type == 1 && $is_discount > 0): ?>
+                                        <td></td>
+                                    <?php elseif (($discount_type == 2 || $discount_type == 3) && $is_dis_val > 0): ?>
+                                        <td></td>
+                                    <?php endif; ?>
+
+                                    <?php if ($is_dis_val > 0): ?>
+                                        <td></td>
+                                    <?php endif; ?>
+
+                                    <?php if ($vat_amnt_per > 0): ?>
+                                        <td></td>
+                                    <?php endif; ?>
+
+                                    <?php if ($vat_amnt > 0): ?>
+                                        <td></td>
+                                    <?php endif; ?>
 
                                     <td colspan="2" align="right">
-                                        <b><?php echo (($position == 0) ? $currency.' '.$subTotal_ammount  : $subTotal_ammount.' '. $currency) ?></b>
+                                        <b><?php echo (($position == 0) ? $currency.' '.$subTotal_ammount : $subTotal_ammount.' '.$currency) ?></b>
                                     </td>
                                 </tr>
                             </tbody>
@@ -276,114 +220,147 @@
                         </table>
                     </div>
                     <div class="row">
-
                         <div class="col-xs-6">
-
                             <p></p>
-                            <p><strong><?php echo $invoice_details?></strong></p>
-
+                            <p><strong><?php echo $invoice_details ?></strong></p>
                         </div>
                         <div class="col-xs-6 inline-block">
-
                             <table class="table print-font-size">
-                                <?php
-                                   
-                                    $price_bef_dis = (($subTotal_amount_cal?$subTotal_amount_cal:0) + ($total_discount_cal?$total_discount_cal:0));
-                                   
-                                        if ($invoice_all_data[0]['total_discount'] != 0) {
-                                            ?>
-                                <tr>
-                                    <th><?php echo 'Total Price Before Discount' ?> :</th>
-                                    <td class="text-right">
-                                        <?php 
-                                        
-                                        echo (($position == 0) ? $currency.' '.$itemprice : $itemprice.' '.$currency) ?>
-                                    </td>
-                                </tr>
-                                <?php }?>
-                                <?php
-                                        if ($invoice_all_data[0]['total_discount'] != 0) {
-                                            ?>
-                                <tr>
-                                    <th><?php echo display('dis_val') ?> :</th>
-                                    <td class="text-right">
-                                        <?php echo (($position == 0) ? $currency.' '.$total_discount : $total_discount.' '.$currency) ?>
-                                    </td>
-                                </tr>
-                                <?php }?>
-                                <tr>
-                                    <th><?php echo 'Total Price After Discount' ?> :</th>
-                                    <td class="text-right">
-                                        <?php
-                                          
-                                         echo (($position == 0) ? $currency.' '.($itemprice - ($total_discount_cal?$total_discount_cal:0)) : ($itemprice - ($total_discount_cal?$total_discount_cal:0)).' '.$currency) ?>
-                                    </td>
-                                </tr>
-                                <?php
-                                        
-                                        if ($invoice_all_data[0]['total_vat_amnt'] != 0) {
-                                            ?>
-                                <tr>
-                                    <th><?php echo display('vat_val') ?> : </th>
-                                    <td class="text-right">
-                                        <?php echo (($position == 0) ? $currency.' '.$total_vat : $total_vat.' '.$currency) ?>
-                                    </td>
-                                </tr>
-                                <?php
-                                        }
-                                        if ($invoice_all_data[0]['total_tax'] != 0) {
-                                            ?>
-                                <tr>
-                                    <th class="text-left"><?php echo display('tax') ?> : </th>
-                                    <td class="text-right">
-                                        <?php echo (($position == 0) ? $currency.' '.$total_tax : $total_tax.' '.$currency) ?>
-                                    </td>
-                                </tr>
-                                <?php } ?>
-                                <?php if ($invoice_all_data[0]['shipping_cost'] != 0) {
-                                            ?>
-                                <tr>
-                                    <th class="text-left"><?php echo 'Shipping Cost' ?> : </th>
-                                    <td class="text-right">
-                                        <?php echo (($position == 0) ? $currency.' '.$shipping_cost :  $shipping_cost.' '.$currency) ?>
-                                    </td>
-                                </tr>
-                                <?php } ?>
-                                <tr>
-                                    <th class="text-left grand_total"><?php echo display('grand_total') ?> :</th>
-                                    <td class="text-right grand_total">
-                                        <?php echo (($position == 0) ? $currency.' '.$total_amount : $total_amount.' '.$currency) ?>
-                                    </td>
-                                </tr>
-                                <?php if($previous > 0){?>
-                                <tr>
-                                    <th class="text-left grand_total"><?php echo display('previous'); ?> :</th>
-                                    <td class="text-right grand_total">
-                                        <?php echo (($position == 0) ? $currency.' '.$previous : $previous.' '.$currency) ?>
-                                    </td>
-                                </tr>
-                                <?php }?>
 
-                                <tr>
-                                    <th class="text-left grand_total"><?php echo display('paid_ammount') ?> :</th>
-                                    <td class="text-right grand_total">
-                                        <?php echo (($position == 0) ? $currency.' '.$paid_amount : $paid_amount.' '.$currency) ?>
-                                    </td>
-                                </tr>
-                                <?php
-                                        if ($invoice_all_data[0]['due_amount'] != 0) {
+                                <?php if (!empty($total_discount_cal) && $total_discount_cal > 0): ?>
+                                    <tr>
+                                        <th><?php echo 'Total Price Before Discount' ?> :</th>
+                                        <td class="text-right">
+                                            <?php 
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($subTotal_amount_cal, 2)
+                                                : number_format($subTotal_amount_cal, 2) . ' ' . $currency;
                                             ?>
-                                <tr>
-                                    <th class="text-left grand_total"><?php echo display('due') ?> :</th>
-                                    <td class="text-right grand_total">
-                                        <?php echo (($position == 0) ? $currency.' '.$due_amount : $due_amount.' '.$currency) ?>
-                                    </td>
-                                </tr>
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <th><?php echo display('dis_val') ?> :</th>
+                                        <td class="text-right">
+                                            <?php 
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($total_discount_cal, 2)
+                                                : number_format($total_discount_cal, 2) . ' ' . $currency;
+                                            ?>
+                                        </td>
+                                    </tr>
+
+                                    <?php
+                                    $clean_sub_total = (float) str_replace(',', '', $subTotal_amount_cal);
+                                    $clean_discount = (float) str_replace(',', '', $total_discount_cal);
+                                    $price_after_discount = $clean_sub_total - $clean_discount;
+                                    ?>
+
+                                    <tr>
+                                        <th><?php echo 'Total Price After Discount' ?> :</th>
+                                        <td class="text-right">
+                                            <?php
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($price_after_discount, 2)
+                                                : number_format($price_after_discount, 2) . ' ' . $currency;
+                                            ?>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
+
+                                <?php if (!empty($total_vat) && $total_vat != 0): ?>
+                                    <tr>
+                                        <th><?php echo display('vat_val') ?> :</th>
+                                        <td class="text-right">
+                                            <?php 
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($total_vat, 2)
+                                                : number_format($total_vat, 2) . ' ' . $currency;
+                                            ?>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
+
+                                <?php if (!empty($total_tax) && $total_tax != 0): ?>
+                                    <tr>
+                                        <th class="text-left"><?php echo display('tax') ?> :</th>
+                                        <td class="text-right">
+                                            <?php 
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($total_tax, 2)
+                                                : number_format($total_tax, 2) . ' ' . $currency;
+                                            ?>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
+
+                                <?php if (!empty($shipping_cost) && $shipping_cost != 0): ?>
+                                    <tr>
+                                        <th class="text-left"><?php echo 'Shipping Cost' ?> :</th>
+                                        <td class="text-right">
+                                            <?php 
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($shipping_cost, 2)
+                                                : number_format($shipping_cost, 2) . ' ' . $currency;
+                                            ?>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
+
                                 <?php
-                                        }
+                                $clean_total_amount = (float) str_replace(',', '', $total_amount);
+                                ?>
+                                <tr style="border-top: 3px double #000;">
+                                    <th class="text-left grand_total"><?php echo display('grand_total'); ?> :</th>
+                                    <td class="text-right grand_total">
+                                        <?php echo ($position == 0)
+                                            ? $currency . ' ' . number_format($clean_total_amount, 2)
+                                            : number_format($clean_total_amount, 2) . ' ' . $currency;
                                         ?>
-                            </table>
+                                    </td>
+                                </tr>
 
+                                <?php if (!empty($previous) && $previous > 0): ?>
+                                    <tr>
+                                        <th class="text-left grand_total"><?php echo display('previous'); ?> :</th>
+                                        <td class="text-right grand_total">
+                                            <?php 
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($previous, 2)
+                                                : number_format($previous, 2) . ' ' . $currency;
+                                            ?>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
+
+                                <?php
+                                $clean_paid_amount = (float) str_replace(',', '', $paid_amount);
+                                ?>
+                                <tr style="border-top: 3px double #000;">
+                                    <th class="text-left grand_total"><?php echo display('paid_ammount'); ?> :</th>
+                                    <td class="text-right grand_total">
+                                        <?php 
+                                        echo ($position == 0)
+                                            ? $currency . ' ' . number_format($clean_paid_amount, 2)
+                                            : number_format($clean_paid_amount, 2) . ' ' . $currency;
+                                        ?>
+                                    </td>
+                                </tr>
+
+                                <?php if (!empty($due_amount) && $due_amount > 0): ?>
+                                    <tr>
+                                        <th class="text-left grand_total"><?php echo display('due') ?> :</th>
+                                        <td class="text-right grand_total">
+                                            <?php 
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($due_amount, 2)
+                                                : number_format($due_amount, 2) . ' ' . $currency;
+                                            ?>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
+
+                            </table>
                         </div>
                     </div>
                     <div class="row margin-top50">
