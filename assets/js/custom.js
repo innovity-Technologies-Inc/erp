@@ -238,15 +238,22 @@ $(document).ready(function() {
              { data: 'customer_name'},
              { data: 'delivery_note' },
              { data: 'final_date' },
-             { data: 'total_amount',class:"total_sale text-right",render: $.fn.dataTable.render.number( ',', '.', 2, currency )},
+             {
+              data: 'total_amount',
+              class: "total_sale text-right",
+              render: function (data, type, row) {
+                var num = parseFloat((data + '').replace(/,/g, '')) || 0;
+                return type === 'display'
+                  ? currency + ' ' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  : num;
+              }
+            },
              { data: 'button'},
           ],
 
   "footerCallback": function(row, data, start, end, display) {
   var api = this.api();
-   api.columns('.total_sale', {
-    page: 'current'
-  }).every(function() {
+  api.columns('.total_sale', { page: 'current' }).every(function() {
     var sum = this
       .data()
       .reduce(function(a, b) {
@@ -254,7 +261,12 @@ $(document).ready(function() {
         var y = parseFloat(b) || 0;
         return x + y;
       }, 0);
-    $(this.footer()).html(currency+' '+sum.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+    $(this.footer()).html(
+      currency + ' ' + sum.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })
+    );
   });
 }
 
