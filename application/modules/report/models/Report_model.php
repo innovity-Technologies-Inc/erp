@@ -264,12 +264,12 @@ public function getSalesReportList($postData = null) {
         PaymentDetails AS (
             SELECT 
                 i.invoice_id, 
-                MAX(i.date) AS date, 
-                MAX(i.total_amount) AS total_amount, 
-                MAX(i.total_discount) AS total_discount, 
-                MAX(i.total_amount - i.total_discount) AS payable_amount, 
-                MAX(i.paid_amount) AS paid_amount, 
-                MAX(i.due_amount) AS due_amount, 
+                i.date AS date, 
+                i.total_amount AS total_amount, 
+                i.total_discount AS total_discount, 
+                (i.total_amount - i.total_discount) AS payable_amount, 
+                i.paid_amount AS paid_amount, 
+                i.due_amount AS due_amount, 
                 c.customer_name, 
                 MAX(v.Vtype) AS voucher_type,  
                 MAX(t.VNo) AS voucher_no,  
@@ -280,7 +280,7 @@ public function getSalesReportList($postData = null) {
             LEFT JOIN acc_transaction t ON v.VNo = t.VNo  
             LEFT JOIN PaymentMethods pm ON t.COAID = pm.HeadCode  
             WHERE t.Debit > 0  
-            GROUP BY i.invoice_id, c.customer_name
+            GROUP BY i.invoice_id, i.date, i.total_amount, i.total_discount, i.paid_amount, i.due_amount, c.customer_name
         )
         SELECT * FROM (
             SELECT 

@@ -148,10 +148,17 @@
                                 <th class="text-right"><?php echo display('ammount') ?></th>
                             </tr>
                         </thead>
-                            <tbody>
-                                <?php 
-                                 $itemprice = 0;
-                                foreach($invoice_all_data as $details){?>
+                        <tbody>
+                            <?php 
+                                $itemprice = 0;
+
+                                // Dynamically calculate colspan for the Grand Total label column
+                                $colspan_base = 2; // SL and Product Name
+                                $colspan_base += ($is_unit != 0) ? 1 : 0;
+                                $colspan_base += ($is_desc != 0) ? 1 : 0;
+                                $colspan_base += ($is_serial != 0) ? 1 : 0;
+
+                                foreach($invoice_all_data as $details){ ?>
                                 <tr>
                                     <td class="text-center"><?php echo $details['sl']?></td>
                                     <td class="text-center"><?php echo $details['product_name']; ?></td>
@@ -187,34 +194,60 @@
                                     <td class="text-right"><?php echo $details['rate']; ?></td>
                                     <td class="text-right"><?php echo $details['total_price']; ?></td>
                                 </tr>
-                                <?php }?>
-                                <tr>
-                                    <td class="text-left" colspan="3"><b><?php echo display('grand_total') ?>:</b></td>
-                                    
-                                    <td align="right"><b><?php echo number_format($subTotal_quantity, 2) ?></b></td>
+                            <?php } ?>
 
-                                    <?php if ($discount_type == 1 && $is_discount > 0): ?>
-                                        <td></td>
-                                    <?php elseif (($discount_type == 2 || $discount_type == 3) && $is_dis_val > 0): ?>
-                                        <td></td>
-                                    <?php endif; ?>
+                            <?php
+                                // Columns before quantity (e.g., SL, Product name, Unit, Desc, Serial)
+                                $colspan_base = 2;
+                                $colspan_base += ($is_unit != 0) ? 1 : 0;
+                                $colspan_base += ($is_desc != 0) ? 1 : 0;
+                                $colspan_base += ($is_serial != 0) ? 1 : 0;
 
-                                    <?php if ($is_dis_val > 0): ?>
-                                        <td></td>
-                                    <?php endif; ?>
+                                // Additional columns after quantity
+                                $additional_cols = 1; // quantity itself
 
-                                    <?php if ($vat_amnt_per > 0): ?>
-                                        <td></td>
-                                    <?php endif; ?>
+                                // Determine if a discount column will be shown
+                                $has_discount_column = false;
+                                if ($discount_type == 1 && $is_discount > 0) $has_discount_column = true;
+                                if (($discount_type == 2 || $discount_type == 3) && $is_dis_val > 0) $has_discount_column = true;
+                                if ($has_discount_column) $additional_cols++;
 
-                                    <?php if ($vat_amnt > 0): ?>
-                                        <td></td>
-                                    <?php endif; ?>
+                                if ($vat_amnt_per > 0) $additional_cols++;
+                                if ($vat_amnt > 0) $additional_cols++;
 
-                                    <td colspan="2" align="right">
-                                        <b><?php echo (($position == 0) ? $currency.' '.$subTotal_ammount : $subTotal_ammount.' '.$currency) ?></b>
-                                    </td>
-                                </tr>
+                                // "rate" and "total_price" columns = 2
+                                $total_columns = $colspan_base + $additional_cols + 2;
+
+                                // Left colspan = all columns before quantity + quantity + extra (not rate or total_price)
+                                $left_colspan = $colspan_base;
+                                $right_colspan = $total_columns - $left_colspan - 1; // -1 for quantity cell
+                            ?>
+                            <tr>
+                                <td class="text-left" colspan="<?php echo $left_colspan; ?>"><b><?php echo display('total') ?>:</b></td>
+                                <td align="right"><b><?php echo number_format($subTotal_quantity, 2) ?></b></td>
+
+                                <?php if ($has_discount_column): ?>
+                                    <td></td>
+                                <?php endif; ?>
+
+                                <?php if ($vat_amnt_per > 0): ?>
+                                    <td></td>
+                                <?php endif; ?>
+
+                                <?php if ($vat_amnt > 0): ?>
+                                    <td></td>
+                                <?php endif; ?>
+
+                                <td colspan="2" align="right">
+                                    <?php
+                                        $sub_total_clean = (float) str_replace(',', '', $subTotal_ammount);
+                                    ?>
+                                    <b><?php echo ($position == 0)
+                                        ? $currency . ' ' . number_format($sub_total_clean, 2)
+                                        : number_format($sub_total_clean, 2) . ' ' . $currency;
+                                    ?></b>
+                                </td>
+                            </tr>
                             </tbody>
 
                         </table>
@@ -226,6 +259,17 @@
                         </div>
                         <div class="col-xs-6 inline-block">
                             <table class="table print-font-size">
+                                <?php
+                                    $clean_sub_total = (float) str_replace(',', '', $subTotal_amount_cal);
+                                    $clean_discount = (!empty($total_discount_cal)) ? (float) str_replace(',', '', $total_discount_cal) : 0.00;
+                                    $price_after_discount = $clean_sub_total - $clean_discount;
+
+                                    $clean_vat = (float) str_replace(',', '', $total_vat);
+                                    $clean_tax = (float) str_replace(',', '', $total_tax);
+                                    $clean_shipping = (float) str_replace(',', '', $shipping_cost);
+
+                                    $grand_total = $price_after_discount + $clean_vat + $clean_tax + $clean_shipping;
+                                ?>
 
                                 <?php if (!empty($total_discount_cal) && $total_discount_cal > 0): ?>
                                     <tr>
@@ -249,12 +293,6 @@
                                             ?>
                                         </td>
                                     </tr>
-
-                                    <?php
-                                    $clean_sub_total = (float) str_replace(',', '', $subTotal_amount_cal);
-                                    $clean_discount = (float) str_replace(',', '', $total_discount_cal);
-                                    $price_after_discount = $clean_sub_total - $clean_discount;
-                                    ?>
 
                                     <tr>
                                         <th><?php echo 'Total Price After Discount' ?> :</th>
@@ -307,15 +345,12 @@
                                     </tr>
                                 <?php endif; ?>
 
-                                <?php
-                                $clean_total_amount = (float) str_replace(',', '', $total_amount);
-                                ?>
                                 <tr style="border-top: 3px double #000;">
                                     <th class="text-left grand_total"><?php echo display('grand_total'); ?> :</th>
                                     <td class="text-right grand_total">
                                         <?php echo ($position == 0)
-                                            ? $currency . ' ' . number_format($clean_total_amount, 2)
-                                            : number_format($clean_total_amount, 2) . ' ' . $currency;
+                                            ? $currency . ' ' . number_format($grand_total, 2)
+                                            : number_format($grand_total, 2) . ' ' . $currency;
                                         ?>
                                     </td>
                                 </tr>
@@ -333,8 +368,8 @@
                                     </tr>
                                 <?php endif; ?>
 
-                                <?php
-                                $clean_paid_amount = (float) str_replace(',', '', $paid_amount);
+                                <?php 
+                                    $clean_paid_amount = (float) str_replace(',', '', $paid_amount);
                                 ?>
                                 <tr style="border-top: 3px double #000;">
                                     <th class="text-left grand_total"><?php echo display('paid_ammount'); ?> :</th>
@@ -348,20 +383,21 @@
                                 </tr>
 
                                 <?php 
-                                    $clean_due_amount = (float) str_replace(',', '', $due_amount);
-                                    if (!empty($clean_due_amount) && $clean_due_amount > 0): 
-                                    ?>
-                                        <tr>
-                                            <th class="text-left grand_total"><?php echo display('due') ?> :</th>
-                                            <td class="text-right grand_total">
-                                                <?php 
-                                                echo ($position == 0)
-                                                    ? $currency . ' ' . number_format($clean_due_amount, 2)
-                                                    : number_format($clean_due_amount, 2) . ' ' . $currency;
-                                                ?>
-                                            </td>
-                                        </tr>
-                                    <?php endif; ?>
+                                    $clean_previous = (float) str_replace(',', '', $previous);
+                                    $total_due = $grand_total + $clean_previous - $clean_paid_amount;
+                                    if ($total_due > 0): 
+                                ?>
+                                    <tr>
+                                        <th class="text-left grand_total"><?php echo display('due') ?> :</th>
+                                        <td class="text-right grand_total">
+                                            <?php 
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($total_due, 2)
+                                                : number_format($total_due, 2) . ' ' . $currency;
+                                            ?>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
                             </table>
                         </div>
                     </div>

@@ -306,7 +306,73 @@
           }
         }
       }
+    },
+    "/apiv2/insert_customer": {
+    "post": {
+      "summary": "Insert a new customer",
+      "tags": ["Customer"],
+      "security": [{ "bearerAuth": [] }],
+      "requestBody": {
+        "required": true,
+        "content": {
+          "multipart/form-data": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "customer_name",
+                "mobile",
+                "customer_email",
+                "password"
+              ],
+              "properties": {
+                "customer_name": { "type": "string", "example": "John Doe" },
+                "address": { "type": "string", "example": "123 Street" },
+                "address2": { "type": "string", "example": "Suite 500" },
+                "mobile": { "type": "string", "example": "01710000000" },
+                "customer_email": { "type": "string", "example": "john@example.com" },
+                "email_address": { "type": "string", "example": "billing@example.com" },
+                "contact": { "type": "string", "example": "Jane Smith" },
+                "phone": { "type": "string", "example": "09666000000" },
+                "fax": { "type": "string", "example": "0881234567" },
+                "city": { "type": "string", "example": "Dhaka" },
+                "state": { "type": "string", "example": "Gulshan" },
+                "zip": { "type": "string", "example": "1212" },
+                "country": { "type": "string", "example": "Bangladesh" },
+                "sales_permit": { "type": "string", "format": "binary" },
+                "sales_permit_number": { "type": "string", "example": "PERMIT-12345" },
+                "previous_balance": { "type": "number", "example": 1500.50 },
+                "password": { "type": "string", "format": "password", "example": "secure123" }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Customer successfully added",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "response": {
+                    "type": "object",
+                    "properties": {
+                      "status": { "type": "string", "example": "ok" },
+                      "message": { "type": "string", "example": "Successfully Added" },
+                      "permission": { "type": "string", "example": "write" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "400": { "description": "Validation or file upload failed" },
+        "401": { "description": "Unauthorized - Missing or invalid token" }
+      }
     }
+  }
   },
   "components": {
     "securitySchemes": {

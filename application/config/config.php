@@ -540,5 +540,6 @@ $config['rewrite_short_tags'] = FALSE;
 | Array:		array('10.0.1.200', '192.168.5.0/24')
 */
 $config['proxy_ips'] = '';
-
- 
+$config['encryption_key'] = 'M4yB3_T0k3n!_S3ss10n_EncK3y';
+// $config['merchant_api_base_url'] = 'http://erp.paysenzhost.xyz';
+$config['merchant_api_base_url'] = 'https://deshishadusa.com';

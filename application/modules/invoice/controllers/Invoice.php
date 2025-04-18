@@ -83,8 +83,8 @@ class Invoice extends MX_Controller {
 
             if ($updated) {
                 // Call external API after local update
-                // $api_url = "https://deshishadusa.com/paymentUpdate";
-                $api_url = "http://erp.paysenzhost.xyz/paymentUpdate";
+                $merchant_api_base_url = $this->config->item('merchant_api_base_url');
+                $api_url = "{$merchant_api_base_url}/paymentUpdate";
                 $query_params = http_build_query([
                     'ref_id' => $ref_id,
                     'status' => $new_status
@@ -155,8 +155,9 @@ class Invoice extends MX_Controller {
 
             if ($updated) {
                 // 2. Call external API server-side
-                // $api_url = "https://deshishadusa.com/deliveryUpdate?invoice_id={$invoice_id}&delivery_status={$delivery_note}";
-                $api_url = "http://erp.paysenzhost.xyz/deliveryUpdate?invoice_id={$invoice_id}&delivery_status={$delivery_note}";
+                $merchant_api_base_url = $this->config->item('merchant_api_base_url');
+                $api_url = "{$merchant_api_base_url}/deliveryUpdate?invoice_id={$invoice_id}&delivery_status={$delivery_note}";
+
 
                 $ch = curl_init();
                 curl_setopt($ch, CURLOPT_URL, $api_url);
@@ -216,116 +217,99 @@ class Invoice extends MX_Controller {
 
 
 
-    public function paysenz_invoice_details($invoice_id = null){
-        $invoice_detail     = $this->invoice_model->retrieve_invoice_html_data($invoice_id);
+    public function paysenz_invoice_details($invoice_id = null)
+    {
+        $invoice_detail = $this->invoice_model->retrieve_invoice_html_data($invoice_id);
         $taxfield = $this->db->select('*')
-                ->from('tax_settings')
-                ->where('is_show',1)
-                ->get()
-                ->result_array();
-        $txregname ='';
-        foreach($taxfield as $txrgname){
-        $regname = $txrgname['tax_name'].' Reg No  - '.$txrgname['reg_no'].', ';
-        $txregname .= $regname;
-        }       
-        $subTotal_quantity = 0;
-        $subTotal_cartoon  = 0;
-        $subTotal_discount = 0;
-        $subTotal_ammount  = 0;
-        $descript          = 0;
-        $isserial          = 0;
-        $is_discount       = 0;
-        $is_dis_val        = 0;
-        $vat_amnt_per      = 0;
-        $vat_amnt          = 0;
-        $isunit            = 0;
+            ->from('tax_settings')
+            ->where('is_show', 1)
+            ->get()
+            ->result_array();
+
+        $txregname = '';
+        foreach ($taxfield as $txrgname) {
+            $regname = $txrgname['tax_name'] . ' Reg No  - ' . $txrgname['reg_no'] . ', ';
+            $txregname .= $regname;
+        }
+
+        $subTotal_quantity = $subTotal_ammount = $descript = $isserial = $isunit = 0;
+        $is_discount = $is_dis_val = $vat_amnt_per = $vat_amnt = 0;
+
         if (!empty($invoice_detail)) {
             foreach ($invoice_detail as $k => $v) {
                 $invoice_detail[$k]['final_date'] = $invoice_detail[$k]['date'];
-                $subTotal_quantity = $subTotal_quantity + $invoice_detail[$k]['quantity'];
-                $subTotal_ammount  = $subTotal_ammount + $invoice_detail[$k]['total_price'];
+                $subTotal_quantity += $invoice_detail[$k]['quantity'];
+                $subTotal_ammount += $invoice_detail[$k]['total_price'];
             }
 
             $i = 0;
             foreach ($invoice_detail as $k => $v) {
                 $i++;
                 $invoice_detail[$k]['sl'] = $i;
-                  if(!empty($invoice_detail[$k]['description'])){
-                    $descript = $descript+1;
-                    
-                }
-                 if(!empty($invoice_detail[$k]['serial_no'])){
-                    $isserial = $isserial+1;
-                    
-                }
-                 if(!empty($invoice_detail[$k]['unit'])){
-                    $isunit = $isunit+1;
-                    
-                }
-                if(!empty($invoice_detail[$k]['discount_per'])){
-                    $is_discount = $is_discount+1;
-                    
-                }
-                if(!empty($invoice_detail[$k]['discount'])){
-                    $is_dis_val = $is_dis_val+1;
-                    
-                }
-                    if(!empty($invoice_detail[$k]['vat_amnt_per'])){
-                    $vat_amnt_per = $vat_amnt_per+1;
-                    
-                }
-                    if(!empty($invoice_detail[$k]['vat_amnt'])){
-                    $vat_amnt = $vat_amnt+1;
-                    
-                }
-   
+
+                if (!empty($v['description'])) $descript++;
+                if (!empty($v['serial_no'])) $isserial++;
+                if (!empty($v['unit'])) $isunit++;
+                if (!empty($v['discount_per'])) $is_discount++;
+                if (!empty($v['discount'])) $is_dis_val++;
+                if (!empty($v['vat_amnt_per'])) $vat_amnt_per++;
+                if (!empty($v['vat_amnt'])) $vat_amnt++;
             }
         }
 
+        // Calculate derived financials
+        $clean_sub_total = (float)str_replace(',', '', $subTotal_ammount);
+        $clean_discount = (float)str_replace(',', '', $invoice_detail[0]['total_discount']);
+        $clean_vat = (float)str_replace(',', '', $invoice_detail[0]['total_vat_amnt']);
+        $clean_tax = (float)str_replace(',', '', $invoice_detail[0]['total_tax']);
+        $clean_shipping = (float)str_replace(',', '', $invoice_detail[0]['shipping_cost']);
 
-        $totalbal      = $invoice_detail[0]['total_amount']+$invoice_detail[0]['prevous_due'];
-        $amount_inword = $totalbal;
-        $user_id       = $invoice_detail[0]['sales_by'];
-        $users         = $this->invoice_model->user_invoice_data($user_id);
+        $price_after_discount = $clean_sub_total - $clean_discount;
+        $grand_total = $price_after_discount + $clean_vat + $clean_tax + $clean_shipping;
+
+        $user_id = $invoice_detail[0]['sales_by'];
+        $users = $this->invoice_model->user_invoice_data($user_id);
+
         $data = array(
-        'title'             => display('invoice_details'),
-        'invoice_id'        => $invoice_detail[0]['invoice_id'],
-        'invoice_no'        => $invoice_detail[0]['invoice'],
-        'customer_name'     => $invoice_detail[0]['customer_name'],
-        'customer_address'  => $invoice_detail[0]['customer_address'],
-        'customer_mobile'   => $invoice_detail[0]['customer_mobile'],
-        'customer_email'    => $invoice_detail[0]['customer_email'],
-        'final_date'        => $invoice_detail[0]['final_date'],
-        'email_address'     => $invoice_detail[0]['email_address'],
-        'contact'           => $invoice_detail[0]['contact'],
-        'invoice_details'   => $invoice_detail[0]['invoice_details'],
-        'total_amount'      => number_format($invoice_detail[0]['total_amount'], 2, '.', ','),
-        'subTotal_quantity' => $subTotal_quantity,
-        'total_discount'    => number_format($invoice_detail[0]['total_discount'], 2, '.', ','),
-        'total_discount_cal'=> $invoice_detail[0]['total_discount'],
-        'total_vat'         => number_format($invoice_detail[0]['total_vat_amnt'], 2, '.', ','),
-        'total_tax'         => number_format($invoice_detail[0]['total_tax'], 2, '.', ','),
-        'subTotal_ammount'  => number_format($subTotal_ammount, 2, '.', ','),
-        'subTotal_amount_cal'=> $subTotal_ammount,
-        'paid_amount'       => number_format($invoice_detail[0]['paid_amount'], 2, '.', ','),
-        'due_amount'        => number_format($invoice_detail[0]['due_amount'], 2, '.', ','),
-        'previous'          => number_format($invoice_detail[0]['prevous_due'], 2, '.', ','),
-        'shipping_cost'     => number_format($invoice_detail[0]['shipping_cost'], 2, '.', ','),
-        'invoice_all_data'  => $invoice_detail,
-        'am_inword'         => $amount_inword,
-        'is_discount'       => $invoice_detail[0]['total_discount']-$invoice_detail[0]['invoice_discount'],
-        'users_name'        => $users->first_name.' '.$users->last_name,
-        'tax_regno'         => $txregname,
-        'is_desc'           => $descript,
-        'is_dis_val'        => $is_dis_val,
-        'vat_amnt_per'      => $vat_amnt_per,
-        'vat_amnt'          => $vat_amnt,
-        'is_discount'       => $is_discount,
-        'is_serial'         => $isserial,
-        'is_unit'           => $isunit,
+            'title'               => display('invoice_details'),
+            'invoice_id'          => $invoice_detail[0]['invoice_id'],
+            'invoice_no'          => $invoice_detail[0]['invoice'],
+            'customer_name'       => $invoice_detail[0]['customer_name'],
+            'customer_address'    => $invoice_detail[0]['customer_address'],
+            'customer_mobile'     => $invoice_detail[0]['customer_mobile'],
+            'customer_email'      => $invoice_detail[0]['customer_email'],
+            'final_date'          => $invoice_detail[0]['final_date'],
+            'email_address'       => $invoice_detail[0]['email_address'],
+            'contact'             => $invoice_detail[0]['contact'],
+            'invoice_details'     => $invoice_detail[0]['invoice_details'],
+            'subTotal_quantity'   => $subTotal_quantity,
+            'total_discount'      => number_format($clean_discount, 2, '.', ','),
+            'total_discount_cal'  => $clean_discount,
+            'total_vat'           => number_format($clean_vat, 2, '.', ','),
+            'total_tax'           => number_format($clean_tax, 2, '.', ','),
+            'subTotal_ammount'    => number_format($clean_sub_total, 2, '.', ','),
+            'subTotal_amount_cal' => $clean_sub_total,
+            'grand_total'         => number_format($grand_total, 2, '.', ','), // final price
+            'paid_amount'         => number_format($invoice_detail[0]['paid_amount'], 2, '.', ','),
+            'due_amount'          => number_format($invoice_detail[0]['due_amount'], 2, '.', ','),
+            'previous'            => number_format($invoice_detail[0]['prevous_due'], 2, '.', ','),
+            'shipping_cost'       => number_format($clean_shipping, 2, '.', ','),
+            'invoice_all_data'    => $invoice_detail,
+            'am_inword'           => $grand_total,
+            'is_discount'         => $clean_discount - $invoice_detail[0]['invoice_discount'],
+            'users_name'          => $users->first_name . ' ' . $users->last_name,
+            'tax_regno'           => $txregname,
+            'is_desc'             => $descript,
+            'is_dis_val'          => $is_dis_val,
+            'vat_amnt_per'        => $vat_amnt_per,
+            'vat_amnt'            => $vat_amnt,
+            'is_discount'         => $is_discount,
+            'is_serial'           => $isserial,
+            'is_unit'             => $isunit,
         );
-        $data['module']     = "invoice";
-        $data['page']       = "invoice_html"; 
+
+        $data['module'] = "invoice";
+        $data['page'] = "invoice_html";
         echo modules::run('template/layout', $data);
     }
 
