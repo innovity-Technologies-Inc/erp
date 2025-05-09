@@ -331,7 +331,11 @@ public function pmethod_dropdown_new(){
             redirect('purchase/add');
         }
     
-        $p_id        = $this->input->post('product_id', TRUE);
+        $p_id            = $this->input->post('product_id', TRUE);
+        $batch_no        = $this->input->post('batch_no', TRUE);
+        $expiry_date     = $this->input->post('expiry_date', TRUE);
+        $product_quantity= $this->input->post('product_quantity', TRUE);
+    
         $supplier_id = $this->input->post('supplier_id', TRUE);
         $supinfo     = $this->db->select('*')->from('supplier_information')->where('supplier_id', $supplier_id)->get()->row();
         $sup_head    = $supinfo->supplier_id . '-' . $supinfo->supplier_name;
@@ -397,38 +401,16 @@ public function pmethod_dropdown_new(){
                 redirect('purchase/add');
             }
     
-            // ✅ Handle Payments
-            $predefine_account  = $this->db->select('*')->from('acc_predefine_account')->get()->row();
-            $Narration          = "Purchase Voucher";
-            $Comment            = "Purchase Voucher for supplier";
-            $COAID              = $predefine_account->purchaseCode;
-    
-            if ($multipaytype && $multipayamount) {
-                if ($multipaytype[0] == 0) { 
-                    $amount_pay = $data['grand_total_amount'];
-                    $amnt_type = 'Credit';
-                    $reVID     = $predefine_account->supplierCode;
-                    $subcode   = $this->db->select('*')->from('acc_subcode')->where('referenceNo', $supplier_id)->where('subTypeId', 4)->get()->row()->id;
-                    $this->insert_purchase_debitvoucher($is_credit, $purchase_id, $COAID, $amnt_type, $amount_pay, $Narration, $Comment, $reVID, $subcode);
-                } else {
-                    $amnt_type = 'Debit';
-                    foreach ($multipaytype as $key => $reVID) {
-                        $amount_pay = $multipayamount[$key];
-                        $this->insert_purchase_debitvoucher($is_credit, $purchase_id, $COAID, $amnt_type, $amount_pay, $Narration, $Comment, $reVID);
-                    }
-                }
-            }
-    
             // ✅ Insert into product_purchase_details
             foreach ($p_id as $i => $product_id) {
                 $data1 = array(
                     'purchase_detail_id' => $this->generator(15),
                     'purchase_id'        => $purs_insert_id,
                     'product_id'         => $product_id,
-                    'quantity'           => $this->input->post('product_quantity', TRUE)[$i] ?? 0,
+                    'quantity'           => $product_quantity[$i] ?? 0,
                     'rate'               => $this->input->post('product_rate', TRUE)[$i] ?? 0,
-                    'batch_id'           => $this->input->post('batch_no', TRUE)[$i] ?? '',
-                    'expiry_date'        => $this->input->post('expiry_date', TRUE)[$i] ?? '',
+                    'batch_id'           => $batch_no[$i] ?? '',
+                    'expiry_date'        => $expiry_date[$i] ?? '',
                     'total_amount'       => $this->input->post('total_price', TRUE)[$i] ?? 0,
                     'discount'           => $this->input->post('discount_per', TRUE)[$i] ?? 0,
                     'discount_amnt'      => $this->input->post('discountvalue', TRUE)[$i] ?? 0,
@@ -436,20 +418,35 @@ public function pmethod_dropdown_new(){
                     'vat_amnt'           => $this->input->post('vatvalue', TRUE)[$i] ?? 0,
                     'status'             => 1
                 );
-    
+        
                 $this->db->insert('product_purchase_details', $data1);
+    
+                // ✅ Insert into batch_master if not exists
+                $existing_batch = $this->db->get_where('batch_master', ['batch_id' => $batch_no[$i]])->row();
+                if (!$existing_batch) {
+                    $batch_data = array(
+                        'batch_id'           => $batch_no[$i],
+                        'product_id'         => $product_id,
+                        'warehouse_id'       => null, // Explicitly setting as NULL
+                        'manufacture_date'   => date('Y-m-d'),
+                        'expiry_date'        => $expiry_date[$i] ?? null,
+                        'total_quantity'     => $product_quantity[$i],
+                        'available_quantity' => $product_quantity[$i]
+                    );
+                    $this->db->insert('batch_master', $batch_data);
+                }
             }
     
             // ✅ Ensure voucher entry exists but DO NOT auto-approve
-                $setting_data = $this->db->select('is_autoapprove_v')
+            $setting_data = $this->db->select('is_autoapprove_v')
                 ->from('web_setting')
                 ->where('setting_id', 1)
                 ->get()
                 ->result_array();
-
-                if ($setting_data[0]['is_autoapprove_v'] == 1) {	
+    
+            if ($setting_data[0]['is_autoapprove_v'] == 1) {    
                 $this->autoapprove($purchase_id); // ✅ Call autoapprove() but keep status = 0
-                }
+            }
     
             return 1;
         } else {

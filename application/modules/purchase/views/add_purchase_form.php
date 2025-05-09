@@ -132,8 +132,7 @@
                                 </td>
 
                                 <td class="wt">
-                                    <input type="text" id="batch_no_1" class="form-control text-right batch_no_1"
-                                        placeholder="Batch No" name="batch_no[]" required/>
+                                    <input type="text" id="batch_no_1" class="form-control text-right batch_no" placeholder="Batch No" name="batch_no[]" required/>
                                 </td>
 
                                 <td class="text-right">
@@ -314,3 +313,56 @@
 
     </div>
 </div>
+
+<script>
+    $(document).ready(function () {
+        // Trigger on blur event of any input with class .batch_no
+        $(document).on('blur', '.batch_no', function () {
+            var batchId = $(this).val();
+            var inputField = $(this);
+
+            if (batchId !== '') {
+                console.log("Checking Batch ID: " + batchId);
+
+                // Remove any previous error classes
+                inputField.removeClass('is-invalid is-valid');
+                inputField.next('.invalid-feedback').remove();
+                
+                // Send AJAX request to check batch ID
+                $.ajax({
+                    url: '<?= base_url("warehouse/check_batch_id") ?>',
+                    type: 'POST',
+                    data: {
+                        batch_id: batchId,
+                        csrf_test_name: $('#CSRF_TOKEN').val()
+                    },
+                    success: function (response) {
+                        console.log("Response: " + response);
+
+                        if (response.trim() === 'true') {
+                            // If found, show the error and block further action
+                            inputField.addClass('is-invalid');
+                            inputField.after('<div class="invalid-feedback">Duplicate Batch ID: ' + batchId + '</div>');
+                            inputField.val('');
+                            inputField.focus();
+                        } else {
+                            // If not found, mark as valid and remove any previous error
+                            inputField.addClass('is-valid');
+                            inputField.next('.invalid-feedback').remove();
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        console.error(xhr.responseText);
+                        alert('Error checking Batch ID. Please try again.');
+                    }
+                });
+            }
+        });
+
+        // Remove the error when the user types again
+        $(document).on('input', '.batch_no', function () {
+            $(this).removeClass('is-invalid');
+            $(this).next('.invalid-feedback').remove();
+        });
+    });
+</script>

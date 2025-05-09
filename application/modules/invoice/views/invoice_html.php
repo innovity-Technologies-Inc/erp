@@ -419,11 +419,30 @@
             </div>
 
             <div class="panel-footer text-left">
-                        <button class="btn btn-info" onclick="printDivnew('printableArea')"><span
-                        class="fa fa-print"></span></button>
-
+            <button class="btn btn-info" onclick="printDiv('printableArea')">
+                <span class="fa fa-print"></span> Print
+            </button>
+            <div id="iosPrintMessage" style="display:none; color:red; margin-top:10px;">
+                On iOS devices, please use the browser's share menu and select "Print".
+            </div>
             </div>
         </div>
     </div>
 </div>
 
+<script>
+    // Replace your printDiv function with this:
+function printDiv(divId) {
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+    // For iOS devices, use the native print dialog
+    window.print();
+  } else {
+    // Your existing print logic for other devices
+    const printContents = document.getElementById(divId).innerHTML;
+    const originalContents = document.body.innerHTML;
+    document.body.innerHTML = printContents;
+    window.print();
+    document.body.innerHTML = originalContents;
+  }
+}
+</script>

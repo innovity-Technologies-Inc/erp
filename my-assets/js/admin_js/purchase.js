@@ -1,5 +1,6 @@
     
     var limits = 500;
+    var BASE_URL = "<?php echo base_url(); ?>";
         "use strict";
     function addPurchaseOrderField1(divName){
       

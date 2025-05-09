@@ -20,7 +20,7 @@ class Sendmail_library extends CI_Controller {
         }
 
         try {
-            $this->email->from('noreply@deshishad.com', 'Deshi Shad');
+            $this->email->from('noreply@paysenz.com', 'Deshi Shad');
             $this->email->to($email);
             $this->email->subject('Verify your email address');
             $this->email->message("
@@ -49,7 +49,7 @@ class Sendmail_library extends CI_Controller {
         }
 
         try {
-            $this->email->from('noreply@deshishad.com', 'Deshi Shad');
+            $this->email->from('noreply@paysenz.com', 'Deshi Shad');
             $this->email->to($email);
             $this->email->subject('Email Verified Successfully');
             $this->email->message("

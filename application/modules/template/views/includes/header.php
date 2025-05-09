@@ -28,10 +28,15 @@
            ?>
              
               <?php }?>
-              <?php if($max_version > $current_version){?>
-                <li> <blink><a href="<?php echo base_url('autoupdate/Autoupdate')?>" class="text-white  btn-danger update-btn"> <?php echo $max_version.' Version Available'; ?></a></blink>
+              <?php if(isset($max_version) && isset($current_version) && $max_version > $current_version){ ?>
+                <li>
+                    <blink>
+                        <a href="<?php echo base_url('autoupdate/Autoupdate')?>" class="text-white btn-danger update-btn">
+                            <?php echo $max_version . ' Version Available'; ?>
+                        </a>
+                    </blink>
                 </li>
-              <?php }?>
+            <?php } ?>
           <li class="dropdown notifications-menu">
                     <a href="<?php echo base_url('out_of_stock') ?>" >
                         <i class="pe-7s-attention" title="<?php echo display('out_of_stock') ?>"></i>

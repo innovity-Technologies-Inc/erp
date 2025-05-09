@@ -228,7 +228,11 @@ public function paysenz_purchase_edit_form($purchase_id = null){
                     $bankcoaid = $this->db->select('HeadCode')->from('acc_coa')->where('HeadName', $bankname)->get()->row()->HeadCode;
                 }
     
-                $p_id        = $this->input->post('product_id', TRUE);
+                $p_id            = $this->input->post('product_id', TRUE);
+                $batch_no        = $this->input->post('batch_no', TRUE);
+                $expiry_date     = $this->input->post('expiry_date', TRUE);
+                $product_quantity= $this->input->post('product_quantity', TRUE);
+    
                 $supplier_id = $this->input->post('supplier_id', TRUE);
                 $supinfo     = $this->db->select('*')->from('supplier_information')->where('supplier_id', $supplier_id)->get()->row();
                 $sup_head    = $supinfo->supplier_id . '-' . $supinfo->supplier_name;
@@ -241,6 +245,7 @@ public function paysenz_purchase_edit_form($purchase_id = null){
     
                 $is_credit = ($multipaytype[0] == 0) ? 1 : '';
     
+                // ✅ Update product_purchase
                 $data = array(
                     'purchase_id'        => $purchase_id,
                     'chalan_no'          => $this->input->post('chalan_no', TRUE),
@@ -258,56 +263,85 @@ public function paysenz_purchase_edit_form($purchase_id = null){
                     'is_credit'          => $is_credit,
                 );
     
-                $predefine_account  = $this->db->select('*')->from('acc_predefine_account')->get()->row();
-                $Narration          = "Purchase Voucher";
-                $Comment            = "Purchase Voucher for supplier";
-                $COAID              = $predefine_account->purchaseCode;
+                $this->db->where('id', $dbpurs_id);
+                $this->db->update('product_purchase', $data);
     
-                if ($purchase_id != '') {
-                    $this->db->where('id', $dbpurs_id);
-                    $this->db->update('product_purchase', $data);
+                // ✅ Delete old transactions before inserting new ones
+                $this->db->where('referenceNo', $purchase_id);
+                $this->db->delete('acc_vaucher');
     
-                    // ✅ Delete old transactions before inserting new ones
-                    $this->db->where('referenceNo', $purchase_id);
-                    $this->db->delete('acc_vaucher');
+                $this->db->where('purchase_id', $dbpurs_id);
+                $this->db->delete('product_purchase_details');
     
-                    $this->db->where('purchase_id', $dbpurs_id);
-                    $this->db->delete('product_purchase_details');
-                }
-    
-                // ✅ Reinsert purchase details
+                // ✅ Reinsert purchase details and update batch_master
+                // ✅ Reinsert purchase details and update batch_master
                 foreach ($p_id as $i => $product_id) {
+                    $batch_no_val = $batch_no[$i];
+                    $product_qty = $product_quantity[$i] ?? 0;
+
                     $data1 = array(
                         'purchase_detail_id' => $this->generator(15),
                         'purchase_id'        => $dbpurs_id,
                         'product_id'         => $product_id,
-                        'quantity'           => isset($this->input->post('product_quantity', TRUE)[$i]) ? $this->input->post('product_quantity', TRUE)[$i] : 0,
-                        'rate'               => isset($this->input->post('product_rate', TRUE)[$i]) ? $this->input->post('product_rate', TRUE)[$i] : 0,
-                        'batch_id'           => isset($this->input->post('batch_no', TRUE)[$i]) ? $this->input->post('batch_no', TRUE)[$i] : '',
-                        'expiry_date'        => isset($this->input->post('expiry_date', TRUE)[$i]) ? $this->input->post('expiry_date', TRUE)[$i] : '',
-                        'total_amount'       => isset($this->input->post('total_price', TRUE)[$i]) ? $this->input->post('total_price', TRUE)[$i] : 0,
-                        'discount'           => isset($this->input->post('discount_per', TRUE)[$i]) ? $this->input->post('discount_per', TRUE)[$i] : 0,
-                        'discount_amnt'      => isset($this->input->post('discountvalue', TRUE)[$i]) ? $this->input->post('discountvalue', TRUE)[$i] : 0,
-                        'vat_amnt_per'       => isset($this->input->post('vatpercent', TRUE)[$i]) ? $this->input->post('vatpercent', TRUE)[$i] : 0,
-                        'vat_amnt'           => isset($this->input->post('vatvalue', TRUE)[$i]) ? $this->input->post('vatvalue', TRUE)[$i] : 0,
+                        'quantity'           => $product_qty,
+                        'rate'               => $this->input->post('product_rate', TRUE)[$i] ?? 0,
+                        'batch_id'           => $batch_no_val ?? '',
+                        'expiry_date'        => $expiry_date[$i] ?? '',
+                        'total_amount'       => $this->input->post('total_price', TRUE)[$i] ?? 0,
+                        'discount'           => $this->input->post('discount_per', TRUE)[$i] ?? 0,
+                        'discount_amnt'      => $this->input->post('discountvalue', TRUE)[$i] ?? 0,
+                        'vat_amnt_per'       => $this->input->post('vatpercent', TRUE)[$i] ?? 0,
+                        'vat_amnt'           => $this->input->post('vatvalue', TRUE)[$i] ?? 0,
                         'status'             => 1
                     );
-    
+
                     if ($data1['quantity'] > 0) {
                         $this->db->insert('product_purchase_details', $data1);
                     }
-                }
-    
-                // ✅ Ensure auto-approval does not cause issues
-                $setting_data = $this->db->select('is_autoapprove_v')
-                    ->from('web_setting')
-                    ->where('setting_id', 1)
-                    ->get()
-                    ->result_array();
-    
-                if ($setting_data[0]['is_autoapprove_v'] == 1) {
-                    $this->load->model('purchase/Purchase_model'); // ✅ Load model
-                    $this->Purchase_model->autoapprove($purchase_id);
+
+                    // ✅ Update or Insert into batch_master
+                    $existing_batch = $this->db->get_where('batch_master', ['batch_id' => $batch_no_val])->row();
+
+                    if ($existing_batch) {
+                        // --- 🔄 Update Logic --- 
+
+                        // Get the maximum total quantity from product_purchase_details
+                        $query = $this->db->select('MAX(quantity) AS total_quantity')
+                            ->where('batch_id', $batch_no_val)
+                            ->get('product_purchase_details');
+                        
+                        $total_quantity = $query->row()->total_quantity ?? 0;
+
+                        // Get the total issued quantity from invoice_details
+                        $issued_query = $this->db->select('IFNULL(SUM(quantity), 0) AS issued_quantity')
+                            ->where('batch_id', $batch_no_val)
+                            ->get('invoice_details');
+
+                        $issued_quantity = $issued_query->row()->issued_quantity ?? 0;
+
+                        // Calculate available quantity
+                        $available_quantity = $total_quantity - $issued_quantity;
+
+                        // ✅ Update the batch_master table
+                        $this->db->where('batch_id', $batch_no_val);
+                        $this->db->update('batch_master', [
+                            'total_quantity'     => $total_quantity,
+                            'available_quantity' => $available_quantity,
+                        ]);
+
+                    } else {
+                        // --- ➕ Insert Logic ---
+                        $batch_data = array(
+                            'batch_id'           => $batch_no_val,
+                            'product_id'         => $product_id,
+                            'warehouse_id'       => null, // Explicitly setting as NULL
+                            'manufacture_date'   => date('Y-m-d'),
+                            'expiry_date'        => $expiry_date[$i] ?? null,
+                            'total_quantity'     => $product_qty,
+                            'available_quantity' => $product_qty,
+                        );
+                        $this->db->insert('batch_master', $batch_data);
+                    }
                 }
     
                 $this->session->set_flashdata('message', display('update_successfully'));

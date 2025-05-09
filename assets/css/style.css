@@ -1043,3 +1043,21 @@ blink {
         width: 100%!important;
     }
 }
+
+.print-btn-desktop {
+    display: inline-block;
+}
+
+.print-btn-mobile {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .print-btn-desktop {
+        display: none !important;
+    }
+
+    .print-btn-mobile {
+        display: inline-block !important;
+    }
+}
