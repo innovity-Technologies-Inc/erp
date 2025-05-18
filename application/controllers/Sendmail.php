@@ -28,26 +28,22 @@ class Sendmail extends CI_Controller {
      */
     public function send_verification($email, $verify_url)
     {
-        try {
-            log_message('debug', "📨 Preparing verification email to: $email");
+        $this->email->from('noreply@paysenz.com', 'Deshi Shad');
+        $this->email->to($email);
+        $this->email->subject('Verify your email address');
+        $this->email->message("
+            <h3>Registration Successful!</h3>
+            <p>Thank you for registering. Please click below to verify your email:</p>
+            <p><a href='$verify_url' style='padding:10px 20px; background:#4CAF50; color:#fff; text-decoration:none;'>Verify Email</a></p>
+            <p>If you cannot click the button, copy and paste this URL into your browser:</p>
+            <p>$verify_url</p>
+        ");
 
-            $this->email->from('noreply@deshishad.com', 'Deshi Shad');
-            $this->email->to($email);
-            $this->email->subject('Verify your email address');
-            $this->email->message("
-                <h3>Registration Successful!</h3>
-                <p>Thank you for registering. Please click below to verify your email:</p>
-                <a href='$verify_url' style='padding:10px 20px; background:#4CAF50; color:#fff; text-decoration:none;'>Verify Email</a>
-            ");
-
-            if ($this->email->send()) {
-                log_message('debug', "✅ Verification email sent successfully to: $email");
-            } else {
-                $error = $this->email->print_debugger(['headers']);
-                log_message('error', "❌ Verification email failed to: $email | Error: $error");
-            }
-        } catch (Exception $e) {
-            log_message('error', '❌ Exception while sending verification email: ' . $e->getMessage());
+        if ($this->email->send()) {
+            echo "✅ Verification email sent.";
+        } else {
+            echo "❌ Email sending failed.";
+            print_r($this->email->print_debugger(['headers']));
         }
     }
 
@@ -62,7 +58,7 @@ class Sendmail extends CI_Controller {
         try {
             log_message('debug', "📨 Preparing confirmation email to: $email");
 
-            $this->email->from('noreply@deshishad.com', 'Deshi Shad');
+            $this->email->from('noreply@paysenz.com', 'Deshi Shad');
             $this->email->to($email);
             $this->email->subject('Email Verified Successfully');
             $this->email->message("
@@ -79,6 +75,21 @@ class Sendmail extends CI_Controller {
             }
         } catch (Exception $e) {
             log_message('error', '❌ Exception while sending confirmation email: ' . $e->getMessage());
+        }
+    }
+
+    public function test_email()
+    {
+        $this->email->from('noreply@paysenz.com', 'Test');
+        $this->email->to('faizshiraji@gmail.com');
+        $this->email->subject('Test Mail');
+        $this->email->message('This is a test mail from CodeIgniter.');
+
+        if ($this->email->send()) {
+            echo "✅ Test mail sent.";
+        } else {
+            echo "❌ Mail send failed.";
+            print_r($this->email->print_debugger(['headers']));
         }
     }
 }

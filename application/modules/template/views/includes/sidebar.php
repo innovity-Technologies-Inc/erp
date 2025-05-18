@@ -352,32 +352,63 @@
 
 
         <!-- Stock menu start -->
-        <?php if($this->permission1->method('stock','read')->access() || $this->permission1->method('stock_report','read')->access()){?>
-        <li class="treeview <?php
-        if ($this->uri->segment('1') == ("stock")) {
-            echo "active";
-        } else {
-            echo " ";
-        }
-        ?>">
-            <a href="#">
-                <i class="ti-bar-chart"></i><span><?php echo display('stock') ?></span>
-                <span class="pull-right-container">
-                    <i class="fa fa-angle-left pull-right"></i>
-                </span>
-            </a>
-            <ul class="treeview-menu">
-                <?php if($this->permission1->method('stock_report','read')->access()){ ?>
-                <li class="treeview <?php if ($this->uri->segment('1') == ("stock")){
-                        echo "active";
-                    } else {
-                        echo " ";
-                    }?>"><a href="<?php echo base_url('stock') ?>"><?php echo display('stock_report') ?></a></]li>
-                <?php }?>
+        <?php if(
+            $this->permission1->method('warehouse', 'read')->access() || 
+            $this->permission1->method('batch', 'read')->access() || 
+            $this->permission1->method('stock_report', 'read')->access() || 
+            $this->permission1->method('stock_movement', 'read')->access() ||
+            $this->permission1->method('stock_movement_history', 'read')->access()
+        ){ ?>
+            <li class="treeview <?php
+                if (in_array($this->uri->segment(1), ['warehouse', 'batch', 'stock'])) {
+                    echo "active";
+                } ?>">
+                <a href="#">
+                    <i class="ti-home"></i><span><?php echo display('warehouse') ?></span>
+                    <span class="pull-right-container">
+                        <i class="fa fa-angle-left pull-right"></i>
+                    </span>
+                </a>
 
-            </ul>
-        </li>
-        <?php }?>
+                <ul class="treeview-menu">
+                    <?php if($this->permission1->method('warehouse', 'create')->access()) { ?>
+                        <li class="<?php if ($this->uri->segment(1) == 'warehouse' && $this->uri->segment(2) == 'add') echo 'active'; ?>">
+                            <a href="<?php echo base_url('warehouse/add') ?>"><?php echo display('add_warehouse') ?></a>
+                        </li>
+                    <?php } ?>
+
+                    <?php if($this->permission1->method('warehouse', 'read')->access()) { ?>
+                        <li class="<?php if ($this->uri->segment(1) == 'warehouse' && $this->uri->segment(2) == 'manage') echo 'active'; ?>">
+                            <a href="<?php echo base_url('warehouse/manage') ?>"><?php echo display('manage_warehouse') ?></a>
+                        </li>
+                    <?php } ?>
+
+                    <?php if ($this->permission1->method('warehouse', 'read')->access()) { ?>
+                        <li class="<?php if ($this->uri->segment(1) == 'warehouse' && $this->uri->segment(2) == 'manage_batch') echo 'active'; ?>">
+                            <a href="<?php echo base_url('warehouse/manage_batch'); ?>"><?php echo display('manage_batch'); ?></a>
+                        </li>
+                    <?php } ?>
+
+                    <?php if($this->permission1->method('stock_report', 'read')->access()) { ?>
+                        <li class="<?php if ($this->uri->segment(1) == 'stock') echo 'active'; ?>">
+                            <a href="<?php echo base_url('stock') ?>"><?php echo display('stock_report') ?></a>
+                        </li>
+                    <?php } ?>
+
+                    <?php if ($this->permission1->method('warehouse', 'read')->access()) { ?>
+                        <li class="<?php if ($this->uri->segment(1) == 'warehouse' && $this->uri->segment(2) == 'stock_movement') echo 'active'; ?>">
+                            <a href="<?php echo base_url('warehouse/stock_movement'); ?>"><?php echo display('stock_move'); ?></a>
+                        </li>
+                    <?php } ?>
+
+                    <?php if ($this->permission1->method('warehouse', 'read')->access()) { ?>
+                        <li class="<?php if ($this->uri->segment(1) == 'warehouse' && $this->uri->segment(2) == 'stock_movement_history') echo 'active'; ?>">
+                            <a href="<?php echo base_url('warehouse/stock_movement_history'); ?>"><?php echo display('stock_movement_history'); ?></a>
+                        </li>
+                    <?php } ?>
+                </ul>
+            </li>
+        <?php } ?>
         <!-- Stock menu end -->
         <!-- Account part star -->
         <?php if($this->permission1->method('show_tree','read')->access() || $this->permission1->method('expenditure_statement','read')->access() || $this->permission1->method('bank_reconciliation_report','read')->access() || $this->permission1->method('receipt_payment','read')->access() || $this->permission1->method('fixedasset_schedule','read')->access() || $this->permission1->method('income_statement_form','read')->access() || $this->permission1->method('bank_reconciliation','read')->access() || $this->permission1->method('predefined_accounts','read')->access() ||  $this->permission1->method('subaccount_list','read')->access() || $this->permission1->method('financial_year','read')->access() || $this->permission1->method('opening_balance','create')->access() || $this->permission1->method('supplier_payment','create')->access()|| $this->permission1->method('customer_receive','create')->access() || $this->permission1->method('service_payment','create')->access() || $this->permission1->method('debit_voucher','read')->access() || $this->permission1->method('credit_voucher','read')->access() || $this->permission1->method('aprove_v','read')->access() || $this->permission1->method('contra_voucher','read')->access() || $this->permission1->method('balance_sheet','read')->access() || $this->permission1->method('journal_voucher','read')->access()|| $this->permission1->method('add_payment_method','create')->access() || $this->permission1->method('cash_adjustment','create')->access()|| $this->permission1->method('payment_method_list','read')->access()){?>

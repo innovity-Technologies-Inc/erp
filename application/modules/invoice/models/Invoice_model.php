@@ -810,6 +810,7 @@ public function invoice_entry($incremented_id) {
 
 	    return true;
 	}
+
     public function insert_sale_inventory_voucher($invoice_id = null,$dbtid = null,$amnt = null,$Narration = null,$Comment = null,$reVID = null){
 
         $fyear = financial_year();          
@@ -1325,6 +1326,42 @@ public function invoice_entry($incremented_id) {
         if ($query->num_rows() > 0) {
             return $query->result_array();
         }
+        return false;
+    }
+
+    public function retrieve_invoice_html_data_for_pdf($invoice_id)
+    {
+        $this->db->select('a.total_tax,
+                        a.*,
+                        b.*,
+                        c.*,
+                        d.product_id,
+                        d.product_name,
+                        d.product_details,
+                        d.unit,
+                        d.product_model,
+                        a.paid_amount as paid_amount,
+                        a.due_amount as due_amount');
+        $this->db->from('invoice a');
+        $this->db->join('invoice_details c', 'c.invoice_id = a.id');
+        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
+        $this->db->join('product_information d', 'd.product_id = c.product_id');
+
+        // Match either invoice_id (string) or id (int)
+        $this->db->group_start();
+        $this->db->where('a.invoice_id', $invoice_id);
+        if (is_numeric($invoice_id)) {
+            $this->db->or_where('a.id', $invoice_id);
+        }
+        $this->db->group_end();
+
+        $this->db->where('c.quantity >', 0);
+        $query = $this->db->get();
+
+        if ($query->num_rows() > 0) {
+            return $query->result_array();
+        }
+
         return false;
     }
 

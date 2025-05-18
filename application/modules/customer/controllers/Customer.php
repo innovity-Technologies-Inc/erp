@@ -76,149 +76,318 @@ class Customer extends MX_Controller {
     } 
 
 
-    public function paysenz_form($id = null)
-{
-    $data['title'] = display('add_customer');
+//     public function paysenz_form($id = null)
+// {
+//     $data['title'] = display('add_customer');
 
-    #-------------------------------#
-    $this->form_validation->set_rules('customer_name', display('customer_name'), 'required|max_length[200]');
-    $this->form_validation->set_rules('customer_mobile', display('customer_mobile'), 'max_length[20]');
-    if (empty($id)) {
-        $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email|is_unique[customer_information.customer_email]');
-    } else {
-        $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email');
-    }
-    $this->form_validation->set_rules('contact', display('contact'), 'max_length[200]');
-    $this->form_validation->set_rules('phone', display('phone'), 'max_length[20]');
-    $this->form_validation->set_rules('city', display('city'), 'max_length[100]');
-    $this->form_validation->set_rules('state', display('state'), 'max_length[100]');
-    $this->form_validation->set_rules('zip', display('zip'), 'max_length[30]');
-    $this->form_validation->set_rules('country', display('country'), 'max_length[100]');
-    $this->form_validation->set_rules('customer_address', display('customer_address'), 'max_length[255]');
-    $this->form_validation->set_rules('address2', display('address2'), 'max_length[255]');
-    $this->form_validation->set_rules('sales_permit_number', display('sales_permit_number'), 'max_length[50]');
+//     #-------------------------------#
+//     $this->form_validation->set_rules('customer_name', display('customer_name'), 'required|max_length[200]');
+//     $this->form_validation->set_rules('customer_mobile', display('customer_mobile'), 'max_length[20]');
+//     if (empty($id)) {
+//         $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email|is_unique[customer_information.customer_email]');
+//     } else {
+//         $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email');
+//     }
+//     $this->form_validation->set_rules('contact', display('contact'), 'max_length[200]');
+//     $this->form_validation->set_rules('phone', display('phone'), 'max_length[20]');
+//     $this->form_validation->set_rules('city', display('city'), 'max_length[100]');
+//     $this->form_validation->set_rules('state', display('state'), 'max_length[100]');
+//     $this->form_validation->set_rules('zip', display('zip'), 'max_length[30]');
+//     $this->form_validation->set_rules('country', display('country'), 'max_length[100]');
+//     $this->form_validation->set_rules('customer_address', display('customer_address'), 'max_length[255]');
+//     $this->form_validation->set_rules('address2', display('address2'), 'max_length[255]');
+//     $this->form_validation->set_rules('sales_permit_number', display('sales_permit_number'), 'max_length[50]');
 
-    #-------------------------------#
+//     #-------------------------------#
 
-    // Handle file upload
-    $sales_permit = "";
-    if (!empty($_FILES['sales_permit']['name'])) {
-        $config['upload_path']   = './uploads/sales_permits/';
-        $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
-        $config['max_size']      = 2048;
-        $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
+//     // Handle file upload
+//     $sales_permit = "";
+//     if (!empty($_FILES['sales_permit']['name'])) {
+//         $config['upload_path']   = './uploads/sales_permits/';
+//         $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
+//         $config['max_size']      = 2048;
+//         $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
 
-        $this->load->library('upload', $config);
+//         $this->load->library('upload', $config);
 
-        if ($this->upload->do_upload('sales_permit')) {
-            $upload_data = $this->upload->data();
-            $sales_permit = $upload_data['file_name'];
-        } else {
-            log_message('error', 'File Upload Error: ' . $this->upload->display_errors());
-            $this->session->set_flashdata('exception', 'File upload failed: ' . $this->upload->display_errors());
-            redirect($_SERVER['HTTP_REFERER']);
-            return;
-        }
-    }
+//         if ($this->upload->do_upload('sales_permit')) {
+//             $upload_data = $this->upload->data();
+//             $sales_permit = $upload_data['file_name'];
+//         } else {
+//             log_message('error', 'File Upload Error: ' . $this->upload->display_errors());
+//             $this->session->set_flashdata('exception', 'File upload failed: ' . $this->upload->display_errors());
+//             redirect($_SERVER['HTTP_REFERER']);
+//             return;
+//         }
+//     }
 
-    // Customer Data
-    $data['customer'] = (object)$postData = [
-        'customer_id'        => $this->input->post('customer_id', true),
-        'customer_name'      => $this->input->post('customer_name', true),
-        'customer_mobile'    => $this->input->post('customer_mobile', true),
-        'customer_email'     => $this->input->post('customer_email', true),
-        'email_address'      => $this->input->post('email_address', true),
-        'contact'            => $this->input->post('contact', true),
-        'phone'              => $this->input->post('phone', true),
-        'fax'                => $this->input->post('fax', true),
-        'city'               => $this->input->post('city', true),
-        'state'              => $this->input->post('state', true),
-        'zip'                => $this->input->post('zip', true),
-        'country'            => $this->input->post('country', true),
-        'customer_address'   => $this->input->post('customer_address', true),
-        'address2'           => !empty($this->input->post('address2', true)) ? $this->input->post('address2', true) : NULL,
-        'sales_permit_number'=> $this->input->post('sales_permit_number', true),
-        'status'             => $this->input->post('status', true),
-        'create_by'          => $this->session->userdata('id')
-    ];
+//     // Customer Data
+//     $data['customer'] = (object)$postData = [
+//         'customer_id'        => $this->input->post('customer_id', true),
+//         'customer_name'      => $this->input->post('customer_name', true),
+//         'customer_mobile'    => $this->input->post('customer_mobile', true),
+//         'customer_email'     => $this->input->post('customer_email', true),
+//         'email_address'      => $this->input->post('email_address', true),
+//         'contact'            => $this->input->post('contact', true),
+//         'phone'              => $this->input->post('phone', true),
+//         'fax'                => $this->input->post('fax', true),
+//         'city'               => $this->input->post('city', true),
+//         'state'              => $this->input->post('state', true),
+//         'zip'                => $this->input->post('zip', true),
+//         'country'            => $this->input->post('country', true),
+//         'customer_address'   => $this->input->post('customer_address', true),
+//         'address2'           => !empty($this->input->post('address2', true)) ? $this->input->post('address2', true) : NULL,
+//         'sales_permit_number'=> $this->input->post('sales_permit_number', true),
+//         'status'             => $this->input->post('status', true),
+//         'create_by'          => $this->session->userdata('id')
+//     ];
 
-    if (!empty($sales_permit)) {
-        $postData['sales_permit'] = $sales_permit;
-    }
+//     if (!empty($sales_permit)) {
+//         $postData['sales_permit'] = $sales_permit;
+//     }
 
-    #-------------------------------#
-    if ($this->form_validation->run() === true) {
-        if (empty($postData['customer_id'])) {
-            if ($this->customer_model->create($postData)) {
-                $customer_id = $this->db->insert_id();
+//     #-------------------------------#
+//     if ($this->form_validation->run() === true) {
+//         if (empty($postData['customer_id'])) {
+//             if ($this->customer_model->create($postData)) {
+//                 $customer_id = $this->db->insert_id();
 
-                // ✅ Insert commission manually during create, because insert_id is needed
-                $commission_data = [
-                    'customer_id'     => $customer_id,
-                    'comission_type'  => $this->input->post('comission_type', true),
-                    'commision_value' => $this->input->post('comission_value', true),
-                    'notes'           => $this->input->post('comission_note', true),
-                    'create_by'       => $this->session->userdata('id'),
-                    'status'          => 1,
-                    'create_date'     => date('Y-m-d H:i:s'),
-                    'update_date'     => date('Y-m-d H:i:s')
-                ];
+//                 // ✅ Insert commission manually during create, because insert_id is needed
+//                 $commission_data = [
+//                     'customer_id'     => $customer_id,
+//                     'comission_type'  => $this->input->post('comission_type', true),
+//                     'commision_value' => $this->input->post('comission_value', true),
+//                     'notes'           => $this->input->post('comission_note', true),
+//                     'create_by'       => $this->session->userdata('id'),
+//                     'status'          => 1,
+//                     'create_date'     => date('Y-m-d H:i:s'),
+//                     'update_date'     => date('Y-m-d H:i:s')
+//                 ];
 
-                $this->db->insert('customer_comission', $commission_data);
+//                 $this->db->insert('customer_comission', $commission_data);
 
-                $info['msg'] = display('save_successfully');
-                $info['status'] = 1;
+//                 $info['msg'] = display('save_successfully');
+//                 $info['status'] = 1;
+//             } else {
+//                 $info['msg'] = display('please_try_again');
+//                 $info['status'] = 0;
+//             }
+//         } else {
+//             // ✅ Don't manually handle commission on update — it's handled in the model
+//             if ($this->customer_model->update($postData)) {
+//                 $info['msg'] = display('update_successfully');
+//                 $info['status'] = 1;
+//             } else {
+//                 $info['msg'] = display('please_try_again');
+//                 $info['status'] = 0;
+//             }
+//         }
+
+//         if ($this->input->is_ajax_request()) {
+//             echo json_encode($info);
+//         } else {
+//             if ($info['status'] == 1) {
+//                 $this->session->set_flashdata('message', $info['msg']);
+//                 redirect('customer_list');
+//             } else {
+//                 $this->session->set_flashdata('exception', $info['msg']);
+//                 redirect($_SERVER['HTTP_REFERER']);
+//             }
+//         }
+//     } else {
+//         if ($this->input->is_ajax_request()) {
+//             $info['msg'] = validation_errors();
+//             $info['status'] = 0;
+//             echo json_encode($info);
+//         } else {
+//             if (!empty($id)) {
+//                 $data['title'] = display('edit_customer');
+//                 $data['customer'] = $this->customer_model->singledata($id);
+
+//                 // load commission data into form
+//                 $commission = $this->db->get_where('customer_comission', ['customer_id' => $id, 'status' => 1])->row();
+//                 if ($commission) {
+//                     $data['customer']->comission_value = $commission->commision_value;
+//                     $data['customer']->comission_type = $commission->comission_type;
+//                     $data['customer']->comission_note = $commission->notes;
+//                 }
+//             }
+
+//             $data['module'] = "customer";
+//             $data['page']   = "form";
+//             echo Modules::run('template/layout', $data);
+//         }
+//     }
+// }
+        public function paysenz_form($id = null)
+        {
+            $data['title'] = display('add_customer');
+
+            $this->form_validation->set_rules('customer_name', display('customer_name'), 'required|max_length[200]');
+            $this->form_validation->set_rules('customer_mobile', display('customer_mobile'), 'max_length[20]');
+            if (empty($id)) {
+                $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email|is_unique[customer_information.customer_email]');
             } else {
-                $info['msg'] = display('please_try_again');
-                $info['status'] = 0;
+                $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email');
             }
-        } else {
-            // ✅ Don't manually handle commission on update — it's handled in the model
-            if ($this->customer_model->update($postData)) {
-                $info['msg'] = display('update_successfully');
-                $info['status'] = 1;
-            } else {
-                $info['msg'] = display('please_try_again');
-                $info['status'] = 0;
-            }
-        }
+            $this->form_validation->set_rules('contact', display('contact'), 'max_length[200]');
+            $this->form_validation->set_rules('phone', display('phone'), 'max_length[20]');
+            $this->form_validation->set_rules('city', display('city'), 'max_length[100]');
+            $this->form_validation->set_rules('state', display('state'), 'max_length[100]');
+            $this->form_validation->set_rules('zip', display('zip'), 'max_length[30]');
+            $this->form_validation->set_rules('country', display('country'), 'max_length[100]');
+            $this->form_validation->set_rules('customer_address', display('customer_address'), 'max_length[255]');
+            $this->form_validation->set_rules('address2', display('address2'), 'max_length[255]');
+            $this->form_validation->set_rules('sales_permit_number', display('sales_permit_number'), 'max_length[50]');
 
-        if ($this->input->is_ajax_request()) {
-            echo json_encode($info);
-        } else {
-            if ($info['status'] == 1) {
-                $this->session->set_flashdata('message', $info['msg']);
-                redirect('customer_list');
-            } else {
-                $this->session->set_flashdata('exception', $info['msg']);
-                redirect($_SERVER['HTTP_REFERER']);
-            }
-        }
-    } else {
-        if ($this->input->is_ajax_request()) {
-            $info['msg'] = validation_errors();
-            $info['status'] = 0;
-            echo json_encode($info);
-        } else {
-            if (!empty($id)) {
-                $data['title'] = display('edit_customer');
-                $data['customer'] = $this->customer_model->singledata($id);
+            $sales_permit = "";
+            if (!empty($_FILES['sales_permit']['name'])) {
+                $config['upload_path']   = './uploads/sales_permits/';
+                $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
+                $config['max_size']      = 2048;
+                $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
 
-                // load commission data into form
-                $commission = $this->db->get_where('customer_comission', ['customer_id' => $id, 'status' => 1])->row();
-                if ($commission) {
-                    $data['customer']->comission_value = $commission->commision_value;
-                    $data['customer']->comission_type = $commission->comission_type;
-                    $data['customer']->comission_note = $commission->notes;
+                $this->load->library('upload', $config);
+
+                if ($this->upload->do_upload('sales_permit')) {
+                    $upload_data = $this->upload->data();
+                    $sales_permit = $upload_data['file_name'];
+                } else {
+                    log_message('error', 'File Upload Error: ' . $this->upload->display_errors());
+                    $this->session->set_flashdata('exception', 'File upload failed: ' . $this->upload->display_errors());
+                    redirect($_SERVER['HTTP_REFERER']);
+                    return;
                 }
             }
 
-            $data['module'] = "customer";
-            $data['page']   = "form";
-            echo Modules::run('template/layout', $data);
+            $data['customer'] = (object)$postData = [
+                'customer_id'        => $this->input->post('customer_id', true),
+                'customer_name'      => $this->input->post('customer_name', true),
+                'customer_mobile'    => $this->input->post('customer_mobile', true),
+                'customer_email'     => $this->input->post('customer_email', true),
+                'email_address'      => $this->input->post('email_address', true),
+                'contact'            => $this->input->post('contact', true),
+                'phone'              => $this->input->post('phone', true),
+                'fax'                => $this->input->post('fax', true),
+                'city'               => $this->input->post('city', true),
+                'state'              => $this->input->post('state', true),
+                'zip'                => $this->input->post('zip', true),
+                'country'            => $this->input->post('country', true),
+                'customer_address'   => $this->input->post('customer_address', true),
+                'address2'           => !empty($this->input->post('address2', true)) ? $this->input->post('address2', true) : NULL,
+                'sales_permit_number'=> $this->input->post('sales_permit_number', true),
+                'status'             => $this->input->post('status', true),
+                'create_by'          => $this->session->userdata('id')
+            ];
+
+            if (!empty($sales_permit)) {
+                $postData['sales_permit'] = $sales_permit;
+            }
+
+            if ($this->form_validation->run() === true) {
+                if (empty($postData['customer_id'])) {
+                    if ($this->customer_model->create($postData)) {
+                        $customer_id = $this->db->insert_id();
+
+                        $commission_data = [
+                            'customer_id'     => $customer_id,
+                            'comission_type'  => $this->input->post('comission_type', true),
+                            'commision_value' => $this->input->post('comission_value', true),
+                            'notes'           => $this->input->post('comission_note', true),
+                            'create_by'       => $this->session->userdata('id'),
+                            'status'          => 1,
+                            'create_date'     => date('Y-m-d H:i:s'),
+                            'update_date'     => date('Y-m-d H:i:s')
+                        ];
+                        $this->db->insert('customer_comission', $commission_data);
+
+                        $email = $postData['customer_email'];
+                        $password = $this->random_password(8);
+
+                        $auth_exists = $this->db->where('username', $email)->get('customer_auth')->row();
+                        if (!$auth_exists) {
+                            $this->db->insert('customer_auth', [
+                                'customer_id' => $customer_id,
+                                'username'    => $email,
+                                'password'    => password_hash($password, PASSWORD_BCRYPT),
+                                'status'      => 1
+                            ]);
+                        }
+
+                        // API call to external ERP
+                        $query = http_build_query([
+                            'name'     => $postData['customer_name'],
+                            'email'    => $email,
+                            'phone'    => $postData['customer_mobile'],
+                            'password' => $password
+                        ]);
+                        $api_url = "http://demob2b.paysenzhost.xyz/api/erpSignUp?$query";
+                        $api_response = file_get_contents($api_url);
+                        log_message('debug', "📤 ERP API Response: $api_response");
+
+                        // Send welcome email
+                        $this->load->library('sendmail_lib');
+                        $this->sendmail_lib->send(
+                            $email,
+                            'Welcome to DeshiShad',
+                            "<p>Dear {$postData['customer_name']},</p><p>Your account has been created.</p><p><strong>Email:</strong> {$email}</p><p><strong>Password:</strong> {$password}</p><p>Please login and change your password.</p><br><p>Thanks,<br>DeshiShad Tech Team(PSB)</p>"
+                        );
+
+                        $info['msg'] = display('save_successfully');
+                        $info['status'] = 1;
+                    } else {
+                        $info['msg'] = display('please_try_again');
+                        $info['status'] = 0;
+                    }
+                } else {
+                    if ($this->customer_model->update($postData)) {
+                        $info['msg'] = display('update_successfully');
+                        $info['status'] = 1;
+                    } else {
+                        $info['msg'] = display('please_try_again');
+                        $info['status'] = 0;
+                    }
+                }
+
+                if ($this->input->is_ajax_request()) {
+                    echo json_encode($info);
+                } else {
+                    if ($info['status'] == 1) {
+                        $this->session->set_flashdata('message', $info['msg']);
+                        redirect('customer_list');
+                    } else {
+                        $this->session->set_flashdata('exception', $info['msg']);
+                        redirect($_SERVER['HTTP_REFERER']);
+                    }
+                }
+            } else {
+                if ($this->input->is_ajax_request()) {
+                    $info['msg'] = validation_errors();
+                    $info['status'] = 0;
+                    echo json_encode($info);
+                } else {
+                    if (!empty($id)) {
+                        $data['title'] = display('edit_customer');
+                        $data['customer'] = $this->customer_model->singledata($id);
+
+                        $commission = $this->db->get_where('customer_comission', ['customer_id' => $id, 'status' => 1])->row();
+                        if ($commission) {
+                            $data['customer']->comission_value = $commission->commision_value;
+                            $data['customer']->comission_type = $commission->comission_type;
+                            $data['customer']->comission_note = $commission->notes;
+                        }
+                    }
+
+                    $data['module'] = "customer";
+                    $data['page']   = "form";
+                    echo Modules::run('template/layout', $data);
+                }
+            }
         }
-    }
-}
+
+        private function random_password($length = 8) {
+            return substr(str_shuffle('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$!'), 0, $length);
+        }
 
 
 

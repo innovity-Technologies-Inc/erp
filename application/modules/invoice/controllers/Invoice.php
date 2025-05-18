@@ -1,6 +1,9 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
+require_once FCPATH . 'vendor/autoload.php'; // Composer autoloader
+use Dompdf\Dompdf;
+
     #------------------------------------    
     # Author: PaySenz Ltd.
     # Author link: https://www.paysenz.com/
@@ -2067,7 +2070,6 @@ public function paysenz_customer_autocomplete() {
         );
        return $data;
     }
-
 
        public function generator($lenth)
     {
