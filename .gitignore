@@ -54,4 +54,5 @@ vendor/*
 # assets/*
 my-assets/image/*
 uploads/*
-
+application/libraries/firebase-service-account.json
+application/config/database.php

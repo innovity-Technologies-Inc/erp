@@ -199,22 +199,27 @@ class Apiv2 extends CI_Controller {
 
     public function login()
     {
+        // Enforce POST method
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return $this->_bad_request('Only POST method is allowed');
+        }
+
+        // Decode JSON input
         $input = json_decode(trim(file_get_contents("php://input")), true);
-        if (!isset($input['username']) || !isset($input['password'])) {
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(400)
-                ->set_output(json_encode(['status' => 'error', 'message' => 'Username and password required']));
+
+        // Check required fields
+        if (empty($input['username']) || empty($input['password'])) {
+            return $this->_bad_request('Username and password are required');
         }
 
+        // Authenticate user
         $user = $this->Api_model->verify_api_user_credentials($input['username'], $input['password']);
+
         if (!$user) {
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(401)
-                ->set_output(json_encode(['status' => 'error', 'message' => 'Invalid credentials']));
+            return $this->_unauthorized('Invalid username or password');
         }
 
+        // Generate tokens
         $access_token = JWT::encode([
             'iat' => time(),
             'exp' => time() + $this->jwt_ttl,
@@ -229,66 +234,44 @@ class Apiv2 extends CI_Controller {
             'uid' => $user['id']
         ], $this->jwt_key, $this->jwt_algo);
 
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_output(json_encode([
-                'status' => 'success',
-                'access_token' => $access_token,
-                'refresh_token' => $refresh_token,
-                'expires_in' => $this->jwt_ttl
-            ]));
+        // Return success response
+        return $this->_success([
+            'access_token'  => $access_token,
+            'refresh_token' => $refresh_token,
+            'expires_in'    => $this->jwt_ttl
+        ], 'Login successful');
     }
 
 
-    /**
-     * @OA\Post
-     * (
-     *     path="/apiv2/refresh_token",
-     *     tags={"Authentication"},
-     *     summary="Refresh access token",
-     *     description="Accepts a valid refresh token and returns a new access token.",
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\JsonContent(
-     *             required={"refresh_token"},
-     *             @OA\Property(property="refresh_token", type="string", example="your_refresh_token_here")
-     *         )
-     *     ),
-     *     @OA\Response(
-     *         response=200,
-     *         description="Token refreshed successfully",
-     *         @OA\JsonContent(
-     *             @OA\Property(property="status", type="string", example="success"),
-     *             @OA\Property(property="access_token", type="string"),
-     *             @OA\Property(property="expires_in", type="integer", example=3600)
-     *         )
-     *     ),
-     *     @OA\Response(response=400, description="Refresh token required"),
-     *     @OA\Response(response=401, description="Invalid or expired refresh token")
-     * )
-     */
-
     public function refresh_token()
     {
+        // Enforce POST method
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return $this->_bad_request('Only POST method is allowed');
+        }
+
+        // Decode input
         $input = json_decode(trim(file_get_contents("php://input")), true);
         $refresh_token = $input['refresh_token'] ?? null;
 
-        if (!$refresh_token) {
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(400)
-                ->set_output(json_encode(['status' => 'error', 'message' => 'Refresh token required']));
+        // Check if token exists
+        if (empty($refresh_token)) {
+            return $this->_bad_request('Refresh token is required');
         }
 
         try {
-            $decoded = JWT::decode($refresh_token, new Key($this->jwt_key, $this->jwt_algo));
+            // Decode token
+            $decoded = JWT::decode($refresh_token, new \Firebase\JWT\Key($this->jwt_key, $this->jwt_algo));
+
+            // Retrieve user
             $user = $this->Api_model->get_api_user_by_id($decoded->uid);
 
             if (!$user) {
-                throw new Exception('User not found');
+                return $this->_unauthorized('User not found');
             }
 
-            $new_token = JWT::encode([
+            // Generate new access token
+            $new_access_token = JWT::encode([
                 'iat' => time(),
                 'exp' => time() + $this->jwt_ttl,
                 'uid' => $user['id'],
@@ -296,18 +279,19 @@ class Apiv2 extends CI_Controller {
                 'usertype' => $user['usertype']
             ], $this->jwt_key, $this->jwt_algo);
 
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_output(json_encode([
-                    'status' => 'success',
-                    'access_token' => $new_token,
-                    'expires_in' => $this->jwt_ttl
-                ]));
+            // Send response
+            return $this->_success([
+                'access_token' => $new_access_token,
+                'expires_in'   => $this->jwt_ttl
+            ], 'Access token refreshed');
+
+        } catch (\Firebase\JWT\ExpiredException $e) {
+            return $this->_unauthorized('Refresh token has expired');
+        } catch (\Firebase\JWT\SignatureInvalidException $e) {
+            return $this->_unauthorized('Invalid token signature');
         } catch (Exception $e) {
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(401)
-                ->set_output(json_encode(['status' => 'error', 'message' => 'Invalid or expired refresh token']));
+            log_message('error', 'Token refresh error: ' . $e->getMessage());
+            return $this->_unauthorized('Invalid or malformed refresh token');
         }
     }
 
@@ -1541,5 +1525,96 @@ class Apiv2 extends CI_Controller {
             $this->_bad_request('File upload failed: ' . $error);
             return false;
         }
+    }
+
+    /**
+     * 200 OK
+     */
+    private function _success($data = [], $message = 'Success')
+    {
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(200)
+            ->set_output(json_encode([
+                'status'  => 'success',
+                'message' => $message,
+                'data'    => $data
+            ]));
+    }
+
+    /**
+     * 201 Created
+     */
+    private function _created($data = [], $message = 'Resource created successfully')
+    {
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(201)
+            ->set_output(json_encode([
+                'status'  => 'success',
+                'message' => $message,
+                'data'    => $data
+            ]));
+    }
+
+    /**
+     * 401 Unauthorized
+     */
+    private function _unauthorized($message = 'Unauthorized')
+    {
+        log_message('error', '🔒 ' . $message);
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(401)
+            ->set_output(json_encode([
+                'status'  => 'error',
+                'message' => $message
+            ]));
+    }
+
+    /**
+     * 403 Forbidden
+     */
+    private function _forbidden($message = 'Forbidden')
+    {
+        log_message('error', '🚫 ' . $message);
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(403)
+            ->set_output(json_encode([
+                'status'  => 'error',
+                'message' => $message
+            ]));
+    }
+
+    /**
+     * 404 Not Found
+     */
+    private function _not_found($message = 'Resource not found')
+    {
+        log_message('error', '❓ ' . $message);
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(404)
+            ->set_output(json_encode([
+                'status'  => 'error',
+                'message' => $message
+            ]));
+    }
+
+    /**
+     * 422 Unprocessable Entity (Validation errors)
+     */
+    private function _validation_error($errors = [], $message = 'Validation failed')
+    {
+        log_message('error', '🧪 Validation failed: ' . json_encode($errors));
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(422)
+            ->set_output(json_encode([
+                'status'  => 'error',
+                'message' => $message,
+                'errors'  => $errors
+            ]));
     }
 }
