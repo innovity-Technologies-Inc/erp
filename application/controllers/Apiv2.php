@@ -637,215 +637,477 @@ class Apiv2 extends CI_Controller {
     }
 
 
-    public function product_search()
+    public function customer_comission_by_email()
     {
-        // Start execution timer
-        $start_time = microtime(true);
-        log_message('debug', 'product_search() initiated');
-
-        // Authentication (unchanged)
-        $user = $this->authenticate_token();
-        if (!$user) {
-            log_message('warning', 'Authentication failed - invalid access token');
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(401)
-                ->set_output(json_encode([
-                    'status' => 'error',
-                    'message' => 'Unauthorized. Please provide a valid access token.'
-                ]));
-        }
-        log_message('debug', 'First layer authentication successful');
-
-        // Second layer authentication (unchanged)
-        $second_token = $this->input->get_request_header('X-Second-Token');
-        $view_sensitive_data = false;
-
-        if ($second_token) {
-            try {
-                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
-                if (isset($decoded->customer_id)) {
-                    log_message('info', 'Second Layer Token Decoded Successfully for customer: ' . $decoded->customer_id);
-                    $view_sensitive_data = true;
-                }
-            } catch (Exception $e) {
-                log_message('error', 'Second Layer Token Decode Failed: ' . $e->getMessage());
-            }
-        }
-
-        // Get and validate input
-        $input = json_decode(file_get_contents('php://input'), true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            log_message('error', 'Invalid JSON input: ' . json_last_error_msg());
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(400)
-                ->set_output(json_encode([
-                    'status' => 'error',
-                    'message' => 'Invalid JSON input'
-                ]));
-        }
-
-        // Process input parameters with explicit table references
-        $product_id   = isset($input['product_id']) ? $this->db->escape_str(trim($input['product_id'])) : '';
-        $product_name = isset($input['product_name']) ? $this->db->escape_str(trim($input['product_name'])) : '';
-        $category_id  = isset($input['category_id']) ? (int)$input['category_id'] : 0;
-        $min_price    = isset($input['min_price']) ? (float)$input['min_price'] : null;
-        $max_price    = isset($input['max_price']) ? (float)$input['max_price'] : null;
-        $limit        = isset($input['limit']) && (int)$input['limit'] > 0 ? (int)$input['limit'] : 10;
-        $page         = isset($input['page']) && (int)$input['page'] > 0 ? (int)$input['page'] : 1;
-        $offset       = ($page - 1) * $limit;
-
-        // Log input parameters
-        log_message('debug', 'Search parameters:', [
-            'product_id' => $product_id,
-            'product_name' => $product_name,
-            'category_id' => $category_id,
-            'min_price' => $min_price,
-            'max_price' => $max_price,
-            'limit' => $limit,
-            'page' => $page
-        ]);
-
-        // Initialize query with explicit table references
-        $this->db->select('product_information.*')
-                ->from('product_information');
-
-        // Apply product_id filter with table prefix
-        if (!empty($product_id)) {
-            $this->db->where('product_information.product_id', $product_id);
-            log_message('debug', 'Applied product_id filter: ' . $product_id);
-        }
-        
-        // Apply product_name filter with table prefix
-        if (!empty($product_name)) {
-            $product_name = str_replace('%', '', $product_name);
-            $search_term = str_replace(' ', '%', $product_name);
-            $this->db->group_start()
-                ->like('product_information.product_name', $product_name, 'both')
-                ->or_like('product_information.product_name', $search_term, 'both')
-                ->group_end();
-            log_message('debug', 'Applied product_name filter: ' . $product_name);
-        }
-
-        // Apply category filter with explicit table references
-        if ($category_id > 0) {
-            // First verify the category exists
-            $category_exists = $this->db->from('product_category')
-                                    ->where('category_id', $category_id)
-                                    ->count_all_results() > 0;
-            
-            if ($category_exists) {
-                $all_category_ids = $this->get_all_related_category_ids($category_id);
-                log_message('debug', 'Category IDs for filtering:', $all_category_ids);
-                
-                if (!empty($all_category_ids)) {
-                    $this->db->where_in('product_information.category_id', $all_category_ids);
-                }
-            } else {
-                log_message('warning', 'Invalid category_id provided: ' . $category_id);
-                // Return empty result for invalid categories
+        try {
+            // ✅ Step 1: First-layer token authentication
+            $user = $this->authenticate_token();
+            if (!$user) {
                 return $this->output
                     ->set_content_type('application/json')
+                    ->set_status_header(401)
                     ->set_output(json_encode([
-                        'status' => 'success',
-                        'total_count' => 0,
-                        'matched_count' => 0,
-                        'page' => $page,
-                        'page_count' => 0,
-                        'limit' => $limit,
-                        'result' => []
+                        'status'  => 'unauthorized',
+                        'message' => 'Unauthorized. Please provide a valid access token.'
                     ]));
             }
-        }
 
-        // Price filters with explicit table references
-        if (!is_null($min_price)) {
-            $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) >=', $min_price);
-            log_message('debug', 'Applied min_price filter: ' . $min_price);
-        }
-        if (!is_null($max_price)) {
-            $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) <=', $max_price);
-            log_message('debug', 'Applied max_price filter: ' . $max_price);
-        }
+            // ✅ Step 2: Log headers
+            log_message('info', 'Headers: ' . json_encode(getallheaders()));
 
-        // Get total count before pagination
-        $total_query = clone $this->db;
-        $total_count = $total_query->count_all_results();
-        log_message('debug', 'Total matching records before pagination: ' . $total_count);
+            // ✅ Step 3: Optional second-layer token validation
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            $view_sensitive_data = false;
 
-        // Apply pagination
-        $this->db->limit($limit, $offset);
-        
-        // Get final results
-        $query = $this->db->get();
-        
-        if (!$query) {
-            $error = $this->db->error();
-            log_message('error', 'Database query failed: ' . $error['message']);
+            if ($second_token) {
+                try {
+                    $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                    if (isset($decoded->customer_id)) {
+                        log_message('info', 'Second-layer token decoded successfully.');
+                        $view_sensitive_data = true;
+                    }
+                } catch (Exception $e) {
+                    log_message('error', 'Second-layer token decode failed: ' . $e->getMessage());
+                }
+            } else {
+                log_message('info', 'Second-layer token not provided.');
+            }
+
+            // ✅ Step 4: Validate input
+            $email = $this->input->get('email');
+            log_message('debug', 'Checking customer commission for email: ' . $email);
+
+            if (empty($email)) {
+                return $this->_bad_request('Missing required parameter: email');
+            }
+
+            // ✅ Step 5: Fetch customer info
+            $customer = $this->Api_model->get_customer_by_email($email);
+
+            if (!$customer || !isset($customer->customer_id)) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(404)
+                    ->set_output(json_encode([
+                        'status'  => 'not_found',
+                        'message' => 'No customer found with this email'
+                    ]));
+            }
+
+            // ✅ Step 6: Fetch active commission
+            $commission = $this->db->select('commision_value, comission_type')
+                ->from('customer_comission')
+                ->where('customer_id', $customer->customer_id)
+                ->where('status', 1)
+                ->order_by('id', 'DESC')
+                ->limit(1)
+                ->get()
+                ->row();
+
+            // ✅ Step 7: Build response
+            $data = [
+                'customer_id'      => $customer->customer_id,
+                'customer_name'    => $customer->customer_name ?? '',
+                'customer_email'   => $customer->customer_email ?? '',
+                'customer_mobile'  => $customer->customer_mobile ?? '',
+                'commision_value'  => $commission->commision_value ?? null,
+                'comission_type'   => $commission->comission_type ?? null,
+                'permission_level' => $view_sensitive_data ? 'write' : 'read'
+            ];
+
+            return $this->output
+                ->set_content_type('application/json')
+                ->set_status_header(200)
+                ->set_output(json_encode([
+                    'status'  => 'success',
+                    'message' => 'Customer commission retrieved successfully.',
+                    'data'    => $data
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+
+        } catch (Exception $e) {
+            return $this->_server_error('Unexpected server error: ' . $e->getMessage());
+        }
+    }
+
+    public function warehouse_list()
+    {
+        try {
+            log_message('debug', 'API Request: warehouse_list');
+
+            // ✅ Step 1: Authenticate First-layer Token
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status'  => 'unauthorized',
+                        'message' => 'Unauthorized. Please provide a valid access token.'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+
+            // ✅ Step 2: Validate Second-layer Token
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (!$second_token) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status'  => 'unauthorized',
+                        'message' => 'Missing required second-layer authentication token (X-Second-Token).'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                if (!isset($decoded->customer_id)) {
+                    return $this->_bad_request('Second-layer token is invalid or missing customer_id.');
+                }
+            } catch (Exception $e) {
+                return $this->_bad_request('Second-layer token decode failed: ' . $e->getMessage());
+            }
+
+            // ✅ Step 3: Load Warehouse Model
+            $this->load->model('warehouse/Warehouse_model', 'warehouse_model');
+
+            // ✅ Step 4: Get Active Warehouses
+            $warehouses = $this->warehouse_model->get_all_warehouses_by_status();
+
+            if (!empty($warehouses)) {
+                log_message('debug', 'Warehouses retrieved: ' . json_encode($warehouses));
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(200)
+                    ->set_output(json_encode([
+                        'status'     => 'success',
+                        'message'    => 'Warehouses retrieved successfully.',
+                        'warehouses' => $warehouses
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            } else {
+                return $this->_bad_request('No active warehouses found.');
+            }
+
+        } catch (Exception $e) {
+            return $this->_server_error('Unexpected server error: ' . $e->getMessage());
+        }
+    }
+
+    public function delete_customer()
+    {
+        try {
+            log_message('debug', 'API Request: delete_customer');
+
+            // ✅ Step 1: First-layer token authentication
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status'  => 'unauthorized',
+                        'message' => 'Unauthorized. Please provide a valid access token.'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+
+            // ✅ Step 2: Second-layer token validation
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (!$second_token) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status'  => 'unauthorized',
+                        'message' => 'Missing required second-layer authentication token (X-Second-Token).'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                if (!isset($decoded->customer_id)) {
+                    return $this->_bad_request('Second-layer token is invalid or missing customer_id.');
+                }
+            } catch (Exception $e) {
+                return $this->_bad_request('Second-layer token decode failed: ' . $e->getMessage());
+            }
+
+            // ✅ Step 3: Validate input
+            $customer_email = $this->input->get('customer_email', TRUE);
+            if (empty($customer_email)) {
+                return $this->_bad_request('Missing required parameter: customer_email');
+            }
+
+            // ✅ Step 4: Fetch customer record
+            $customer = $this->db->get_where('customer_information', ['customer_email' => $customer_email])->row();
+            if (!$customer) {
+                return $this->_bad_request('Customer not found with the provided email.');
+            }
+
+            // ✅ Step 5: Update status to 2 (deleted)
+            $data = ['status' => 2];
+            if ($this->Api_model->update_customer($data, $customer_email)) {
+
+                $customer_id   = $customer->customer_id;
+                $existing_name = $customer->customer_name;
+                $existing_email = $customer->customer_email;
+                $fcm_token     = $customer->fcm_token ?? null;
+
+                $status_text = 'Deleted';
+
+                // ✅ Load libraries
+                $this->load->library('sendmail_lib');
+                $this->load->library('fcm_lib');
+
+                // ✅ Notify Admin
+                $admin_email = 'faizshiraji@gmail.com';
+                $admin_subject = "Customer Status Updated to Deleted by User";
+                $admin_message = "
+                    <h3>Status Change Notification</h3>
+                    <p>The status for customer <strong>{$existing_name}</strong> (ID: {$customer_id}) has been updated to <strong>{$status_text}</strong>.</p>
+                ";
+                $this->sendmail_lib->send(
+                    $admin_email,
+                    $admin_subject,
+                    $admin_message,
+                    'noreply@hostelevate.com',
+                    'DeshiShad Alert System'
+                );
+
+                // ✅ Notify Customer (Email)
+                $customer_subject = "Your DeshiShad Account is Deleted by You";
+                $customer_message = "
+                    <h3>Dear {$existing_name},</h3>
+                    <p>You have successfully <strong>deleted</strong> your DeshiShad account.</p>
+                    <p>If you did not request this or need to reactivate your account, please contact DeshiShad Support immediately.</p>
+                    <p>We’re sorry to see you go. Thank you for being with DeshiShad.</p>";
+                $notification_body = "You have deleted your DeshiShad account.";
+
+                $this->sendmail_lib->send(
+                    $existing_email,
+                    $customer_subject,
+                    $customer_message,
+                    'noreply@hostelevate.com',
+                    'DeshiShad'
+                );
+
+                // ✅ FCM Push Notification
+                if (!empty($fcm_token)) {
+                    $this->fcm_lib->sendNotification($fcm_token, $customer_subject, $notification_body);
+                }
+
+                log_message('info', "📤 Status deleted and notification sent for customer_id={$customer_id}");
+
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(200)
+                    ->set_output(json_encode([
+                        'status'     => 'success',
+                        'message'    => 'Customer status updated to deleted',
+                        'permission' => 'read'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            } else {
+                return $this->_server_error('Failed to update customer. Please try again.');
+            }
+
+        } catch (Exception $e) {
+            return $this->_server_error('Unexpected server error: ' . $e->getMessage());
+        }
+    }
+
+    public function get_payment_methods()
+    {
+        try {
+            // ✅ Step 1: Authenticate First-layer Token
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status'  => 'unauthorized',
+                        'message' => 'Unauthorized. Please provide a valid access token.'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+
+            // ✅ Step 2: Log Headers
+            log_message('info', 'Headers: ' . json_encode(getallheaders()));
+
+            // ✅ Step 3: Validate Second-layer Token
+            $second_token = $this->input->get_request_header('X-Second-Token');
+
+            if (!$second_token) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status'  => 'unauthorized',
+                        'message' => 'Missing required second-layer authentication token (X-Second-Token).'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                if (!isset($decoded->customer_id)) {
+                    return $this->_bad_request('Second-layer token is invalid or missing customer_id.');
+                }
+            } catch (Exception $e) {
+                return $this->_bad_request('Second-layer token decode failed: ' . $e->getMessage());
+            }
+
+            // ✅ Step 4: Fetch Payment Methods
+            $data = $this->db->select('HeadName, HeadCode')
+                ->from('acc_coa')
+                ->group_start()
+                    ->where('PHeadName', 'Cash')
+                    ->or_where('PHeadName', 'Cash at Bank')
+                ->group_end()
+                ->get()
+                ->result();
+
+            // ✅ Step 5: Build Response
+            if (!empty($data)) {
+                $list[] = [
+                    'HeadCode' => '0',
+                    'HeadName' => 'Credit Sale'
+                ];
+
+                foreach ($data as $value) {
+                    $list[] = [
+                        'HeadCode' => $value->HeadCode,
+                        'HeadName' => $value->HeadName
+                    ];
+                }
+
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(200)
+                    ->set_output(json_encode([
+                        'status'          => 'success',
+                        'message'         => 'Payment methods fetched successfully.',
+                        'payment_methods' => $list
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            } else {
+                return $this->_bad_request('No payment methods found.');
+            }
+
+        } catch (Exception $e) {
+            return $this->_server_error('Unexpected server error: ' . $e->getMessage());
+        }
+    }
+
+    public function product_search()
+    {
+        try {
+            $start_time = microtime(true);
+            log_message('debug', 'product_search() initiated');
+
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status' => 'error',
+                        'message' => 'Unauthorized. Please provide a valid access token.'
+                    ]));
+            }
+
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            $view_sensitive_data = false;
+            if ($second_token) {
+                try {
+                    $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                    $view_sensitive_data = isset($decoded->customer_id);
+                    log_message('info', 'Second Layer Token Decoded Successfully for customer: ' . $decoded->customer_id);
+                } catch (Exception $e) {
+                    log_message('error', 'Second layer token error: ' . $e->getMessage());
+                }
+            }
+
+            $input = json_decode(file_get_contents('php://input'), true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new Exception('Invalid JSON input: ' . json_last_error_msg());
+            }
+
+            $params = [
+                'product_id'   => $input['product_id'] ?? '',
+                'product_name' => $input['product_name'] ?? '',
+                'category_id'  => $input['category_id'] ?? '',
+                'min_price'    => $input['min_price'] ?? null,
+                'max_price'    => $input['max_price'] ?? null
+            ];
+            $limit  = isset($input['limit']) ? (int)$input['limit'] : 10;
+            $page   = isset($input['page']) ? (int)$input['page'] : 1;
+            $offset = ($page - 1) * $limit;
+
+            $this->load->library('ProductSearchService');
+
+            // For total count (no limit)
+            $total_query = $this->productsearchservice->buildProductSearchQuery($params);
+            $total_count = $total_query->count_all_results();
+
+            // For paginated data (limit/offset)
+            $queryBuilder = $this->productsearchservice->buildProductSearchQuery($params);
+            $queryBuilder->limit($limit, $offset);
+            log_message('debug', 'Final SQL: ' . $queryBuilder->get_compiled_select());
+            $query = $queryBuilder->get();
+
+            if (!$query) {
+                throw new Exception('Database query failed: ' . $this->db->error()['message']);
+            }
+
+            $products = $query->result_array();
+
+            // Map category names
+            $category_map = [];
+            $categories = $this->db->select('category_id, category_name')->get('product_category')->result();
+            foreach ($categories as $cat) {
+                $category_map[$cat->category_id] = $cat->category_name;
+            }
+
+            // Process products
+            foreach ($products as $k => $v) {
+                if (!empty($products[$k]['image'])) {
+                    $products[$k]['image'] = base_url(str_replace('./', '', $products[$k]['image']));
+                }
+
+                $products[$k]['category_name'] = $category_map[$v['category_id']] ?? 'Uncategorized';
+
+                if (!$view_sensitive_data) {
+                    unset($products[$k]['price']);
+                } else {
+                    $products[$k]['price'] = (float)$products[$k]['price'];
+                }
+
+                $products[$k]['qr_code'] = base_url('my-assets/image/qr/' . $v['product_id'] . '.png');
+                $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $v['product_id']);
+            }
+
+            $execution_time = microtime(true) - $start_time;
+
+            return $this->output
+                ->set_content_type('application/json')
+                ->set_output(json_encode([
+                    'status' => 'success',
+                    'total_count' => $total_count,
+                    'matched_count' => count($products),
+                    'page' => $page,
+                    'page_count' => ceil($total_count / $limit),
+                    'execution_time' => round($execution_time, 4),
+                    'limit' => $limit,
+                    'result' => $products
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        } catch (Exception $e) {
+            log_message('error', 'product_search() failed: ' . $e->getMessage());
             return $this->output
                 ->set_content_type('application/json')
                 ->set_status_header(500)
                 ->set_output(json_encode([
                     'status' => 'error',
-                    'message' => 'Database query failed',
-                    'error' => $error
+                    'message' => 'Internal Server Error',
+                    'error_detail' => $e->getMessage()
                 ]));
         }
-
-        $products = $query->result_array();
-        log_message('debug', 'Retrieved ' . count($products) . ' products');
-
-        // Preload category names for better performance
-        $category_map = [];
-        $categories = $this->db->select('category_id, category_name')
-                            ->get('product_category')
-                            ->result();
-        foreach ($categories as $cat) {
-            $category_map[$cat->category_id] = $cat->category_name;
-        }
-
-        // Process each product
-        foreach ($products as $k => $v) {
-            // Fix image paths
-            if (!empty($products[$k]['image'])) {
-                $products[$k]['image'] = base_url(str_replace('./', '', $products[$k]['image']));
-            }
-
-            
-            // Add category name
-            $products[$k]['category_name'] = $category_map[$v['category_id']] ?? 'Uncategorized';
-
-            // Handle sensitive data
-            if ($view_sensitive_data) {
-                // Convert price to float since it's stored as varchar
-                $products[$k]['price'] = (float)$products[$k]['price'];
-            } else {
-                unset($products[$k]['price']);
-            }
-
-            // Add QR code and barcode URLs
-            $products[$k]['qr_code'] = base_url('my-assets/image/qr/' . $v['product_id'] . '.png');
-            $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $v['product_id']);
-        }
-
-        // Calculate execution time
-        $execution_time = microtime(true) - $start_time;
-        log_message('debug', 'product_search() completed in ' . $execution_time . ' seconds');
-
-        // Return final response
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_output(json_encode([
-                'status' => 'success',
-                'total_count' => $total_count,
-                'matched_count' => count($products),
-                'page' => $page,
-                'page_count' => ceil($total_count / $limit),
-                'execution_time' => round($execution_time, 4),
-                'limit' => $limit,
-                'result' => $products
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
 
@@ -976,72 +1238,38 @@ class Apiv2 extends CI_Controller {
                 ]));
         }
 
-        $customer_email = $this->input->post('email');
+        $customer_email  = $this->input->post('email');
         $customer_mobile = $this->input->post('mobile');
-        $password = $this->input->post('password');
+        $password        = $this->input->post('password');
 
         log_message('debug', "📥 Email: $customer_email | Mobile: $customer_mobile");
 
         if (!filter_var($customer_email, FILTER_VALIDATE_EMAIL)) {
-            log_message('error', '❌ Invalid email format: ' . $customer_email);
-            return $this->output->set_content_type('application/json')->set_status_header(400)
-                ->set_output(json_encode(['status' => 'error', 'message' => 'Invalid email format']));
+            return $this->_bad_request('Invalid email format');
         }
 
         if (!preg_match('/^[0-9]+$/', $customer_mobile)) {
-            log_message('error', '❌ Mobile number format error: ' . $customer_mobile);
-            return $this->output->set_content_type('application/json')->set_status_header(400)
-                ->set_output(json_encode(['status' => 'error', 'message' => 'Mobile must be digits only']));
+            return $this->_bad_request('Mobile must be digits only');
         }
 
         if (!preg_match('/[^a-zA-Z0-9]/', $password)) {
-            log_message('error', '❌ Password missing special character');
-            return $this->output->set_content_type('application/json')->set_status_header(400)
-                ->set_output(json_encode(['status' => 'error', 'message' => 'Password must include at least one special character']));
+            return $this->_bad_request('Password must include at least one special character');
         }
 
-        $existsMobile = $this->db->where('customer_mobile', $customer_mobile)->get('customer_information')->row();
-        if ($existsMobile) {
-            log_message('error', '❗ Duplicate customer mobile found: ' . $customer_mobile);
-            return $this->output->set_content_type('application/json')->set_status_header(409)
-                ->set_output(json_encode(['status' => 'error', 'message' => 'Mobile number already exists']));
+        if ($this->db->where('customer_mobile', $customer_mobile)->get('customer_information')->row()) {
+            return $this->_conflict('Mobile number already exists');
         }
 
-        $existsEmail = $this->db->where('username', $customer_email)->get('customer_auth')->row();
-        if ($existsEmail) {
-            log_message('error', '❗ Duplicate email found: ' . $customer_email);
-            return $this->output->set_content_type('application/json')->set_status_header(409)
-                ->set_output(json_encode(['status' => 'error', 'message' => 'Email already registered']));
+        if ($this->db->where('username', $customer_email)->get('customer_auth')->row()) {
+            return $this->_conflict('Email already registered');
         }
 
         $sales_permit = '';
         if (!empty($_FILES['sales_permit']['name'])) {
-            log_message('debug', '📎 Uploading sales permit file...');
-            $config['upload_path']   = './uploads/sales_permits/';
-            $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
-            $config['max_size']      = 2048;
-            $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
-
-            if (!is_dir($config['upload_path'])) {
-                mkdir($config['upload_path'], 0755, true);
-            }
-
-            $this->load->library('upload', $config);
-            $this->load->library('session');
-
-            if ($this->upload->do_upload('sales_permit')) {
-                $upload_data = $this->upload->data();
-                $sales_permit = $upload_data['file_name'];
-                log_message('debug', '✅ File uploaded: ' . $sales_permit);
-            } else {
-                $error = strip_tags($this->upload->display_errors());
-                log_message('error', '❌ File upload failed: ' . $error);
-                echo json_encode(['response' => ['status' => 'error', 'message' => 'File upload failed: ' . $error]]);
-                return;
-            }
+            $sales_permit = $this->_upload_file('sales_permit', './uploads/sales_permits/');
+            if ($sales_permit === false) return;
         }
 
-        log_message('debug', '📥 Preparing customer data...');
         $data = [
             'customer_name'        => $this->input->post('customer_name'),
             'customer_address'     => $this->input->post('address'),
@@ -1063,14 +1291,10 @@ class Apiv2 extends CI_Controller {
             'create_by'            => $user->uid
         ];
 
-        log_message('debug', '📝 Inserting customer record...');
         if ($this->Api_model->customer_create($data)) {
             $customer_id = $this->db->insert_id();
-            log_message('debug', '✅ Customer inserted with ID: ' . $customer_id);
-
-            $coa = $this->Api_model->customerheadcode();
-            $headcode = ($coa && $coa->HeadCode != NULL) ? $coa->HeadCode + 1 : "102030000001";
-            $c_acc = $customer_id . '-' . $this->input->post('customer_name');
+            $headcode    = ($coa = $this->Api_model->customerheadcode()) ? $coa->HeadCode + 1 : "102030000001";
+            $c_acc       = $customer_id . '-' . $this->input->post('customer_name');
 
             $this->db->insert('acc_coa', [
                 'HeadCode' => $headcode,
@@ -1088,10 +1312,8 @@ class Apiv2 extends CI_Controller {
                 'CreateBy' => $user->uid,
                 'CreateDate' => date('Y-m-d H:i:s')
             ]);
-            log_message('debug', '📘 Chart of Account created');
 
             $this->Api_model->customer_previous_balance_add($this->input->post('previous_balance'), $customer_id);
-            log_message('debug', '💵 Previous balance processed');
 
             $this->db->insert('customer_auth', [
                 'customer_id' => $customer_id,
@@ -1099,70 +1321,66 @@ class Apiv2 extends CI_Controller {
                 'password'    => password_hash($password, PASSWORD_BCRYPT),
                 'status'      => 3
             ]);
-            log_message('debug', '🔐 Customer login created (status 3)');
 
             $token = bin2hex(random_bytes(32));
             $this->db->insert('email_verification_tokens', [
                 'customer_id' => $customer_id,
-                'token' => $token
+                'token'       => $token
             ]);
-            log_message('debug', '📩 Email token saved: ' . $token);
-
-            log_message('debug', '🧠 Checking if CI session is initialized...');
-
-            if (!isset($this->session)) {
-                log_message('debug', '🔍 $this->session is not set — attempting to load CI session library.');
-                $this->load->library('session');
-
-                if (isset($this->session)) {
-                    log_message('debug', '✅ CI session library loaded successfully.');
-                } else {
-                    log_message('error', '❌ Failed to load CI session library.');
-                }
-            } else {
-                log_message('debug', '🧠 $this->session is already initialized.');
-            }
 
             $this->session->set_userdata('registered_customer_id', $customer_id);
             $this->session->set_userdata('registered_customer_email', $customer_email);
-            log_message('debug', '📦 Session data set: registered_customer_id = ' . $customer_id . ', registered_customer_email = ' . $customer_email);
 
             $verify_url = base_url("apiv2/verify_email?token=$token");
 
+            // ✅ Use Sendmail_lib instead of controller
             $this->load->library('sendmail_lib');
-            $email = $customer_email;
-            log_message('debug', "📨 Sending verification email to: $email with URL: $verify_url");
 
-            if (empty($email) || empty($verify_url)) {
-                log_message('error', "❌ Missing parameters in send_verification | Email: $email | URL: $verify_url");
-            } else {
+            $this->sendmail_lib->send(
+                $customer_email,
+                'Verify your email address',
+                "<h3>Registration Successful!</h3>
+                <p>Thank you for registering. Please click the button below to verify your email:</p>
+                <p><a href='$verify_url' style='padding:10px 20px; background:#4CAF50; color:#fff;'>Verify Email</a></p>",
+                'noreply@hostelevate.com',
+                'DeshiShad'
+            );
+
+            // Identify creator
+            $creator      = $this->db->where('id', $user->uid)->get('api_users')->row();
+            $creator_text = 'Unknown';
+            if ($creator) {
+                $creator_text = $creator->usertype === 'webuser' ? 'Customer (via Web Portal)' :
+                                ($creator->usertype === 'appuser' ? 'Customer (via Mobile App)' :
+                                ucfirst($creator->usertype));
+            }
+
+            // Notify Admins
+            $admin_query = $this->db->where_in('id', [1, 2])->get('user_login');
+            foreach ($admin_query->result() as $admin) {
                 $this->sendmail_lib->send(
-                    $email,
-                    'Verify your email address',
-                    "<h3>Registration Successful!</h3><p>Thank you for registering. Please click the button below to verify your email:</p><p><a href='$verify_url' style='padding:10px 20px; background:#4CAF50; color:#fff; text-decoration:none;'>Verify Email</a></p><p>If the button above doesn't work, copy and paste this URL into your browser:</p><p>$verify_url</p>",
-                    'noreply@paysenz.com',
-                    'Deshi Shad'
+                    $admin->username,
+                    'New Customer Registered',
+                    "<h4>New customer registration alert</h4>
+                    <p><strong>Name:</strong> {$this->input->post('customer_name')}</p>
+                    <p><strong>Email:</strong> $customer_email</p>
+                    <p><strong>Mobile:</strong> $customer_mobile</p>
+                    <p><strong>Who Created:</strong> $creator_text</p>
+                    <p><strong>Registered At:</strong> " . date('Y-m-d H:i:s') . "</p>",
+                    'noreply@hostelevate.com',
+                    'DeshiShad Alert System'
                 );
             }
 
-            log_message('debug', '✉️ Verification email triggered');
-
-            echo json_encode([
+            return $this->output->set_content_type('application/json')->set_output(json_encode([
                 'response' => [
                     'status'     => 'ok',
                     'message'    => 'Customer created. Verification email sent.',
                     'permission' => 'write'
                 ]
-            ]);
+            ]));
         } else {
-            log_message('error', '❌ Customer insertion failed');
-            echo json_encode([
-                'response' => [
-                    'status' => 'error',
-                    'message' => 'Please try again',
-                    'permission' => 'read'
-                ]
-            ]);
+            return $this->_server_error('Customer insertion failed. Please try again.');
         }
     }
 
@@ -1174,45 +1392,44 @@ class Apiv2 extends CI_Controller {
             show_error('Invalid verification link', 400);
         }
 
+        // 🔍 Lookup the token record
         $record = $this->db->get_where('email_verification_tokens', ['token' => $token])->row();
         if (!$record) {
             show_error('Token not found or expired', 404);
         }
 
-        // Update both tables' status to 0
+        // ✅ Update both tables: set status = 0 (active)
         $this->db->where('customer_id', $record->customer_id)->update('customer_information', ['status' => 0]);
         $this->db->where('customer_id', $record->customer_id)->update('customer_auth', ['status' => 0]);
 
-        // Get customer info
+        // 🧹 Optional: delete or mark token as used
+        // $this->db->delete('email_verification_tokens', ['token' => $token]);
+
+        // ✅ Get customer info for confirmation email
         $customer = $this->db->get_where('customer_information', ['customer_id' => $record->customer_id])->row();
 
-        // Prepare confirmation message
-        $email_body = '
-            <html>
-            <head><title>Email Verified</title></head>
-            <body>
-                <h3>Email Verified!</h3>
-                <p>You have successfully verified your email.</p>
-                <p>Deshi Shad support team will now contact you to activate your account.</p>
-                <p>You may also call us at <strong>+1234567890012</strong>.</p>
-            </body>
-            </html>
-        ';
+        // 📧 Build email message
+        $email_message = "
+            <h3>Email Verified!</h3>
+            <p>You have successfully verified your email.</p>
+            <p>Our support team will now contact you to activate your account.</p>
+            <p>You may also call us at <strong>+1234567890012</strong>.</p>
+        ";
 
-        // Send confirmation using Sendmail_lib
+        // 📬 Send confirmation email
         $this->load->library('sendmail_lib');
-        log_message('debug', "📨 Sending email verification confirmation to: {$customer->customer_email}");
+        log_message('debug', "📨 Sending verification confirmation to: {$customer->customer_email}");
 
         $this->sendmail_lib->send(
             $customer->customer_email,
             'Email Verified Successfully',
-            $email_body,
-            'noreply@paysenz.com',
-            'Deshi Shad'
+            $email_message,
+            'noreply@hostelevate.com',
+            'DeshiShad'
         );
 
-        // Output confirmation HTML
-        echo "<h2>Email Verified</h2><p>You can now wait for support or call <strong>+1234567890012</strong>.</p>";
+        // ✅ Show confirmation in browser
+        echo "<h2>Email Verified</h2><p>Your email has been verified. Our support team will contact you shortly.</p><p>If needed, call <strong>+1234567890012</strong>.</p>";
     }
 
     public function second_layer_login()
@@ -1280,5 +1497,49 @@ class Apiv2 extends CI_Controller {
                 'second_layer_token' => $second_layer_token,
                 'expires_in' => 3600 // 1 hour
             ]));
+    }
+
+    private function _bad_request($message)
+    {
+        log_message('error', '❌ ' . $message);
+        return $this->output->set_content_type('application/json')->set_status_header(400)
+            ->set_output(json_encode(['status' => 'error', 'message' => $message]));
+    }
+
+    private function _conflict($message)
+    {
+        log_message('error', '❗ ' . $message);
+        return $this->output->set_content_type('application/json')->set_status_header(409)
+            ->set_output(json_encode(['status' => 'error', 'message' => $message]));
+    }
+
+    private function _server_error($message)
+    {
+        log_message('error', '❌ ' . $message);
+        return $this->output->set_content_type('application/json')->set_status_header(500)
+            ->set_output(json_encode(['status' => 'error', 'message' => $message]));
+    }
+
+    private function _upload_file($field_name, $upload_path)
+    {
+        $config = [
+            'upload_path'   => $upload_path,
+            'allowed_types' => 'jpg|jpeg|png|pdf|doc|docx',
+            'max_size'      => 2048,
+            'file_name'     => time() . '_' . $_FILES[$field_name]['name']
+        ];
+
+        if (!is_dir($upload_path)) {
+            mkdir($upload_path, 0755, true);
+        }
+
+        $this->load->library('upload', $config);
+        if ($this->upload->do_upload($field_name)) {
+            return $this->upload->data()['file_name'];
+        } else {
+            $error = strip_tags($this->upload->display_errors());
+            $this->_bad_request('File upload failed: ' . $error);
+            return false;
+        }
     }
 }

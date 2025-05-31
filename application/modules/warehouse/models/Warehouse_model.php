@@ -471,4 +471,14 @@ defined('BASEPATH') OR exit('No direct script access allowed');
             return $exists;
         }
 
+         public function get_warehouse_stock_by_product($product_id) 
+        {
+        $this->db->select('w.id as warehouse_id, w.name as warehouse_name, SUM(bm.available_quantity) as qty');
+        $this->db->from('batch_master bm');
+        $this->db->join('warehouse w', 'w.id = bm.warehouse_id', 'left');
+        $this->db->where('bm.product_id', $product_id);
+        $this->db->group_by('w.id');
+        return $this->db->get()->result_array();
+        }
+        
     }

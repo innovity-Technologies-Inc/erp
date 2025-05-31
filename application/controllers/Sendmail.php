@@ -7,16 +7,10 @@ class Sendmail extends CI_Controller {
     {
         parent::__construct();
 
-        // Check if session library is initialized
-        if (!isset($this->session)) {
-            log_message('debug', '📦 Session library not loaded. Attempting to load...');
-            $this->load->library('session');
-        } else {
-            log_message('debug', '🧠 CI session is already initialized.');
-        }
-
-        $this->load->library('email');
-        $this->config->load('email');
+        // Load necessary libraries
+        $this->load->library('session');  // ensures session is available
+        $this->load->library('email');    // ✅ email must be loaded here
+        $this->config->load('email');     // load email config from application/config/email.php
     }
 
     /**
@@ -26,24 +20,25 @@ class Sendmail extends CI_Controller {
      * @param string $verify_url
      * @return void
      */
-    public function send_verification($email, $verify_url)
+    public function send_verification($email, $verify_url, $from_name, $subject, $message)
     {
-        $this->email->from('noreply@paysenz.com', 'Deshi Shad');
+        $this->email->from('noreply@hostelevate.com', $from_name);
         $this->email->to($email);
-        $this->email->subject('Verify your email address');
-        $this->email->message("
-            <h3>Registration Successful!</h3>
-            <p>Thank you for registering. Please click below to verify your email:</p>
-            <p><a href='$verify_url' style='padding:10px 20px; background:#4CAF50; color:#fff; text-decoration:none;'>Verify Email</a></p>
-            <p>If you cannot click the button, copy and paste this URL into your browser:</p>
-            <p>$verify_url</p>
-        ");
+        $this->email->subject($subject);
+        
+        // Append the verification link to the message if not already included
+        if (strpos($message, $verify_url) === false) {
+            $message .= "<p>If the above button doesn't work, copy and paste this URL into your browser:</p><p>$verify_url</p>";
+        }
+
+        $this->email->message($message);
 
         if ($this->email->send()) {
-            echo "✅ Verification email sent.";
+            log_message('debug', "✅ Verification email sent to: $email");
         } else {
-            echo "❌ Email sending failed.";
-            print_r($this->email->print_debugger(['headers']));
+            $debug = $this->email->print_debugger(['headers']);
+            log_message('error', "❌ Failed to send verification email to: $email");
+            log_message('error', $debug);
         }
     }
 
@@ -53,37 +48,37 @@ class Sendmail extends CI_Controller {
      * @param string $email
      * @return void
      */
-    public function send_confirmation($email)
+    public function send_confirmation($email, $from_name, $subject, $message)
     {
         try {
             log_message('debug', "📨 Preparing confirmation email to: $email");
 
-            $this->email->from('noreply@paysenz.com', 'Deshi Shad');
+            $this->email->from('noreply@hostelevate.com', $from_name);
             $this->email->to($email);
-            $this->email->subject('Email Verified Successfully');
-            $this->email->message("
-                <h3>Email Verified!</h3>
-                <p>You have successfully verified your email.</p>
-                <p>Deshi Shad support team will now contact you to activate your account. You may also call us at <strong>+1234567890012</strong>.</p>
-            ");
+            $this->email->subject($subject);
+            $this->email->message($message);
 
             if ($this->email->send()) {
-                log_message('debug', "✅ Confirmation email sent successfully to: $email");
+                log_message('debug', "✅ Confirmation email sent to: $email");
             } else {
-                $error = $this->email->print_debugger(['headers']);
-                log_message('error', "❌ Confirmation email failed to: $email | Error: $error");
+                $debug = $this->email->print_debugger(['headers']);
+                log_message('error', "❌ Failed to send confirmation email to: $email");
+                log_message('error', $debug);
             }
         } catch (Exception $e) {
-            log_message('error', '❌ Exception while sending confirmation email: ' . $e->getMessage());
+            log_message('error', '❌ Exception in send_confirmation(): ' . $e->getMessage());
         }
     }
 
+    /**
+     * Test SMTP email config
+     */
     public function test_email()
     {
-        $this->email->from('noreply@paysenz.com', 'Test');
+        $this->email->from('noreply@hostelevate.com', 'HostElevate Test');
         $this->email->to('faizshiraji@gmail.com');
-        $this->email->subject('Test Mail');
-        $this->email->message('This is a test mail from CodeIgniter.');
+        $this->email->subject('Test Mail from Hostinger SMTP');
+        $this->email->message('✅ This is a test mail sent from CodeIgniter using Hostinger SMTP and valid sender authentication.');
 
         if ($this->email->send()) {
             echo "✅ Test mail sent.";
