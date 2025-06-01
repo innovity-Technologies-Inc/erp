@@ -417,72 +417,73 @@ class Api extends CI_Controller {
 
     }
 
-
    
     
-    public function product_list(){
-
-        $start = $this->input->get('start');
-        if($start){  
-            $start = ($start==1?0:$start);
-            $products = $this->Api_model->product_list($limit=15,$start);
-            
-        }else{
-            $products = $this->Api_model->searchproduct_list();
-        }
-
-
-        if (!empty($products)) {
-
-            foreach ($products as $k => $v) {
-
-                $s = $this->db->select('sum(quantity) as totalSalesQnty')->where('product_id',$v['product_id'])->get('invoice_details')->row();
-                $p = $this->db->select('sum(quantity) as totalBuyQnty')->where('product_id',$v['product_id'])->get('product_purchase_details')->row();
-                $stokqty = $p->totalBuyQnty-$s->totalSalesQnty;
-                
-                  
-                $config['cacheable'] = true; //boolean, the default is true
-                $config['cachedir'] = ''; //string, the default is application/cache/
-                $config['errorlog'] = ''; //string, the default is application/logs/
-                $config['quality'] = true; //boolean, the default is true
-                $config['size'] = '1024'; //interger, the default is 1024
-                $config['black'] = array(224, 255, 255); // array, default is array(255,255,255)
-                $config['white'] = array(70, 130, 180); // array, default is array(0,0,0)
-                $this->ciqrcode->initialize($config);
-                //Create QR code image create
-                $params['data'] = $products[$k]['product_id'];
-                $products[$k]['stock_qty']     = (!empty($stokqty)?$stokqty:0);
-                $params['level'] = 'H';
-                $params['size'] = 10;
-                $image_name = $products[$k]['product_id'] . '.png';
-                $params['savename'] = FCPATH . 'my-assets/image/qr/' . $image_name;
-                $this->ciqrcode->generate($params);
-
-                $products[$k]['product_info_bybarcode'] = $this->Api_model->product_info_bybarcode($products[$k]['product_id']);
-                $products[$k]['qr_code']  = base_url('my-assets/image/qr/'.$image_name);
-                $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/'.$products[$k]['product_id']);
-
+        public function product_list() 
+        {
+            $start = $this->input->get('start');
+            if ($start) {  
+                $start = ($start == 1 ? 0 : $start);
+                $products = $this->Api_model->product_list($limit = 15, $start);
+            } else {
+                $products = $this->Api_model->searchproduct_list();
             }
 
-        }
+            if (!empty($products)) {
+                // Load the Warehouse_model with alias
+                $this->load->model('warehouse/Warehouse_model', 'warehouse_model');
 
-        if(!empty($products)){
-            $json['response'] = array(
-                'status'       => 'ok',
-                'product_list' => $products,
-                'total_val'    => $this->db->count_all("product_information"),
-            );
-        }else{
-             $json['response'] = array(
-                    'status'  => 'error',
+                foreach ($products as $k => $v) {
+                    // Stock calculations
+                    $s = $this->db->select('SUM(quantity) AS totalSalesQnty')->where('product_id', $v['product_id'])->get('invoice_details')->row();
+                    $p = $this->db->select('SUM(quantity) AS totalBuyQnty')->where('product_id', $v['product_id'])->get('product_purchase_details')->row();
+                    $stokqty = $p->totalBuyQnty - $s->totalSalesQnty;
+
+                    // QR Code
+                    $config['cacheable'] = true;
+                    $config['cachedir'] = '';
+                    $config['errorlog'] = '';
+                    $config['quality'] = true;
+                    $config['size'] = '1024';
+                    $config['black'] = [224, 255, 255];
+                    $config['white'] = [70, 130, 180];
+                    $this->ciqrcode->initialize($config);
+
+                    $params['data'] = $products[$k]['product_id'];
+                    $products[$k]['stock_qty'] = (!empty($stokqty) ? $stokqty : 0);
+                    $params['level'] = 'H';
+                    $params['size'] = 10;
+                    $image_name = $products[$k]['product_id'] . '.png';
+                    $params['savename'] = FCPATH . 'my-assets/image/qr/' . $image_name;
+                    $this->ciqrcode->generate($params);
+
+                    // Barcode and QR Code URLs
+                    $products[$k]['product_info_bybarcode'] = $this->Api_model->product_info_bybarcode($products[$k]['product_id']);
+                    $products[$k]['qr_code']  = base_url('my-assets/image/qr/' . $image_name);
+                    $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $products[$k]['product_id']);
+
+                    // 👉 Warehouse-wise stock
+                    $warehouse_stock = $this->warehouse_model->get_warehouse_stock_by_product($products[$k]['product_id']);
+                    $products[$k]['warehouse_stock_qty'] = $warehouse_stock;
+                }
+            }
+
+            if (!empty($products)) {
+                $json['response'] = [
+                    'status'       => 'ok',
+                    'product_list' => $products,
+                    'total_val'    => $this->db->count_all("product_information"),
+                ];
+            } else {
+                $json['response'] = [
+                    'status'       => 'error',
                     'product_list' => [],
-                    'message' => 'No Product Found',
-                );
+                    'message'      => 'No Product Found',
+                ];
+            }
+
+            echo json_encode($json, JSON_UNESCAPED_UNICODE);
         }
-            
-        echo json_encode($json,JSON_UNESCAPED_UNICODE);
-            
-    }
 
   
     public function delete_product() {
@@ -1179,66 +1180,66 @@ class Api extends CI_Controller {
 
 
     public function customer_comission_by_email()
-{
-    $email = $this->input->get('email');
+    {
+        $email = $this->input->get('email');
 
-    log_message('debug', 'API Request: customer_comission_by_email | Email: ' . $email);
+        log_message('debug', 'API Request: customer_comission_by_email | Email: ' . $email);
 
-    if (empty($email)) {
-        log_message('error', 'API Error: Email parameter is missing');
+        if (empty($email)) {
+            log_message('error', 'API Error: Email parameter is missing');
 
-        echo json_encode([
-            'response' => [
-                'status'     => 'error',
-                'message'    => 'Email parameter is missing',
-                'permission' => 'read'
-            ]
-        ], JSON_UNESCAPED_UNICODE);
-        return;
-    }
-
-    $customerdata = $this->Api_model->get_customer_by_email($email);
-
-    if (!empty($customerdata) && isset($customerdata->customer_id)) {
-        $customer_id = $customerdata->customer_id;
-        log_message('debug', "Customer Found: ID = {$customer_id}");
-
-        // ✅ Fetch latest active commission
-        $commission = $this->db->select('commision_value, comission_type')
-                               ->from('customer_comission')
-                               ->where('customer_id', $customer_id)
-                               ->where('status', 1)
-                               ->order_by('id', 'DESC')
-                               ->limit(1)
-                               ->get()
-                               ->row();
-
-        if ($commission) {
-            log_message('debug', "Commission Found for Customer ID {$customer_id} | Value = {$commission->commision_value}, Type = {$commission->comission_type}");
-        } else {
-            log_message('debug', "No active commission found for Customer ID {$customer_id}");
+            echo json_encode([
+                'response' => [
+                    'status'     => 'error',
+                    'message'    => 'Email parameter is missing',
+                    'permission' => 'read'
+                ]
+            ], JSON_UNESCAPED_UNICODE);
+            return;
         }
 
-        $customerdata->commision_value = $commission ? $commission->commision_value : null;
-        $customerdata->comission_type  = $commission ? $commission->comission_type : null;
+        $customerdata = $this->Api_model->get_customer_by_email($email);
 
-        $json['response'] = [
-            'status'     => 'ok',
-            'customers'  => $customerdata,
-            'permission' => 'write'
-        ];
-    } else {
-        log_message('error', "No customer found with email: {$email}");
+        if (!empty($customerdata) && isset($customerdata->customer_id)) {
+            $customer_id = $customerdata->customer_id;
+            log_message('debug', "Customer Found: ID = {$customer_id}");
 
-        $json['response'] = [
-            'status'     => 'error',
-            'message'    => 'No customer found with this email',
-            'permission' => 'read'
-        ];
+            // ✅ Fetch latest active commission
+            $commission = $this->db->select('commision_value, comission_type')
+                                ->from('customer_comission')
+                                ->where('customer_id', $customer_id)
+                                ->where('status', 1)
+                                ->order_by('id', 'DESC')
+                                ->limit(1)
+                                ->get()
+                                ->row();
+
+            if ($commission) {
+                log_message('debug', "Commission Found for Customer ID {$customer_id} | Value = {$commission->commision_value}, Type = {$commission->comission_type}");
+            } else {
+                log_message('debug', "No active commission found for Customer ID {$customer_id}");
+            }
+
+            $customerdata->commision_value = $commission ? $commission->commision_value : null;
+            $customerdata->comission_type  = $commission ? $commission->comission_type : null;
+
+            $json['response'] = [
+                'status'     => 'ok',
+                'customers'  => $customerdata,
+                'permission' => 'write'
+            ];
+        } else {
+            log_message('error', "No customer found with email: {$email}");
+
+            $json['response'] = [
+                'status'     => 'error',
+                'message'    => 'No customer found with this email',
+                'permission' => 'read'
+            ];
+        }
+
+        echo json_encode($json, JSON_UNESCAPED_UNICODE);
     }
-
-    echo json_encode($json, JSON_UNESCAPED_UNICODE);
-}
 
     public function customer_search_by_email() {
         $email = $this->input->get('email');
@@ -3152,9 +3153,6 @@ class Api extends CI_Controller {
 
     }
 
-   
-
-
 
     public function set_paymentcheckout_data(){
 
@@ -3243,6 +3241,34 @@ class Api extends CI_Controller {
         }
        
         echo json_encode($json,JSON_UNESCAPED_UNICODE);  
+    }
+
+
+    public function warehouse_list()
+    {
+        log_message('debug', 'API Request: retrieve_warehouse_data');
+
+        // Load the warehouse model from the module with an alias
+        $this->load->model('warehouse/Warehouse_model', 'warehouse_model');
+
+        // Get all active warehouses
+        $warehouses = $this->warehouse_model->get_all_warehouses_by_status();
+
+        if ($warehouses) {
+            log_message('debug', 'Warehouses retrieved: ' . json_encode($warehouses));
+            $json['response'] = [
+                'status'     => 'ok',
+                'warehouses' => $warehouses
+            ];
+        } else {
+            log_message('error', 'No active warehouses found via API.');
+            $json['response'] = [
+                'status'  => 'error',
+                'message' => 'No active warehouses found.'
+            ];
+        }
+
+        echo json_encode($json, JSON_UNESCAPED_UNICODE);
     }
 
 

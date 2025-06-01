@@ -9,26 +9,38 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Product_model extends CI_Model {
 
-    public function get_category_level($category_id, $level = 1) {
-        if ($category_id == 0 || empty($category_id)) {
-            return 1; // Root level
-        }
-    
-        // Fetch parent ID
-        $this->db->select('parent_id');
-        $this->db->from('product_category');
-        $this->db->where('category_id', $category_id);
-        $query = $this->db->get();
-    
-        if ($query->num_rows() > 0) {
-            $parent_id = $query->row()->parent_id;
-    
-            // If parent exists, recursively check the level
-            if (!empty($parent_id)) {
-                return $this->get_category_level($parent_id, $level + 1);
+        public function get_category_level($category_id) {
+        $level = 1;
+        $visited = [];
+
+        while (!empty($category_id)) {
+            // Prevent circular reference
+            if (in_array($category_id, $visited)) {
+                log_message('error', "Circular category reference detected at ID: $category_id");
+                break;
+            }
+
+            $visited[] = $category_id;
+
+            $this->db->select('parent_id');
+            $this->db->from('product_category');
+            $this->db->where('category_id', $category_id);
+            $query = $this->db->get();
+
+            if ($query->num_rows() > 0) {
+                $parent_id = $query->row()->parent_id;
+
+                if (empty($parent_id)) {
+                    break;
+                }
+
+                $category_id = $parent_id;
+                $level++;
+            } else {
+                break; // no parent found
             }
         }
-    
+
         return $level;
     }
 
