@@ -984,17 +984,13 @@ class Apiv2 extends CI_Controller {
             $start_time = microtime(true);
             log_message('debug', 'product_search() initiated');
 
+            // ✅ First-layer token check
             $user = $this->authenticate_token();
             if (!$user) {
-                return $this->output
-                    ->set_content_type('application/json')
-                    ->set_status_header(401)
-                    ->set_output(json_encode([
-                        'status' => 'error',
-                        'message' => 'Unauthorized. Please provide a valid access token.'
-                    ]));
+                return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
             }
 
+            // ✅ Second-layer token (optional)
             $second_token = $this->input->get_request_header('X-Second-Token');
             $view_sensitive_data = false;
             if ($second_token) {
@@ -1007,9 +1003,10 @@ class Apiv2 extends CI_Controller {
                 }
             }
 
+            // ✅ Input decoding and validation
             $input = json_decode(file_get_contents('php://input'), true);
             if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new Exception('Invalid JSON input: ' . json_last_error_msg());
+                return $this->_bad_request('Invalid JSON input: ' . json_last_error_msg());
             }
 
             $params = [
@@ -1023,32 +1020,20 @@ class Apiv2 extends CI_Controller {
             $page   = isset($input['page']) ? (int)$input['page'] : 1;
             $offset = ($page - 1) * $limit;
 
-            $this->load->library('ProductSearchService');
+            // ✅ Search logic
+            $total_count = $this->countProductSearchResults($params);
+            $products = $this->getProductSearchResults($params, $limit, $offset);
 
-            // For total count (no limit)
-            $total_query = $this->productsearchservice->buildProductSearchQuery($params);
-            $total_count = $total_query->count_all_results();
+            log_message('debug', 'Fetched product count: ' . count($products));
 
-            // For paginated data (limit/offset)
-            $queryBuilder = $this->productsearchservice->buildProductSearchQuery($params);
-            $queryBuilder->limit($limit, $offset);
-            log_message('debug', 'Final SQL: ' . $queryBuilder->get_compiled_select());
-            $query = $queryBuilder->get();
-
-            if (!$query) {
-                throw new Exception('Database query failed: ' . $this->db->error()['message']);
-            }
-
-            $products = $query->result_array();
-
-            // Map category names
+            // ✅ Map categories
             $category_map = [];
             $categories = $this->db->select('category_id, category_name')->get('product_category')->result();
             foreach ($categories as $cat) {
                 $category_map[$cat->category_id] = $cat->category_name;
             }
 
-            // Process products
+            // ✅ Process result
             foreach ($products as $k => $v) {
                 if (!empty($products[$k]['image'])) {
                     $products[$k]['image'] = base_url(str_replace('./', '', $products[$k]['image']));
@@ -1068,32 +1053,105 @@ class Apiv2 extends CI_Controller {
 
             $execution_time = microtime(true) - $start_time;
 
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_output(json_encode([
-                    'status' => 'success',
-                    'total_count' => $total_count,
-                    'matched_count' => count($products),
-                    'page' => $page,
-                    'page_count' => ceil($total_count / $limit),
-                    'execution_time' => round($execution_time, 4),
-                    'limit' => $limit,
-                    'result' => $products
-                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            // ✅ Return formatted response
+            return $this->_success([
+                'total_count'    => $total_count,
+                'matched_count'  => count($products),
+                'page'           => $page,
+                'page_count'     => ceil($total_count / $limit),
+                'execution_time' => round($execution_time, 4),
+                'limit'          => $limit,
+                'result'         => $products
+            ], 'Product search completed successfully.');
 
         } catch (Exception $e) {
-            log_message('error', 'product_search() failed: ' . $e->getMessage());
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(500)
-                ->set_output(json_encode([
-                    'status' => 'error',
-                    'message' => 'Internal Server Error',
-                    'error_detail' => $e->getMessage()
-                ]));
+            return $this->_server_error('product_search() failed: ' . $e->getMessage());
         }
     }
 
+    public function buildProductSearchQuery(array $params)
+    {
+        $this->db->from('product_information');
+
+        if (!empty($params['product_id'])) {
+            $this->db->where('product_information.product_id', $params['product_id']);
+        }
+
+        if (!empty($params['product_name'])) {
+            $this->db->like('product_information.product_name', $params['product_name']);
+        }
+
+        if (!empty($params['category_id'])) {
+            $this->db->where('product_information.category_id', $params['category_id']);
+        }
+
+        if (!is_null($params['min_price'])) {
+            $this->db->where('product_information.price >=', $params['min_price']);
+        }
+
+        if (!is_null($params['max_price'])) {
+            $this->db->where('product_information.price <=', $params['max_price']);
+        }
+
+        return clone $this->db; // Optional: clone here to avoid mutation if reused multiple times
+    }
+
+    // ✅ Result query logic
+    public function getProductSearchResults($params, $limit, $offset)
+    {
+        $this->db->from('product_information');
+
+        if (!empty($params['product_id'])) {
+            $this->db->where('product_information.product_id', $params['product_id']);
+        }
+
+        if (!empty($params['product_name'])) {
+            $this->db->like('product_information.product_name', $params['product_name']);
+        }
+
+        if (!empty($params['category_id'])) {
+            $this->db->where('product_information.category_id', $params['category_id']);
+        }
+
+        if (!is_null($params['min_price'])) {
+            $this->db->where('product_information.price >=', $params['min_price']);
+        }
+
+        if (!is_null($params['max_price'])) {
+            $this->db->where('product_information.price <=', $params['max_price']);
+        }
+
+        $this->db->limit($limit, $offset);
+        return $this->db->get()->result_array();
+    }
+
+    // ✅ Count query logic
+    public function countProductSearchResults($params)
+    {
+        $this->db->from('product_information');
+
+        if (!empty($params['product_id'])) {
+            $this->db->where('product_information.product_id', $params['product_id']);
+        }
+
+        if (!empty($params['product_name'])) {
+            $this->db->like('product_information.product_name', $params['product_name']);
+        }
+
+        if (!empty($params['category_id'])) {
+            $this->db->where('product_information.category_id', $params['category_id']);
+        }
+
+        if (!is_null($params['min_price'])) {
+            $this->db->where('product_information.price >=', $params['min_price']);
+        }
+
+        if (!is_null($params['max_price'])) {
+            $this->db->where('product_information.price <=', $params['max_price']);
+        }
+
+        return $this->db->count_all_results(); // executes and resets
+    }
 
     private function get_all_related_category_ids($category_id)
     {
