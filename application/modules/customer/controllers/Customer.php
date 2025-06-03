@@ -55,7 +55,7 @@ class Customer extends MX_Controller {
         $postData = $this->input->post();
         $data = $this->customer_model->getCreditCustomerList($postData);
         echo json_encode($data);
-    } 
+    }
 
     //Paid Customer list. The customer who will pay 100%.
     public function paysenz_paid_customer() {
@@ -65,7 +65,6 @@ class Customer extends MX_Controller {
         $data["customer_dropdown"] = $this->customer_model->paysenz_paid_customer_dropdown();
         $data['all_customer']      = $this->customer_model->paysenz_all_paid_customer(); 
         echo modules::run('template/layout', $data);
-        
     }
     
      public function paysenz_CheckPaidCustomerList(){

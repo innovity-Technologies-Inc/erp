@@ -599,18 +599,23 @@ public function getCreditCustomerList($postData=null){
       ->result();
   }
 
-  public function update($data = array())
+    public function update($data = array())
     {
+        log_message('debug', '[CustomerUpdate] Starting customer update process');
+
         if (!array_key_exists('status', $data)) {
             $data['status'] = $this->input->post('status', TRUE);
         }
 
         $customer_id = $data["customer_id"];
+        log_message('debug', "[CustomerUpdate] Updating customer_id={$customer_id}");
 
         $existing_customer = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row();
         $existing_status = $existing_customer->status;
         $existing_email  = $existing_customer->customer_email;
         $existing_name   = $existing_customer->customer_name;
+
+        log_message('debug', "[CustomerUpdate] Existing status={$existing_status}, name={$existing_name}, email={$existing_email}");
 
         $this->db->select('sales_permit');
         $this->db->from('customer_information');
@@ -618,6 +623,8 @@ public function getCreditCustomerList($postData=null){
         $existing = $this->db->get()->row();
 
         if (!empty($_FILES['sales_permit']['name'])) {
+            log_message('debug', '[CustomerUpdate] New sales permit file uploaded');
+
             $config['upload_path']   = './uploads/sales_permits/';
             $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
             $config['max_size']      = 2048;
@@ -628,53 +635,47 @@ public function getCreditCustomerList($postData=null){
             if ($this->upload->do_upload('sales_permit')) {
                 $upload_data = $this->upload->data();
                 $data['sales_permit'] = $upload_data['file_name'];
+                log_message('debug', '[CustomerUpdate] File uploaded successfully: ' . $data['sales_permit']);
 
                 if (!empty($existing->sales_permit)) {
                     $old_file = './uploads/sales_permits/' . $existing->sales_permit;
                     if (file_exists($old_file)) {
                         unlink($old_file);
+                        log_message('debug', '[CustomerUpdate] Old sales permit file removed: ' . $existing->sales_permit);
                     }
                 }
             } else {
+                log_message('error', '[CustomerUpdate] File upload error: ' . $this->upload->display_errors());
                 $this->session->set_flashdata('exception', $this->upload->display_errors());
                 redirect($_SERVER['HTTP_REFERER']);
                 return false;
             }
         } else {
             $data['sales_permit'] = $existing->sales_permit;
+            log_message('debug', '[CustomerUpdate] No new file uploaded. Using existing sales permit.');
         }
 
-        $this->db->where('customer_id', $customer_id)
-                ->update("customer_information", $data);
+        $this->db->where('customer_id', $customer_id)->update("customer_information", $data);
+        log_message('debug', '[CustomerUpdate] customer_information updated');
 
-        $old_headnam = $customer_id . '-' . $this->input->post("old_name");
-        $c_acc = $customer_id . '-' . $data["customer_name"];
-        $sub_acc = ['name' => $data['customer_name']];
-
-        $this->db->where('referenceNo', $customer_id)
-                ->where('subTypeId', 3)
-                ->update('acc_subcode', $sub_acc);
+        $this->db->where('referenceNo', $customer_id)->where('subTypeId', 3)->update('acc_subcode', ['name' => $data['customer_name']]);
+        log_message('debug', '[CustomerUpdate] acc_subcode updated with name=' . $data['customer_name']);
 
         if (!empty($this->input->post('comission_type')) || !empty($this->input->post('comission_value')) || !empty($this->input->post('comission_note'))) {
-            if (!empty($customer_id)) {
-                $this->db->where('customer_id', $customer_id)
-                        ->where('status', 1)
-                        ->update('customer_comission', ['status' => 0]);
+            $this->db->where('customer_id', $customer_id)->where('status', 1)->update('customer_comission', ['status' => 0]);
+            $commission_data = [
+                'customer_id'     => $customer_id,
+                'comission_type'  => $this->input->post('comission_type', true),
+                'commision_value' => $this->input->post('comission_value', true),
+                'notes'           => $this->input->post('comission_note', true),
+                'create_by'       => $this->session->userdata('id'),
+                'status'          => 1,
+                'create_date'     => date('Y-m-d H:i:s'),
+                'update_date'     => date('Y-m-d H:i:s'),
+            ];
 
-                $commission_data = [
-                    'customer_id'     => $customer_id,
-                    'comission_type'  => $this->input->post('comission_type', true),
-                    'commision_value' => $this->input->post('comission_value', true),
-                    'notes'           => $this->input->post('comission_note', true),
-                    'create_by'       => $this->session->userdata('id'),
-                    'status'          => 1,
-                    'create_date'     => date('Y-m-d H:i:s'),
-                    'update_date'     => date('Y-m-d H:i:s'),
-                ];
-
-                $this->db->insert('customer_comission', $commission_data);
-                log_message('info', "Inserted new commission for customer_id={$customer_id} and set all previous to status=0");
-            }
+            $this->db->insert('customer_comission', $commission_data);
+            log_message('info', "[CustomerUpdate] Inserted new commission and archived old ones for customer_id={$customer_id}");
         }
 
         if ($existing_status != $data['status']) {
@@ -685,10 +686,11 @@ public function getCreditCustomerList($postData=null){
                 default => 'Unknown',
             };
 
+            log_message('debug', "[CustomerUpdate] Status change detected: {$existing_status} → {$data['status']}");
+
             $this->load->library('sendmail_lib');
 
-            // ✅ Admin Email
-            $admin_email = 'faizshiraji@gmail.com';
+            // Admin Email
             $admin_subject = "Customer Status Updated";
             $admin_message = "
                 <h3>Status Change Notification</h3>
@@ -696,63 +698,47 @@ public function getCreditCustomerList($postData=null){
                 <p><strong>New Status:</strong> {$status_text}</p>
             ";
             $this->sendmail_lib->send(
-                $admin_email,
+                'faizshiraji@gmail.com',
                 $admin_subject,
                 $admin_message,
                 'noreply@hostelevate.com',
                 'DeshiShad Alert System'
             );
+            log_message('debug', "[CustomerUpdate] Admin email sent for customer_id={$customer_id}");
 
-            // ✅ Customer Email & Notification
             switch ((int)$data['status']) {
                 case 0:
                     $customer_subject = "Your DeshiShad Account is Inactive";
-                    $customer_message = "
-                        <h3>Dear {$existing_name},</h3>
-                        <p>Your DeshiShad account has been marked as <strong>Inactive</strong> by the admin team.</p>
-                        <p>Please contact DeshiShad Support or your Account Manager if you believe this is a mistake or need further clarification.</p>
-                        <p>Thank you for staying with DeshiShad.</p>";
+                    $customer_message = "<h3>Dear {$existing_name},</h3><p>Your DeshiShad account has been marked as <strong>Inactive</strong> by the admin team.</p><p>Please contact support for details.</p>";
                     $notification_body = "Your account has been set to Inactive.";
                     break;
-
                 case 1:
                     $customer_subject = "Your DeshiShad Account is Activated";
-                    $customer_message = "
-                        <h3>Dear {$existing_name},</h3>
-                        <p>Your DeshiShad Merchant Account has been <strong>activated</strong> by our admin team.</p>
-                        <p>You can now log in using your credentials. Please enjoy using DeshiShad!</p>
-                        <p>If you have any queries regarding the DeshiShad portal, please contact our support team at <strong>+1110982730701</strong>.</p>";
+                    $customer_message = "<h3>Dear {$existing_name},</h3><p>Your DeshiShad Merchant Account has been <strong>activated</strong>. You can now log in.</p>";
                     $notification_body = "Welcome! Your account has been activated.";
                     break;
-
                 case 2:
-                    $customer_subject = "Your DeshiShad Account is Deleted by Admin";
-                    $customer_message = "
-                        <h3>Dear {$existing_name},</h3>
-                        <p>Your DeshiShad account has been <strong>deleted</strong> by the admin.</p>
-                        <p>If you need any clarification, please reach out to DeshiShad IT Admin or your Account Manager.</p>
-                        <p>Thank you for being with DeshiShad.</p>";
+                    $customer_subject = "Your DeshiShad Account is Deleted";
+                    $customer_message = "<h3>Dear {$existing_name},</h3><p>Your DeshiShad account has been <strong>deleted</strong> by the admin.</p>";
                     $notification_body = "Your account has been deleted.";
                     break;
-
                 default:
                     $customer_subject = "Your Account Status Updated";
-                    $customer_message = "
-                        <h3>Dear {$existing_name},</h3>
-                        <p>Your account status has been updated to: <strong>{$status_text}</strong>.</p>
-                        <p>If you have any questions, please contact support at <a href='mailto:support@hostelevate.com'>support@hostelevate.com</a>.</p>";
+                    $customer_message = "<h3>Dear {$existing_name},</h3><p>Your account status is now: <strong>{$status_text}</strong>.</p>";
                     $notification_body = "Your account status has changed.";
-                    break;
             }
 
-            // ✅ Send FCM Notification
-            $this->load->library('fcm_lib');
             $fcmToken = $existing_customer->fcm_token ?? null;
             if (!empty($fcmToken)) {
-                $this->fcm_lib->sendNotification($fcmToken, $customer_subject, $notification_body);
+                $this->load->helper('firebase');
+                log_message('debug', "[CustomerUpdate] Sending FCM to token={$fcmToken}");
+
+                $fcm_response = send_firebase_notification($fcmToken, $customer_subject, $notification_body);
+                log_message('info', "[FCM] Notification sent to {$existing_email}, response: " . json_encode($fcm_response));
+            } else {
+                log_message('info', "[FCM] No FCM token found for customer_id={$customer_id}");
             }
 
-            // ✅ Send Email
             $this->sendmail_lib->send(
                 $existing_email,
                 $customer_subject,
@@ -761,9 +747,10 @@ public function getCreditCustomerList($postData=null){
                 'DeshiShad'
             );
 
-            log_message('info', "📤 Status update emails sent to admin and customer_id={$customer_id}");
+            log_message('info', "[CustomerUpdate] Customer email sent for customer_id={$customer_id}");
         }
 
+        log_message('debug', "[CustomerUpdate] Update process complete for customer_id={$customer_id}");
         return true;
     }
 
