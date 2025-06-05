@@ -1476,69 +1476,87 @@ class Apiv2 extends CI_Controller {
 
     public function second_layer_login()
     {
-        // Step 1: Get the JSON input
-        $input = json_decode(trim(file_get_contents("php://input")), true);
+        try {
+            // ✅ First-layer token authentication (Bearer token)
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->_unauthorized('Unauthorized. Bearer token required for 2nd layer login.');
+            }
 
-        // Step 2: Validate the input
-        if (!isset($input['username']) || !isset($input['password'])) {
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(400)
-                ->set_output(json_encode([
-                    'status' => 'error',
-                    'message' => 'Username and password are required.'
-                ]));
-        }
+            // ✅ Parse JSON input
+            $input_raw = file_get_contents("php://input");
+            log_message('debug', '🔍 Raw second_layer_login input: ' . $input_raw);
+            $input = json_decode(trim($input_raw), true);
 
-        $username = $input['username'];
-        $password = $input['password'];
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return $this->_bad_request('Invalid JSON input: ' . json_last_error_msg());
+            }
 
-        // Step 3: Check if user exists and status is Active (1)
-        $user = $this->db->select('id, customer_id, password, status')
-                        ->from('customer_auth')
-                        ->where('username', $username)
-                        ->where('status', 1) // Only Active status
-                        ->get()
-                        ->row();
+            // ✅ Required fields validation
+            if (empty($input['username']) || empty($input['password']) || empty($input['fcm_token'])) {
+                return $this->_bad_request('Username, password, and fcm_token are required.');
+            }
 
-        if (!$user) {
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(401)
-                ->set_output(json_encode([
-                    'status' => 'error',
-                    'message' => 'Invalid credentials or account not active.'
-                ]));
-        }
+            $username   = trim($input['username']);
+            $password   = trim($input['password']);
+            $fcm_token  = trim($input['fcm_token']);
 
-        // Step 4: Verify Password
-        if (!password_verify($password, $user->password)) {
-            return $this->output
-                ->set_content_type('application/json')
-                ->set_status_header(401)
-                ->set_output(json_encode([
-                    'status' => 'error',
-                    'message' => 'Invalid password.'
-                ]));
-        }
+            // ✅ Lookup in customer_auth
+            $auth_user = $this->db->select('id, customer_id, password, status')
+                ->from('customer_auth')
+                ->where('username', $username)
+                ->where('status', 1)
+                ->get()
+                ->row();
 
-        // Step 5: Generate the 2nd Layer Token (JWT)
-        $second_layer_token = JWT::encode([
-            'iat' => time(),
-            'exp' => time() + 3600, // 1 hour expiry
-            'customer_id' => $user->customer_id,
-            'username'    => $username,
-        ], $this->jwt_key, $this->jwt_algo);
+            if (!$auth_user) {
+                return $this->_unauthorized('Invalid credentials or account not active.');
+            }
 
-        // Step 6: Respond with the second layer token
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_output(json_encode([
-                'status' => 'success',
-                'message' => '2nd Layer Login Successful',
+            // ✅ Password verify
+            if (!password_verify($password, $auth_user->password)) {
+                return $this->_unauthorized('Invalid password.');
+            }
+
+            // ✅ Generate 2nd layer token (JWT)
+            $payload = [
+                'iat'         => time(),
+                'exp'         => time() + 3600,
+                'customer_id' => $auth_user->customer_id,
+                'username'    => $username,
+            ];
+            $second_layer_token = JWT::encode($payload, $this->jwt_key, $this->jwt_algo);
+
+            // ✅ Store FCM token
+            $this->db->where('id', $auth_user->id)->update('customer_auth', [
+                'fcm_token'  => $fcm_token,
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+            if ($this->db->affected_rows() === 0) {
+                log_message('warning', '⚠️ FCM token update had no effect for user ID: ' . $auth_user->id);
+            }
+
+            // ✅ Send push notification
+            $this->load->library('Fcm_lib');
+            $this->fcm_lib->sendNotification(
+                $fcm_token,
+                'Welcome!',
+                'You have successfully logged in to the 2nd layer.'
+            );
+
+            // ✅ Response
+            return $this->_success([
                 'second_layer_token' => $second_layer_token,
-                'expires_in' => 3600 // 1 hour
-            ]));
+                'fcm_token'          => $fcm_token,
+                'expires_in'         => 3600
+            ], '2nd Layer Login Successful');
+
+        } catch (ExpiredException $e) {
+            return $this->_unauthorized('Bearer token expired. Please login again.');
+        } catch (Exception $e) {
+            log_message('error', '❌ second_layer_login() failed: ' . $e->getMessage());
+            return $this->_server_error('Something went wrong during 2nd layer login.');
+        }
     }
 
     private function _bad_request($message)
