@@ -1057,6 +1057,109 @@ class Api extends CI_Controller {
     }
 
 
+    public function customer_password_change()
+    {
+        try {
+            // ✅ Step 1: Parse and Validate Input
+            $input = json_decode(trim(file_get_contents("php://input")), true);
+            log_message('debug', '[customer_password_change_no_auth] 🔐 Input: ' . json_encode($input));
+
+            if (!isset($input['customer_id']) || !isset($input['old_password']) || !isset($input['new_password'])) {
+                return $this->_bad_request('customer_id, old_password, and new_password are required.');
+            }
+
+            $customer_id = (int) $input['customer_id'];
+            $old_password = trim($input['old_password']);
+            $new_password = trim($input['new_password']);
+
+            if (strlen($new_password) < 6) {
+                return $this->_bad_request('New password must be at least 6 characters long.');
+            }
+
+            // ✅ Step 2: Verify old password
+            $auth = $this->db->get_where('customer_auth', ['customer_id' => $customer_id])->row();
+            if (!$auth || !password_verify($old_password, $auth->password)) {
+                return $this->_bad_request('Old password is incorrect.');
+            }
+
+            // ✅ Step 3: Hash and save new password
+            $hashed_new_password = password_hash($new_password, PASSWORD_BCRYPT);
+            $this->db->where('customer_id', $customer_id)->update('customer_auth', [
+                'password'    => $hashed_new_password,
+                'updated_at'  => date('Y-m-d H:i:s')
+            ]);
+
+            log_message('debug', "[customer_password_change_no_auth] 🔁 Password updated for customer_id={$customer_id}");
+
+            // ✅ Step 4: Fetch customer info
+            $customer_info = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row();
+            $customer_name = $customer_info->customer_name ?? 'Unknown';
+            $customer_email = $customer_info->customer_email ?? '';
+
+            // ✅ Step 5: Load SMTP config
+            $smtp = $this->db->get('email_config')->row_array();
+            if (empty($smtp)) {
+                log_message('error', '[customer_password_change_no_auth] ❌ SMTP config missing');
+            }
+
+            $this->load->library('Sendmail_lib');
+
+            // ✅ Step 6: Notify Admins
+            $admin_subject = "🔐 Password Changed Without Auth - {$customer_name}";
+            $admin_message = "
+                <h4>Password Change (Unauthenticated)</h4>
+                <p><strong>Name:</strong> {$customer_name}</p>
+                <p><strong>Email:</strong> {$customer_email}</p>
+                <p><strong>Customer ID:</strong> {$customer_id}</p>
+                <p><strong>Time:</strong> " . date('Y-m-d H:i:s') . "</p>
+            ";
+
+            $admins = $this->db->select('username')->from('user_login')->where(['user_type' => 1, 'status' => 1])->get();
+            foreach ($admins->result() as $admin) {
+                if (filter_var($admin->username, FILTER_VALIDATE_EMAIL)) {
+                    $this->sendmail_lib->send(
+                        $admin->username,
+                        $admin_subject,
+                        $admin_message,
+                        $smtp['smtp_user'],
+                        'DeshiShad Alert System'
+                    );
+                }
+            }
+
+            // ✅ Step 7: Notify Customer
+            if (!empty($customer_email)) {
+                $customer_subject = "🛡️ Your Password Has Been Updated";
+                $customer_message = "
+                    <h3>Hello {$customer_name},</h3>
+                    <p>Your account password has been successfully updated.</p>
+                    <p><strong>New Password:</strong> {$new_password}</p>
+                    <p>If you did not make this change, please contact our support immediately.</p>
+                ";
+
+                $this->sendmail_lib->send(
+                    $customer_email,
+                    $customer_subject,
+                    $customer_message,
+                    $smtp['smtp_user'],
+                    'DeshiShad Support'
+                );
+            }
+
+            return $this->output
+                ->set_content_type('application/json')
+                ->set_status_header(200)
+                ->set_output(json_encode([
+                    'status'  => 'success',
+                    'message' => 'Password updated without authentication and notifications sent.'
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+
+        } catch (Exception $e) {
+            log_message('error', '[customer_password_change_no_auth] ❌ Exception: ' . $e->getMessage());
+            return $this->_server_error('Unexpected server error: ' . $e->getMessage());
+        }
+    }
+
 
     public function credit_customers(){
 
@@ -2220,7 +2323,7 @@ class Api extends CI_Controller {
             'invoice_id' => $invoice_id,
             'message'    => 'Invoice created successfully via API'
         ]);
-    }   
+    }
         
     
     

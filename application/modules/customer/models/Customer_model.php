@@ -156,7 +156,7 @@ class Customer_model extends CI_Model {
     }
 
 
-    public function getCustomerList($postData = null)
+public function getCustomerList($postData = null)
 {
     log_message('error', '========= getCustomerList() START =========');
 
@@ -166,17 +166,6 @@ class Customer_model extends CI_Model {
     $customer_id = $this->input->post('customer_id');
     $custom_data = $this->input->post('customfiled');
 
-    log_message('error', 'Received customer_id: ' . json_encode($customer_id));
-    log_message('error', 'Received customfiled: ' . json_encode($custom_data));
-
-    if (!empty($custom_data)) {
-        $cus_data = [''];
-        foreach ($custom_data as $cusd) {
-            $cus_data[] = $cusd;
-        }
-        log_message('error', 'Processed custom_data: ' . json_encode($cus_data));
-    }
-
     $draw = (int) $postData['draw'];
     $start = (int) $postData['start'];
     $rowperpage = (int) $postData['length'];
@@ -185,28 +174,35 @@ class Customer_model extends CI_Model {
     $columnSortOrder = $postData['order'][0]['dir'];
     $searchValue = $postData['search']['value'];
 
-    log_message('error', "Pagination info: start=$start, length=$rowperpage");
-    log_message('error', "Ordering: column=$columnName, direction=$columnSortOrder");
-    log_message('error', "Search value: $searchValue");
-
-    $this->db->select('count(*) as allcount');
+    // 🔢 Count total records (unfiltered)
+    $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
     $this->db->from('customer_information a');
     $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
-    $this->db->group_by('a.customer_id');
-    $totalRecords = $this->db->get()->num_rows();
-    log_message('error', 'Total unfiltered records: ' . $totalRecords);
+    $totalRecords = $this->db->get()->row()->allcount ?? 0;
 
+    // 🔍 Count total filtered records (for pagination)
+    $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
+    $this->db->from('customer_information a');
+    $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
+    if (!empty($searchValue)) {
+        $this->db->group_start();
+        $this->db->like('a.customer_name', $searchValue);
+        $this->db->or_like('a.customer_mobile', $searchValue);
+        $this->db->or_like('a.customer_email', $searchValue);
+        $this->db->or_like('a.sales_permit_number', $searchValue);
+        $this->db->group_end();
+    }
+    $totalFilteredRecords = $this->db->get()->row()->allcount ?? 0;
+
+    // 📦 Fetch paginated data
     $this->db->select("
         a.customer_id, 
         a.customer_name, 
-        a.customer_address, 
         a.customer_mobile, 
         a.customer_email, 
         a.email_address AS vat_no, 
         a.sales_permit_number, 
         a.sales_permit, 
-        a.zip, 
-        a.country, 
         a.status, 
         (
             COALESCE((SELECT SUM(Debit - Credit) FROM acc_transaction WHERE subCode = s.id AND subType = 3 AND IsAppove = 1), 0) 
@@ -223,28 +219,23 @@ class Customer_model extends CI_Model {
         $this->db->like('a.customer_name', $searchValue);
         $this->db->or_like('a.customer_mobile', $searchValue);
         $this->db->or_like('a.customer_email', $searchValue);
-        $this->db->or_like('a.zip', $searchValue);
-        $this->db->or_like('a.country', $searchValue);
-        $this->db->or_like('a.sales_permit_number', $searchValue); // ✅ SP No search enabled
+        $this->db->or_like('a.sales_permit_number', $searchValue);
         $this->db->group_end();
     }
 
     $this->db->group_by('a.customer_id');
     $this->db->order_by($columnName, $columnSortOrder);
-
     if ($rowperpage !== -1) {
-        log_message('error', "Applying LIMIT: $rowperpage OFFSET: $start");
         $this->db->limit($rowperpage, $start);
     }
 
     $records = $this->db->get()->result();
-    log_message('error', 'Records fetched from DB: ' . count($records));
 
     $data = [];
-    $sl = 1;
+    $sl = $start + 1;
+    $base_url = base_url();
     foreach ($records as $record) {
         $button = '';
-        $base_url = base_url();
 
         if ($this->permission1->method('manage_customer', 'update')->access()) {
             $button .= '<a href="' . $base_url . 'edit_customer/' . $record->customer_id . '" class="btn btn-info btn-xs m-b-5 custom_btn" title="Update"><i class="pe-7s-note"></i></a>';
@@ -256,15 +247,12 @@ class Customer_model extends CI_Model {
         $data[] = [
             'sl'                  => $sl++,
             'customer_name'       => $record->customer_name,
-            'address'             => $record->customer_address,
             'mobile'              => $record->customer_mobile,
             'email'               => $record->customer_email,
             'vat_no'              => $record->vat_no,
             'sales_permit_number' => $record->sales_permit_number,
             'sales_permit'        => !empty($record->sales_permit) ? '<a href="' . base_url('uploads/sales_permits/' . $record->sales_permit) . '" target="_blank">View File</a>' : 'N/A',
-            'zip'                 => $record->zip,
-            'country'             => $record->country,
-            'balance'             => (!empty($record->balance) ? $record->balance : 0),
+            'balance'             => number_format((float) $record->balance, 2),
             'status'              => $record->status,
             'button'              => $button,
         ];
@@ -273,7 +261,7 @@ class Customer_model extends CI_Model {
     $response = [
         "draw" => $draw,
         "iTotalRecords" => $totalRecords,
-        "iTotalDisplayRecords" => count($records),
+        "iTotalDisplayRecords" => $totalFilteredRecords,
         "aaData" => $data
     ];
 
@@ -589,15 +577,15 @@ public function getCreditCustomerList($postData=null){
 
     public function paysenz_all_paid_customer(){
 
-   return $data =  $this->db->select("a.*,b.HeadCode,((select ifnull(sum(Debit),0) from acc_transaction where COAID= `b`.`HeadCode`)-(select ifnull(sum(Credit),0) from acc_transaction where COAID= `b`.`HeadCode`)) as balance")
-      ->from('customer_information a')
-      ->join('acc_coa b','a.customer_id = b.customer_id','left')
-      ->having('balance <= 0')
-      ->group_by('a.customer_id')
-      ->order_by('a.customer_name', 'asc')
-      ->get()
-      ->result();
-  }
+    return $data =  $this->db->select("a.*,b.HeadCode,((select ifnull(sum(Debit),0) from acc_transaction where COAID= `b`.`HeadCode`)-(select ifnull(sum(Credit),0) from acc_transaction where COAID= `b`.`HeadCode`)) as balance")
+        ->from('customer_information a')
+        ->join('acc_coa b','a.customer_id = b.customer_id','left')
+        ->having('balance <= 0')
+        ->group_by('a.customer_id')
+        ->order_by('a.customer_name', 'asc')
+        ->get()
+        ->result();
+    }
 
     public function update($data = array())
     {
@@ -610,60 +598,121 @@ public function getCreditCustomerList($postData=null){
         $customer_id = $data["customer_id"];
         log_message('debug', "[CustomerUpdate] Updating customer_id={$customer_id}");
 
-        $existing_customer = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row();
-        $existing_status = $existing_customer->status;
-        $existing_email  = $existing_customer->customer_email;
-        $existing_name   = $existing_customer->customer_name;
+        // Pre-update snapshots
+        $existing_customer = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row_array();
+        log_message('debug', '[CustomerUpdate] Pre-update snapshot: ' . json_encode($existing_customer));
 
-        log_message('debug', "[CustomerUpdate] Existing status={$existing_status}, name={$existing_name}, email={$existing_email}");
+        $existing_auth = $this->db->get_where('customer_auth', ['customer_id' => $customer_id])->row_array();
+        if (isset($existing_auth['password'])) {
+            $existing_auth['password'] = '[REDACTED]';
+        }
+        log_message('debug', '[CustomerUpdate] Pre-update auth snapshot: ' . json_encode($existing_auth));
 
-        $this->db->select('sales_permit');
-        $this->db->from('customer_information');
-        $this->db->where('customer_id', $customer_id);
-        $existing = $this->db->get()->row();
+        $existing = $this->db->select('sales_permit')->from('customer_information')->where('customer_id', $customer_id)->get()->row();
 
+        // File upload handling
         if (!empty($_FILES['sales_permit']['name'])) {
-            log_message('debug', '[CustomerUpdate] New sales permit file uploaded');
-
             $config['upload_path']   = './uploads/sales_permits/';
             $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
             $config['max_size']      = 2048;
             $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
-
             $this->load->library('upload', $config);
 
             if ($this->upload->do_upload('sales_permit')) {
                 $upload_data = $this->upload->data();
                 $data['sales_permit'] = $upload_data['file_name'];
-                log_message('debug', '[CustomerUpdate] File uploaded successfully: ' . $data['sales_permit']);
+                log_message('debug', '[CustomerUpdate] New sales_permit uploaded: ' . $data['sales_permit']);
 
                 if (!empty($existing->sales_permit)) {
                     $old_file = './uploads/sales_permits/' . $existing->sales_permit;
                     if (file_exists($old_file)) {
                         unlink($old_file);
-                        log_message('debug', '[CustomerUpdate] Old sales permit file removed: ' . $existing->sales_permit);
+                        log_message('debug', '[CustomerUpdate] Old sales_permit deleted: ' . $old_file);
                     }
                 }
             } else {
-                log_message('error', '[CustomerUpdate] File upload error: ' . $this->upload->display_errors());
                 $this->session->set_flashdata('exception', $this->upload->display_errors());
+                log_message('error', '[CustomerUpdate] File upload failed: ' . $this->upload->display_errors());
                 redirect($_SERVER['HTTP_REFERER']);
                 return false;
             }
         } else {
             $data['sales_permit'] = $existing->sales_permit;
-            log_message('debug', '[CustomerUpdate] No new file uploaded. Using existing sales permit.');
         }
 
+        // Update customer_information
         $this->db->where('customer_id', $customer_id)->update("customer_information", $data);
-        log_message('debug', '[CustomerUpdate] customer_information updated');
+        log_message('debug', "[CustomerUpdate] Updated customer_information. SQL: " . $this->db->last_query());
 
+        // Update acc_subcode
         $this->db->where('referenceNo', $customer_id)->where('subTypeId', 3)->update('acc_subcode', ['name' => $data['customer_name']]);
-        log_message('debug', '[CustomerUpdate] acc_subcode updated with name=' . $data['customer_name']);
+        log_message('debug', "[CustomerUpdate] Updated acc_subcode. SQL: " . $this->db->last_query());
 
+        // Handle password update
+        $password_option = $this->input->post('password_option', true);
+        $password_value  = $this->input->post('password', true);
+
+        if (in_array($password_option, ['set', 'reset']) && !empty($password_value)) {
+            $hashed_password = password_hash($password_value, PASSWORD_BCRYPT);
+            log_message('debug', "[CustomerUpdate] password_option={$password_option}, password_value={$password_value}");
+
+            if ($existing_auth) {
+                $this->db->where('customer_id', $customer_id)->update('customer_auth', [
+                    'password'   => $hashed_password,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+                log_message('debug', "[CustomerUpdate] Executed password update. SQL: " . $this->db->last_query());
+            } else {
+                $username_exists = $this->db->get_where('customer_auth', ['username' => $existing_customer['customer_email']])->num_rows();
+                if ($username_exists > 0) {
+                    log_message('error', "[CustomerUpdate] Cannot insert into customer_auth - duplicate username: {$existing_customer['customer_email']}");
+                } else {
+                    $this->db->insert('customer_auth', [
+                        'customer_id' => $customer_id,
+                        'username'    => $existing_customer['customer_email'],
+                        'password'    => $hashed_password,
+                        'status'      => $data['status'],
+                        'created_at'  => date('Y-m-d H:i:s'),
+                        'updated_at'  => date('Y-m-d H:i:s')
+                    ]);
+                    log_message('debug', "[CustomerUpdate] Inserted new auth with password. SQL: " . $this->db->last_query());
+                }
+            }
+
+            // Send email notifications
+            $smtp = $this->db->get('email_config')->row_array();
+            if ($smtp) {
+                $this->load->library('Sendmail_lib');
+
+                $this->sendmail_lib->send(
+                    $existing_customer['customer_email'],
+                    'Your DeshiShad Password Has Been Updated',
+                    "<h3>Dear {$existing_customer['customer_name']},</h3><p>Your account password has been updated.</p><p><strong>New Password:</strong> {$password_value}</p>",
+                    $smtp['smtp_user'],
+                    'DeshiShad Security Team'
+                );
+
+                $admins = $this->db->select('username')->from('user_login')->where(['user_type' => 1, 'status' => 1])->get();
+                foreach ($admins->result() as $admin) {
+                    if (filter_var($admin->username, FILTER_VALIDATE_EMAIL)) {
+                        $this->sendmail_lib->send(
+                            $admin->username,
+                            'Customer Password Changed',
+                            "<h4>Password Change Alert</h4><p>The password for customer <strong>{$existing_customer['customer_name']}</strong> (ID: {$customer_id}) has been changed.</p>",
+                            $smtp['smtp_user'],
+                            'DeshiShad Alert System'
+                        );
+                    }
+                }
+            }
+        }
+
+        // Commission update
         if (!empty($this->input->post('comission_type')) || !empty($this->input->post('comission_value')) || !empty($this->input->post('comission_note'))) {
             $this->db->where('customer_id', $customer_id)->where('status', 1)->update('customer_comission', ['status' => 0]);
-            $commission_data = [
+            log_message('debug', '[CustomerUpdate] Deactivated previous commission rows');
+
+            $this->db->insert('customer_comission', [
                 'customer_id'     => $customer_id,
                 'comission_type'  => $this->input->post('comission_type', true),
                 'commision_value' => $this->input->post('comission_value', true),
@@ -672,13 +721,12 @@ public function getCreditCustomerList($postData=null){
                 'status'          => 1,
                 'create_date'     => date('Y-m-d H:i:s'),
                 'update_date'     => date('Y-m-d H:i:s'),
-            ];
-
-            $this->db->insert('customer_comission', $commission_data);
-            log_message('info', "[CustomerUpdate] Inserted new commission and archived old ones for customer_id={$customer_id}");
+            ]);
+            log_message('debug', '[CustomerUpdate] New commission inserted');
         }
 
-        if ($existing_status != $data['status']) {
+        // Status change notifications
+        if ($existing_customer['status'] != $data['status']) {
             $status_text = match ((int)$data['status']) {
                 0 => 'Inactive',
                 1 => 'Active',
@@ -686,73 +734,61 @@ public function getCreditCustomerList($postData=null){
                 default => 'Unknown',
             };
 
-            log_message('debug', "[CustomerUpdate] Status change detected: {$existing_status} → {$data['status']}");
+            $this->db->where('customer_id', $customer_id)->update('customer_auth', ['status' => $data['status']]);
+            log_message('debug', "[CustomerUpdate] Updated customer_auth.status={$data['status']}");
 
-            $this->load->library('sendmail_lib');
+            $smtp = $this->db->get('email_config')->row_array();
+            if ($smtp) {
+                $this->load->library('Sendmail_lib');
 
-            // Admin Email
-            $admin_subject = "Customer Status Updated";
-            $admin_message = "
-                <h3>Status Change Notification</h3>
-                <p>The status for customer <strong>{$existing_name}</strong> (ID: {$customer_id}) has been updated.</p>
-                <p><strong>New Status:</strong> {$status_text}</p>
-            ";
-            $this->sendmail_lib->send(
-                'faizshiraji@gmail.com',
-                $admin_subject,
-                $admin_message,
-                'noreply@hostelevate.com',
-                'DeshiShad Alert System'
-            );
-            log_message('debug', "[CustomerUpdate] Admin email sent for customer_id={$customer_id}");
+                $admin_message = "<h3>Status Change Notification</h3><p>The status for customer <strong>{$existing_customer['customer_name']}</strong> (ID: {$customer_id}) has been updated.</p><p><strong>New Status:</strong> {$status_text}</p>";
 
-            switch ((int)$data['status']) {
-                case 0:
-                    $customer_subject = "Your DeshiShad Account is Inactive";
-                    $customer_message = "<h3>Dear {$existing_name},</h3><p>Your DeshiShad account has been marked as <strong>Inactive</strong> by the admin team.</p><p>Please contact support for details.</p>";
-                    $notification_body = "Your account has been set to Inactive.";
-                    break;
-                case 1:
-                    $customer_subject = "Your DeshiShad Account is Activated";
-                    $customer_message = "<h3>Dear {$existing_name},</h3><p>Your DeshiShad Merchant Account has been <strong>activated</strong>. You can now log in.</p>";
-                    $notification_body = "Welcome! Your account has been activated.";
-                    break;
-                case 2:
-                    $customer_subject = "Your DeshiShad Account is Deleted";
-                    $customer_message = "<h3>Dear {$existing_name},</h3><p>Your DeshiShad account has been <strong>deleted</strong> by the admin.</p>";
-                    $notification_body = "Your account has been deleted.";
-                    break;
-                default:
-                    $customer_subject = "Your Account Status Updated";
-                    $customer_message = "<h3>Dear {$existing_name},</h3><p>Your account status is now: <strong>{$status_text}</strong>.</p>";
-                    $notification_body = "Your account status has changed.";
+                $admins = $this->db->select('username')->from('user_login')->where(['user_type' => 1, 'status' => 1])->get();
+                foreach ($admins->result() as $admin) {
+                    if (filter_var($admin->username, FILTER_VALIDATE_EMAIL)) {
+                        $this->sendmail_lib->send($admin->username, 'Customer Status Updated', $admin_message, $smtp['smtp_user'], 'DeshiShad Alert System');
+                    }
+                }
+
+                switch ((int)$data['status']) {
+                    case 0:
+                        $subject = "Your DeshiShad Account is Inactive";
+                        $message = "<h3>Dear {$existing_customer['customer_name']},</h3><p>Your account has been marked as <strong>Inactive</strong>.</p>";
+                        $notification_body = "Your account has been set to Inactive.";
+                        break;
+                    case 1:
+                        $subject = "Your DeshiShad Account is Activated";
+                        $message = "<h3>Dear {$existing_customer['customer_name']},</h3><p>Your account has been <strong>activated</strong>.</p>";
+                        $notification_body = "Welcome! Your account has been activated.";
+                        break;
+                    case 2:
+                        $subject = "Your DeshiShad Account is Deleted";
+                        $message = "<h3>Dear {$existing_customer['customer_name']},</h3><p>Your account has been <strong>deleted</strong>.</p>";
+                        $notification_body = "Your account has been deleted.";
+                        break;
+                    default:
+                        $subject = "Your Account Status Updated";
+                        $message = "<h3>Dear {$existing_customer['customer_name']},</h3><p>Your account status is now: <strong>{$status_text}</strong>.</p>";
+                        $notification_body = "Your account status has changed.";
+                }
+
+                if (!empty($existing_customer['fcm_token'])) {
+                    $this->load->helper('firebase');
+                    send_firebase_notification($existing_customer['fcm_token'], $subject, $notification_body);
+                }
+
+                $this->sendmail_lib->send($existing_customer['customer_email'], $subject, $message, $smtp['smtp_user'], 'DeshiShad');
             }
-
-            $fcmToken = $existing_customer->fcm_token ?? null;
-            if (!empty($fcmToken)) {
-                $this->load->helper('firebase');
-                log_message('debug', "[CustomerUpdate] Sending FCM to token={$fcmToken}");
-
-                $fcm_response = send_firebase_notification($fcmToken, $customer_subject, $notification_body);
-                log_message('info', "[FCM] Notification sent to {$existing_email}, response: " . json_encode($fcm_response));
-            } else {
-                log_message('info', "[FCM] No FCM token found for customer_id={$customer_id}");
-            }
-
-            $this->sendmail_lib->send(
-                $existing_email,
-                $customer_subject,
-                $customer_message,
-                'noreply@hostelevate.com',
-                'DeshiShad'
-            );
-
-            log_message('info', "[CustomerUpdate] Customer email sent for customer_id={$customer_id}");
         }
 
         log_message('debug', "[CustomerUpdate] Update process complete for customer_id={$customer_id}");
         return true;
     }
+
+
+
+
+
 
 	public function delete($id = null)
 	{
@@ -925,6 +961,22 @@ public function generator($lenth)
                         ->get()
                         ->result_array();
 
+    }
+
+    public function get_admin_emails() {
+            $this->db->select('username');
+            $this->db->from('user_login');
+            $this->db->where('user_type', 1);
+            $this->db->where('status', 1);
+            $query = $this->db->get();
+
+            $emails = [];
+            foreach ($query->result() as $row) {
+                // Assuming username is the email address
+                $emails[] = $row->username;
+            }
+
+            return $emails;
     }
 
 }

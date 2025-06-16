@@ -830,31 +830,40 @@ class Apiv2 extends CI_Controller {
             $data = ['status' => 2];
             if ($this->Api_model->update_customer($data, $customer_email)) {
 
-                $customer_id   = $customer->customer_id;
-                $existing_name = $customer->customer_name;
-                $existing_email = $customer->customer_email;
-                $fcm_token     = $customer->fcm_token ?? null;
-
-                $status_text = 'Deleted';
+                $customer_id     = $customer->customer_id;
+                $existing_name   = $customer->customer_name;
+                $existing_email  = $customer->customer_email;
+                $fcm_token       = $customer->fcm_token ?? null;
+                $status_text     = 'Deleted';
 
                 // ✅ Load libraries
                 $this->load->library('sendmail_lib');
                 $this->load->library('fcm_lib');
 
-                // ✅ Notify Admin
-                $admin_email = 'faizshiraji@gmail.com';
+                // ✅ Notify Admins from user_login table
                 $admin_subject = "Customer Status Updated to Deleted by User";
                 $admin_message = "
                     <h3>Status Change Notification</h3>
                     <p>The status for customer <strong>{$existing_name}</strong> (ID: {$customer_id}) has been updated to <strong>{$status_text}</strong>.</p>
                 ";
-                $this->sendmail_lib->send(
-                    $admin_email,
-                    $admin_subject,
-                    $admin_message,
-                    'noreply@hostelevate.com',
-                    'DeshiShad Alert System'
-                );
+
+                $admin_query = $this->db->select('username')
+                                        ->from('user_login')
+                                        ->where(['user_type' => 1, 'status' => 1])
+                                        ->get();
+
+                foreach ($admin_query->result() as $admin) {
+                    $admin_email = $admin->username;
+                    if (filter_var($admin_email, FILTER_VALIDATE_EMAIL)) {
+                        $this->sendmail_lib->send(
+                            $admin_email,
+                            $admin_subject,
+                            $admin_message,
+                            'noreply@hostelevate.com',
+                            'DeshiShad Alert System'
+                        );
+                    }
+                }
 
                 // ✅ Notify Customer (Email)
                 $customer_subject = "Your DeshiShad Account is Deleted by You";
@@ -976,6 +985,355 @@ class Apiv2 extends CI_Controller {
         } catch (Exception $e) {
             return $this->_server_error('Unexpected server error: ' . $e->getMessage());
         }
+    }
+
+    public function customer_password_change()
+    {
+        try {
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status'  => 'unauthorized',
+                        'message' => 'Unauthorized. Please provide a valid access token.'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (!$second_token) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status'  => 'unauthorized',
+                        'message' => 'Missing required second-layer authentication token (X-Second-Token).'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                if (!isset($decoded->customer_id)) {
+                    return $this->_bad_request('Second-layer token is invalid or missing customer_id.');
+                }
+                $customer_id = $decoded->customer_id;
+            } catch (Exception $e) {
+                return $this->_bad_request('Second-layer token decode failed: ' . $e->getMessage());
+            }
+
+            $input = json_decode(trim(file_get_contents("php://input")), true);
+            log_message('debug', '[customer_password_change] 🔐 Input: ' . json_encode($input));
+
+            if (!isset($input['old_password']) || !isset($input['new_password'])) {
+                return $this->_bad_request('Both old_password and new_password are required.');
+            }
+
+            $old_password = trim($input['old_password']);
+            $new_password = trim($input['new_password']);
+
+            if (strlen($new_password) < 6) {
+                return $this->_bad_request('New password must be at least 6 characters long.');
+            }
+
+            $auth = $this->db->get_where('customer_auth', ['customer_id' => $customer_id])->row();
+            if (!$auth || !password_verify($old_password, $auth->password)) {
+                return $this->_bad_request('Old password is incorrect.');
+            }
+
+            $hashed_new_password = password_hash($new_password, PASSWORD_BCRYPT);
+            $this->db->where('customer_id', $customer_id)->update('customer_auth', [
+                'password'    => $hashed_new_password,
+                'updated_at'  => date('Y-m-d H:i:s')
+            ]);
+            log_message('debug', "[customer_password_change] 🔁 Password updated for customer_id={$customer_id}");
+
+            $customer_info = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row();
+            $customer_name = $customer_info->customer_name ?? 'Unknown';
+            $customer_email = $customer_info->customer_email ?? '';
+
+            $smtp = $this->db->get('email_config')->row_array();
+            if (empty($smtp)) {
+                log_message('error', '[customer_password_change] ❌ SMTP config missing');
+            }
+
+            $this->load->library('Sendmail_lib');
+
+            // Notify Admins
+            $admin_subject = "🔐 Customer Password Changed - {$customer_name}";
+            $admin_message = "
+                <h4>Password Change Notification</h4>
+                <p><strong>Name:</strong> {$customer_name}</p>
+                <p><strong>Email:</strong> {$customer_email}</p>
+                <p><strong>Customer ID:</strong> {$customer_id}</p>
+                <p><strong>Time:</strong> " . date('Y-m-d H:i:s') . "</p>
+            ";
+
+            $admins = $this->db->select('username')->from('user_login')->where(['user_type' => 1, 'status' => 1])->get();
+            foreach ($admins->result() as $admin) {
+                if (filter_var($admin->username, FILTER_VALIDATE_EMAIL)) {
+                    $this->sendmail_lib->send(
+                        $admin->username,
+                        $admin_subject,
+                        $admin_message,
+                        $smtp['smtp_user'],
+                        'DeshiShad Alert System'
+                    );
+                }
+            }
+
+            // Notify Customer
+            if (!empty($customer_email)) {
+                $customer_subject = "🛡️ Your Password Has Been Updated";
+                $customer_message = "
+                    <h3>Hello {$customer_name},</h3>
+                    <p>Your account password has been successfully updated.</p>
+                    <p><strong>New Password:</strong> {$new_password}</p>
+                    <p>If you did not make this change, please contact our support immediately.</p>
+                ";
+
+                $this->sendmail_lib->send(
+                    $customer_email,
+                    $customer_subject,
+                    $customer_message,
+                    $smtp['smtp_user'],
+                    'DeshiShad Support'
+                );
+            }
+
+            return $this->output
+                ->set_content_type('application/json')
+                ->set_status_header(200)
+                ->set_output(json_encode([
+                    'status'  => 'success',
+                    'message' => 'Password updated and notifications sent.'
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+
+        } catch (Exception $e) {
+            log_message('error', '[customer_password_change] ❌ Exception: ' . $e->getMessage());
+            return $this->_server_error('Unexpected server error: ' . $e->getMessage());
+        }
+    }
+
+    public function insert_sale()
+    {
+        header('Content-Type: application/json');
+        log_message('debug', '✅ API insert_sale called');
+
+        // ✅ First-layer authentication
+        $user = $this->authenticate_token();
+        if (!$user) {
+            echo json_encode(['status' => 'unauthorized', 'message' => 'Unauthorized. Bearer token missing or invalid.']);
+            return;
+        }
+
+        // ✅ Second-layer authentication
+        $second_token = $this->input->get_request_header('X-Second-Token');
+        if (!$second_token) {
+            echo json_encode(['status' => 'unauthorized', 'message' => 'Missing second-layer token (X-Second-Token).']);
+            return;
+        }
+
+        try {
+            $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+            if (!isset($decoded->customer_id)) {
+                echo json_encode(['status' => 'error', 'message' => 'Second-layer token invalid.']);
+                return;
+            }
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'error', 'message' => 'Second-layer token decode failed: ' . $e->getMessage()]);
+            return;
+        }
+
+        // ✅ Parse input
+        $input = json_decode(file_get_contents("php://input"), true);
+        log_message('debug', '🧾 Raw request body: ' . print_r($input, true));
+
+        if (empty($input)) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid JSON input']);
+            return;
+        }
+
+        // ✅ Setup session and models
+        $this->load->library(['session', 'occational', 'smsgateway']);
+        $this->load->model('invoice/Invoice_model', 'invoice_model');
+        $this->load->model('account/Accounts_model', 'accounts_model');
+
+        // ✅ Set session for voucher approval
+        $createby = $input['createby'] ?? null;
+        $this->session->set_userdata('id', $createby);
+
+        // ✅ Financial year check
+        $finyear = financial_year();
+        if ($finyear <= 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Please Create Financial Year First']);
+            return;
+        }
+
+        // ✅ Generate invoice ID
+        $invoice_id = $this->invoice_generator();
+        log_message('debug', "🧾 Generated invoice_id = $invoice_id");
+
+        // ✅ Prepare $_POST for form-compatible logic
+        $_POST = [
+            'invoice_id'           => $invoice_id,
+            'invoice'              => $invoice_id,
+            'customer_id'          => $input['customer_id'],
+            'paid_amount'          => $input['paid_amount'],
+            'due_amount'           => $input['due_amount'] ?? 0,
+            'total_discount'       => $input['total_discount'] ?? 0,
+            'total_tax'            => $input['total_tax'] ?? 0,
+            'invoice_date'         => $input['invoice_date'] ?? date('Y-m-d'),
+            'inva_details'         => $input['inva_details'] ?? 'API Invoice',
+            'payment_type'         => $input['payment_type'],
+            'delivery_note'        => $input['delivery_note'] ?? '',
+            'status'               => $input['status'] ?? 1,
+            'invoice_discount'     => 0,
+            'total_vat_amnt'       => 0,
+            'previous'             => 0,
+            'shipping_cost'        => 0,
+            'is_credit'            => ($input['payment_type'] == 0) ? 1 : 0,
+            'multipaytype'         => [$input['payment_type']],
+            'pamount_by_method'    => [$input['paid_amount']],
+            'product_id'           => [],
+            'product_quantity'     => [],
+            'product_rate'         => [],
+            'serial_no'            => [],
+            'total_price'          => [],
+            'discount'             => [],
+            'discountvalue'        => [],
+            'vatvalue'             => [],
+            'vatpercent'           => [],
+            'desc'                 => [],
+            'available_quantity'   => [],
+        ];
+
+        $grand_total = 0;
+        foreach ($input['detailsinfo'] as $item) {
+            $qty = floatval($item['product_quantity']);
+            $rate = floatval($item['product_rate']);
+            $total = $qty * $rate;
+            $grand_total += $total;
+
+            $_POST['product_id'][]         = $item['product_id'];
+            $_POST['product_quantity'][]   = $qty;
+            $_POST['product_rate'][]       = $rate;
+            $_POST['serial_no'][]          = $item['serial_no'] ?? '';
+            $_POST['total_price'][]        = $total;
+            $_POST['discount'][]           = 0;
+            $_POST['discountvalue'][]      = 0;
+            $_POST['vatvalue'][]           = 0;
+            $_POST['vatpercent'][]         = 0;
+            $_POST['desc'][]               = '';
+            $_POST['available_quantity'][] = $qty + 100;
+        }
+
+        $_POST['grand_total_price'] = $grand_total;
+
+        // ✅ Insert invoice
+        $inserted_invoice_id = $this->invoice_model->invoice_entry($invoice_id);
+        log_message('debug', "✅ Invoice inserted, ID: $inserted_invoice_id");
+
+        // ✅ Auto approve if enabled
+        $setting_data = $this->db->select('is_autoapprove_v')->from('web_setting')->where('setting_id', 1)->get()->row();
+        if ($setting_data && $setting_data->is_autoapprove_v == 1) {
+            $this->autoapprove($inserted_invoice_id);
+            log_message('debug', "✅ Auto-approved voucher for $inserted_invoice_id");
+        }
+
+        // ✅ Optional SMS
+        $config_data = $this->db->get('sms_settings')->row();
+        if ($config_data->isinvoice == 1) {
+            $cusinfo = $this->db->get_where('customer_information', ['customer_id' => $input['customer_id']])->row();
+            if (!empty($cusinfo)) {
+                $message = 'Mr.' . $cusinfo->customer_name . ', You have purchased ' . number_format($grand_total, 2) . ' and paid ' . $_POST['paid_amount'];
+                $this->smsgateway->send([
+                    'apiProvider' => 'nexmo',
+                    'username'    => $config_data->api_key,
+                    'password'    => $config_data->api_secret,
+                    'from'        => $config_data->from,
+                    'to'          => $cusinfo->customer_mobile,
+                    'message'     => $message
+                ]);
+                log_message('debug', "✅ SMS sent to customer {$cusinfo->customer_mobile}");
+            }
+        }
+
+        // ✅ Send Email Notifications to Admin and Customer
+        $this->load->library('Sendmail_lib');
+        $smtp = $this->db->get('email_config')->row_array();
+
+        $cusinfo = $this->db->get_where('customer_information', ['customer_id' => $input['customer_id']])->row();
+        $customer_name = $cusinfo->customer_name ?? 'Unknown';
+        $customer_email = $cusinfo->customer_email ?? '';
+
+        $admin_subject = "🧾 New Invoice Created - {$invoice_id}";
+        $admin_message = "<h4>New Invoice Notification</h4><p><strong>Invoice ID:</strong> {$invoice_id}</p><p><strong>Customer:</strong> {$customer_name}</p><p><strong>Email:</strong> {$customer_email}</p><p><strong>Total Amount:</strong> " . number_format($grand_total, 2) . "</p><p><strong>Time:</strong> " . date('Y-m-d H:i:s') . "</p>";
+
+        $admins = $this->db->select('username')->from('user_login')->where(['user_type' => 1, 'status' => 1])->get();
+        foreach ($admins->result() as $admin) {
+            if (filter_var($admin->username, FILTER_VALIDATE_EMAIL)) {
+                $this->sendmail_lib->send(
+                    $admin->username,
+                    $admin_subject,
+                    $admin_message,
+                    $smtp['smtp_user'],
+                    'DeshiShad ERP System'
+                );
+            }
+        }
+
+        if (!empty($customer_email)) {
+            $customer_subject = "🧾 Your Invoice [{$invoice_id}] Has Been Created";
+            $customer_message = "<h3>Dear {$customer_name},</h3><p>Thank you for your purchase. Your invoice has been created successfully.</p><p><strong>Invoice ID:</strong> {$invoice_id}</p><p><strong>Total:</strong> " . number_format($grand_total, 2) . "</p><p>If you have any questions, please contact support.</p>";
+
+            $this->sendmail_lib->send(
+                $customer_email,
+                $customer_subject,
+                $customer_message,
+                $smtp['smtp_user'],
+                'DeshiShad Sales'
+            );
+        }
+
+        echo json_encode([
+            'status'     => 'success',
+            'invoice_id' => $invoice_id,
+            'message'    => 'Invoice created successfully via authenticated API'
+        ]);
+    }
+
+    public function invoice_generator() {
+        $this->db->select_max('invoice', 'invoice_no');
+        $query = $this->db->get('invoice');
+        $result = $query->result_array();
+        $invoice_no = $result[0]['invoice_no'];
+
+        if ($invoice_no != '') {
+            $invoice_no = $invoice_no + 1;
+        } else {
+            $invoice_no = 1000;
+        }
+        return $invoice_no;
+    }
+
+    public function autoapprove($invoice_id){
+        $this->load->model('account/Accounts_model', 'accounts_model');
+        
+        $vouchers = $this->db->select('referenceNo, VNo')->from('acc_vaucher')
+                      ->where('referenceNo', $invoice_id)
+                      ->where('status', 0)
+                      ->get()->result();
+        
+        log_message('debug', '🎯 Vouchers to approve: ' . json_encode($vouchers));
+    
+        foreach ($vouchers as $value) {
+            log_message('debug', '🟢 Approving voucher: VNo=' . $value->VNo . ', Ref=' . $value->referenceNo);
+            $result = $this->accounts_model->approved_vaucher($value->VNo, 'active');
+            log_message('debug', '✅ Voucher approved: ' . json_encode($result));
+        }
+    
+        return true;
     }
 
     public function product_search()
@@ -1375,9 +1733,10 @@ class Apiv2 extends CI_Controller {
 
             $verify_url = base_url("apiv2/verify_email?token=$token");
 
-            // ✅ Use Sendmail_lib instead of controller
+            // ✅ Sendmail_lib usage for all mail communications
             $this->load->library('sendmail_lib');
 
+            // Send verification mail
             $this->sendmail_lib->send(
                 $customer_email,
                 'Verify your email address',
@@ -1388,8 +1747,8 @@ class Apiv2 extends CI_Controller {
                 'DeshiShad'
             );
 
-            // Identify creator
-            $creator      = $this->db->where('id', $user->uid)->get('api_users')->row();
+            // Get creator info
+            $creator = $this->db->where('id', $user->uid)->get('api_users')->row();
             $creator_text = 'Unknown';
             if ($creator) {
                 $creator_text = $creator->usertype === 'webuser' ? 'Customer (via Web Portal)' :
@@ -1397,7 +1756,7 @@ class Apiv2 extends CI_Controller {
                                 ucfirst($creator->usertype));
             }
 
-            // Notify Admins
+            // Notify admins
             $admin_query = $this->db->where_in('id', [1, 2])->get('user_login');
             foreach ($admin_query->result() as $admin) {
                 $this->sendmail_lib->send(

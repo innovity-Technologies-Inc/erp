@@ -110,6 +110,34 @@ class Setting_model extends CI_Model {
 			return $data;
 	}
 
+	public function getMailConfig()
+	{
+		$row = $this->db->select('*')
+			->from('email_config')
+			->get()
+			->row();
+
+		if ($row) {
+			return [
+				'protocol'     => $row->protocol,
+				'smtp_host'    => $row->smtp_host,
+				'smtp_port'    => $row->smtp_port,
+				'smtp_user'    => $row->smtp_user,
+				'smtp_pass'    => $row->smtp_pass,
+				'smtp_crypto'  => $row->smtp_crypto ?? 'ssl',
+				'mailtype'     => $row->mailtype ?? 'html',
+				'charset'      => 'utf-8',
+				'newline'      => "\r\n",
+				'crlf'         => "\r\n",
+				'wordwrap'     => TRUE,
+				'smtp_timeout' => 10,
+			];
+		}
+
+		log_message('error', '[getMailConfig] ❌ No mail config found in email_config table');
+		return [];
+	}
+
 	public function sms_settingdata(){
 		 $data = $this->db->select("*")
 			->from('sms_settings')

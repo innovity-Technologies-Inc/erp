@@ -256,6 +256,38 @@
 
 
                  <div class="form-group row">
+                    <label for="password_option" class="col-sm-2 text-right col-form-label">
+                        <?php echo display('password_option'); ?>:
+                    </label>
+                    <div class="col-sm-4">
+                        <select name="password_option" id="password_option" class="form-control" onchange="togglePasswordFields(this.value)">
+                            <option value="">Select Option</option>
+                            <option value="set">Set Password</option>
+                            <option value="reset">Reset Password</option>
+                        </select>
+                    </div>
+
+                    <label for="password" class="col-sm-2 text-right col-form-label">
+                        <?php echo display('password'); ?>:
+                    </label>
+                    <div class="col-sm-4">
+                        <input type="text" name="password" class="form-control" id="password"
+                            placeholder="<?php echo display('password'); ?>" readonly>
+                        <small id="password_help" class="form-text text-muted"></small>
+                    </div>
+                </div>
+
+                <div class="form-group row" id="generate_password_section" style="display:none;">
+                    <label class="col-sm-2 text-right col-form-label"></label>
+                    <div class="col-sm-10">
+                        <button type="button" class="btn btn-info" onclick="generateRandomPassword()">
+                            Generate Password
+                        </button>
+                        <span class="text-success ml-2" id="generated_pass_msg" style="display:none;">Password Generated!</span>
+                    </div>
+                </div>
+
+                 <div class="form-group row">
                      <div class="col-sm-6 text-right">
                      </div>
                      <div class="col-sm-6 text-right">
@@ -270,10 +302,46 @@
                      </div>
                  </div>
 
-
                  <?php echo form_close();?>
              </div>
-
          </div>
      </div>
  </div>
+
+ <script>
+    function togglePasswordFields(option) {
+    const passwordInput = document.getElementById('password');
+    const genSection = document.getElementById('generate_password_section');
+    const helpText = document.getElementById('password_help');
+    const msg = document.getElementById('generated_pass_msg');
+
+    if (option === 'set') {
+        passwordInput.removeAttribute('readonly');
+        genSection.style.display = 'flex';
+        helpText.innerText = 'You can either type a password manually or click "Generate Password".';
+        msg.style.display = 'none';
+    } else if (option === 'reset') {
+        passwordInput.removeAttribute('readonly');
+        genSection.style.display = 'none';
+        passwordInput.value = '';
+        helpText.innerText = 'Type the new password to reset.';
+        msg.style.display = 'none';
+    } else {
+        passwordInput.setAttribute('readonly', true);
+        passwordInput.value = '';
+        genSection.style.display = 'none';
+        helpText.innerText = '';
+        msg.style.display = 'none';
+    }
+}
+
+function generateRandomPassword() {
+    const hexChars = '0123456789abcdef';
+    let password = '';
+    for (let i = 0; i < 8; i++) {
+        password += hexChars[Math.floor(Math.random() * 16)];
+    }
+    document.getElementById('password').value = password;
+    document.getElementById('generated_pass_msg').style.display = 'inline';
+}
+ </script>

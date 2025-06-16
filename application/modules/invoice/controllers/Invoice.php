@@ -235,20 +235,28 @@ class Invoice extends MX_Controller {
             $txregname .= $regname;
         }
 
-        $subTotal_quantity = $subTotal_ammount = $descript = $isserial = $isunit = 0;
+        // Initialize variables
+        $subTotal_quantity = 0;
+        $subTotal_price_before_discount = 0.00;
+        $subTotal_price_after_discount = 0.00;
+        $total_discount_val = 0.00;
+        $descript = $isserial = $isunit = 0;
         $is_discount = $is_dis_val = $vat_amnt_per = $vat_amnt = 0;
 
         if (!empty($invoice_detail)) {
-            foreach ($invoice_detail as $k => $v) {
-                $invoice_detail[$k]['final_date'] = $invoice_detail[$k]['date'];
-                $subTotal_quantity += $invoice_detail[$k]['quantity'];
-                $subTotal_ammount += $invoice_detail[$k]['total_price'];
-            }
-
             $i = 0;
             foreach ($invoice_detail as $k => $v) {
                 $i++;
                 $invoice_detail[$k]['sl'] = $i;
+                $invoice_detail[$k]['final_date'] = $v['date'];
+
+                $subTotal_quantity += $v['quantity'];
+                $line_total_before_discount = $v['rate'] * $v['quantity'];
+                $line_total_after_discount = $v['total_price'];
+
+                $subTotal_price_before_discount += $line_total_before_discount;
+                $subTotal_price_after_discount += $line_total_after_discount;
+                $total_discount_val += ($line_total_before_discount - $line_total_after_discount);
 
                 if (!empty($v['description'])) $descript++;
                 if (!empty($v['serial_no'])) $isserial++;
@@ -260,14 +268,13 @@ class Invoice extends MX_Controller {
             }
         }
 
-        // Calculate derived financials
-        $clean_sub_total = (float)str_replace(',', '', $subTotal_ammount);
-        $clean_discount = (float)str_replace(',', '', $invoice_detail[0]['total_discount']);
+        // Clean taxes, shipping
         $clean_vat = (float)str_replace(',', '', $invoice_detail[0]['total_vat_amnt']);
         $clean_tax = (float)str_replace(',', '', $invoice_detail[0]['total_tax']);
         $clean_shipping = (float)str_replace(',', '', $invoice_detail[0]['shipping_cost']);
 
-        $price_after_discount = $clean_sub_total - $clean_discount;
+        // Final totals
+        $price_after_discount = $subTotal_price_after_discount;
         $grand_total = $price_after_discount + $clean_vat + $clean_tax + $clean_shipping;
 
         $user_id = $invoice_detail[0]['sales_by'];
@@ -286,20 +293,20 @@ class Invoice extends MX_Controller {
             'contact'             => $invoice_detail[0]['contact'],
             'invoice_details'     => $invoice_detail[0]['invoice_details'],
             'subTotal_quantity'   => $subTotal_quantity,
-            'total_discount'      => number_format($clean_discount, 2, '.', ','),
-            'total_discount_cal'  => $clean_discount,
+            'subTotal_amount_cal' => $subTotal_price_before_discount, // before discount
+            'subTotal_ammount'    => number_format($subTotal_price_after_discount, 2, '.', ','), // after discount
+            'total_discount_cal'  => $total_discount_val,
+            'total_discount'      => number_format($total_discount_val, 2, '.', ','),
             'total_vat'           => number_format($clean_vat, 2, '.', ','),
             'total_tax'           => number_format($clean_tax, 2, '.', ','),
-            'subTotal_ammount'    => number_format($clean_sub_total, 2, '.', ','),
-            'subTotal_amount_cal' => $clean_sub_total,
-            'grand_total'         => number_format($grand_total, 2, '.', ','), // final price
+            'grand_total'         => number_format($grand_total, 2, '.', ','),
             'paid_amount'         => number_format($invoice_detail[0]['paid_amount'], 2, '.', ','),
             'due_amount'          => number_format($invoice_detail[0]['due_amount'], 2, '.', ','),
             'previous'            => number_format($invoice_detail[0]['prevous_due'], 2, '.', ','),
             'shipping_cost'       => number_format($clean_shipping, 2, '.', ','),
             'invoice_all_data'    => $invoice_detail,
             'am_inword'           => $grand_total,
-            'is_discount'         => $clean_discount - $invoice_detail[0]['invoice_discount'],
+            'is_discount'         => $total_discount_val - $invoice_detail[0]['invoice_discount'],
             'users_name'          => $users->first_name . ' ' . $users->last_name,
             'tax_regno'           => $txregname,
             'is_desc'             => $descript,
