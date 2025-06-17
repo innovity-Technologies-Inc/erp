@@ -277,6 +277,15 @@ class Invoice extends MX_Controller {
         $price_after_discount = $subTotal_price_after_discount;
         $grand_total = $price_after_discount + $clean_vat + $clean_tax + $clean_shipping;
 
+        // 🟢 Keep real paid and due amount from DB
+        $real_paid_amount = (float)str_replace(',', '', $invoice_detail[0]['paid_amount']);
+        $real_due_amount  = (float)str_replace(',', '', $invoice_detail[0]['due_amount']);
+
+        // Fallback: recalculate if needed
+        if ($real_paid_amount <= 0 && $real_due_amount > 0) {
+            $real_paid_amount = $grand_total - $real_due_amount;
+        }
+
         $user_id = $invoice_detail[0]['sales_by'];
         $users = $this->invoice_model->user_invoice_data($user_id);
 
@@ -300,8 +309,8 @@ class Invoice extends MX_Controller {
             'total_vat'           => number_format($clean_vat, 2, '.', ','),
             'total_tax'           => number_format($clean_tax, 2, '.', ','),
             'grand_total'         => number_format($grand_total, 2, '.', ','),
-            'paid_amount'         => number_format($invoice_detail[0]['paid_amount'], 2, '.', ','),
-            'due_amount'          => number_format($invoice_detail[0]['due_amount'], 2, '.', ','),
+            'paid_amount'         => number_format($real_paid_amount, 2, '.', ','),  // 🟢 corrected
+            'due_amount'          => number_format($real_due_amount, 2, '.', ','),   // 🟢 corrected
             'previous'            => number_format($invoice_detail[0]['prevous_due'], 2, '.', ','),
             'shipping_cost'       => number_format($clean_shipping, 2, '.', ','),
             'invoice_all_data'    => $invoice_detail,
