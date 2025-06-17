@@ -7,57 +7,71 @@ class Sendmail_lib {
 
     public function __construct()
     {
-        // Load CodeIgniter super-object
         $this->CI =& get_instance();
-
-        // Load email library and configuration
         $this->CI->load->library('email');
-        $this->CI->config->load('email'); // optional: if you're using email config from config/email.php
+        $this->CI->load->database();
     }
 
     /**
-     * Send an email via configured SMTP
+     * Send an email via configured SMTP from email_config table
      *
-     * @param string $to          Recipient email address
-     * @param string $subject     Email subject
-     * @param string $message     HTML content of the email
-     * @param string $from        (optional) Sender email address, default: noreply@paysenz.com
-     * @param string $from_name   (optional) Sender name, default: Paysenz
-     * @return bool               TRUE on success, FALSE on failure
+     * @param string $to
+     * @param string $subject
+     * @param string $message
+     * @param string $from        Optional
+     * @param string $from_name   Optional
+     * @return bool
      */
-    public function send($to, $subject, $message, $from = 'noreply@hostelevate.com', $from_name = 'DeshiShad')
+    public function send($to, $subject, $message, $from = null, $from_name = 'DeshiShad')
     {
-        // Prepare headers
+        // ⏱️ Allow email script more time to run
+        set_time_limit(60); // adjust as needed
+
+        $smtp = $this->CI->db->get('email_config')->row_array(); // no 'status' column assumed
+
+        if (!$smtp) {
+            log_message('error', '[Sendmail_lib] No SMTP configuration found in email_config table.');
+            return false;
+        }
+
+        $from = $from ?? $smtp['smtp_user'];
+
+        $config = [
+            'protocol'     => $smtp['protocol'],
+            'smtp_host'    => $smtp['smtp_host'],
+            'smtp_port'    => $smtp['smtp_port'],
+            'smtp_user'    => $smtp['smtp_user'],
+            'smtp_pass'    => $smtp['smtp_pass'],
+            'smtp_crypto'  => 'ssl',
+            'mailtype'     => $smtp['mailtype'] ?? 'html',
+            'charset'      => 'utf-8',
+            'newline'      => "\r\n",
+            'crlf'         => "\r\n",
+            'wordwrap'     => TRUE,
+            'smtp_timeout' => 10,
+        ];
+
+        $this->CI->email->initialize($config);
         $this->CI->email->from($from, $from_name);
         $this->CI->email->to($to);
         $this->CI->email->subject($subject);
         $this->CI->email->message($message);
 
-        // Attempt to send email
         if ($this->CI->email->send()) {
-            log_message('debug', "✅ Email successfully sent to: $to | Subject: $subject");
+            log_message('debug', "[Sendmail_lib] ✅ Email sent to: $to | Subject: $subject");
             return true;
         } else {
-            $debug_output = $this->CI->email->print_debugger(['headers']);
-            log_message('error', "❌ Failed to send email to: $to | Subject: $subject");
-            log_message('error', "📧 Email Debug Info:\n" . $debug_output);
+            log_message('error', "[Sendmail_lib] ❌ Email failed to: $to | Subject: $subject");
+            log_message('error', "[Sendmail_lib] 📧 Debug Info:\n" . $this->CI->email->print_debugger(['headers']));
             return false;
         }
     }
 
-    /**
-     * Send a test email to verify SMTP settings
-     *
-     * @param string|null $recipient Optional recipient email for testing (defaults to system admin)
-     * @return bool
-     */
     public function test($recipient = null)
     {
-        $to = $recipient ?? 'faizshiraji@gmail.com'; // Replace with a default testing email
+        $to = $recipient ?? 'faizshiraji@gmail.com';
         $subject = '✅ Test Email from Sendmail_lib';
-        $body = '<p>This is a test email from <strong>Sendmail_lib</strong>.</p>
-                 <p>If you received this, SMTP and email config are working!</p>';
-
+        $body = '<p>This is a test email from <strong>Sendmail_lib</strong>.</p><p>If you received this, SMTP config is working!</p>';
         return $this->send($to, $subject, $body);
     }
 }

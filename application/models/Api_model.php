@@ -493,6 +493,22 @@
             return true;
         }
 
+        public function get_admin_emails() {
+            $this->db->select('username');
+            $this->db->from('user_login');
+            $this->db->where('user_type', 1);
+            $this->db->where('status', 1);
+            $query = $this->db->get();
+
+            $emails = [];
+            foreach ($query->result() as $row) {
+                // Assuming username is the email address
+                $emails[] = $row->username;
+            }
+
+            return $emails;
+        }
+
         //update customer
         public function update_customer($data, $customer_email) {
             $this->db->where('customer_email', $customer_email);

@@ -218,70 +218,79 @@ class Customer extends MX_Controller {
 //         }
 //     }
 // }
-        public function paysenz_form($id = null)
-        {
-            $data['title'] = display('add_customer');
+    public function paysenz_form($id = null)
+    {
+        $data['title'] = display('add_customer');
 
-            $this->form_validation->set_rules('customer_name', display('customer_name'), 'required|max_length[200]');
-            $this->form_validation->set_rules('customer_mobile', display('customer_mobile'), 'max_length[20]');
-            if (empty($id)) {
-                $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email|is_unique[customer_information.customer_email]');
+        $this->form_validation->set_rules('customer_name', display('customer_name'), 'required|max_length[200]');
+        $this->form_validation->set_rules('customer_mobile', display('customer_mobile'), 'max_length[20]');
+        if (empty($id)) {
+            $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email|is_unique[customer_information.customer_email]');
+        } else {
+            $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email');
+        }
+        $this->form_validation->set_rules('email_address', display('email_address'), 'max_length[100]');
+        $this->form_validation->set_rules('contact', display('contact'), 'max_length[200]');
+        $this->form_validation->set_rules('phone', display('phone'), 'max_length[20]');
+        $this->form_validation->set_rules('fax', display('fax'), 'max_length[20]');
+        $this->form_validation->set_rules('city', display('city'), 'max_length[100]');
+        $this->form_validation->set_rules('state', display('state'), 'max_length[100]');
+        $this->form_validation->set_rules('zip', display('zip'), 'max_length[30]');
+        $this->form_validation->set_rules('country', display('country'), 'max_length[100]');
+        $this->form_validation->set_rules('customer_address', display('customer_address'), 'max_length[255]');
+        $this->form_validation->set_rules('address2', display('address2'), 'max_length[255]');
+        $this->form_validation->set_rules('sales_permit_number', display('sales_permit_number'), 'max_length[50]');
+        $this->form_validation->set_rules('comission_value', display('comission_value'), 'max_length[100]');
+        $this->form_validation->set_rules('comission_type', display('comission_type'), 'max_length[100]');
+        $this->form_validation->set_rules('comission_note', display('comission_note'), 'max_length[255]');
+
+        if ($this->input->post('password_option') && $this->input->post('password')) {
+            $this->form_validation->set_rules('password', 'Password', 'min_length[6]|max_length[255]');
+        }
+
+        $sales_permit = "";
+        if (!empty($_FILES['sales_permit']['name'])) {
+            $config['upload_path']   = './uploads/sales_permits/';
+            $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
+            $config['max_size']      = 2048;
+            $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
+
+            $this->load->library('upload', $config);
+
+            if ($this->upload->do_upload('sales_permit')) {
+                $upload_data = $this->upload->data();
+                $sales_permit = $upload_data['file_name'];
             } else {
-                $this->form_validation->set_rules('customer_email', display('email'), 'max_length[100]|valid_email');
+                log_message('error', 'File Upload Error: ' . $this->upload->display_errors());
+                $this->session->set_flashdata('exception', 'File upload failed: ' . $this->upload->display_errors());
+                redirect($_SERVER['HTTP_REFERER']);
+                return;
             }
-            $this->form_validation->set_rules('contact', display('contact'), 'max_length[200]');
-            $this->form_validation->set_rules('phone', display('phone'), 'max_length[20]');
-            $this->form_validation->set_rules('city', display('city'), 'max_length[100]');
-            $this->form_validation->set_rules('state', display('state'), 'max_length[100]');
-            $this->form_validation->set_rules('zip', display('zip'), 'max_length[30]');
-            $this->form_validation->set_rules('country', display('country'), 'max_length[100]');
-            $this->form_validation->set_rules('customer_address', display('customer_address'), 'max_length[255]');
-            $this->form_validation->set_rules('address2', display('address2'), 'max_length[255]');
-            $this->form_validation->set_rules('sales_permit_number', display('sales_permit_number'), 'max_length[50]');
+        }
 
-            $sales_permit = "";
-            if (!empty($_FILES['sales_permit']['name'])) {
-                $config['upload_path']   = './uploads/sales_permits/';
-                $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
-                $config['max_size']      = 2048;
-                $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
+        $data['customer'] = (object)$postData = [
+            'customer_id'         => $this->input->post('customer_id', true),
+            'customer_name'       => $this->input->post('customer_name', true),
+            'customer_mobile'     => $this->input->post('customer_mobile', true),
+            'customer_email'      => $this->input->post('customer_email', true),
+            'email_address'       => $this->input->post('email_address', true),
+            'contact'             => $this->input->post('contact', true),
+            'phone'               => $this->input->post('phone', true),
+            'fax'                 => $this->input->post('fax', true),
+            'city'                => $this->input->post('city', true),
+            'state'               => $this->input->post('state', true),
+            'zip'                 => $this->input->post('zip', true),
+            'country'             => $this->input->post('country', true),
+            'customer_address'    => $this->input->post('customer_address', true),
+            'address2'            => !empty($this->input->post('address2', true)) ? $this->input->post('address2', true) : NULL,
+            'sales_permit_number' => $this->input->post('sales_permit_number', true),
+            'status'              => $this->input->post('status', true),
+            'create_by'           => $this->session->userdata('id')
+        ];
 
-                $this->load->library('upload', $config);
-
-                if ($this->upload->do_upload('sales_permit')) {
-                    $upload_data = $this->upload->data();
-                    $sales_permit = $upload_data['file_name'];
-                } else {
-                    log_message('error', 'File Upload Error: ' . $this->upload->display_errors());
-                    $this->session->set_flashdata('exception', 'File upload failed: ' . $this->upload->display_errors());
-                    redirect($_SERVER['HTTP_REFERER']);
-                    return;
-                }
-            }
-
-            $data['customer'] = (object)$postData = [
-                'customer_id'        => $this->input->post('customer_id', true),
-                'customer_name'      => $this->input->post('customer_name', true),
-                'customer_mobile'    => $this->input->post('customer_mobile', true),
-                'customer_email'     => $this->input->post('customer_email', true),
-                'email_address'      => $this->input->post('email_address', true),
-                'contact'            => $this->input->post('contact', true),
-                'phone'              => $this->input->post('phone', true),
-                'fax'                => $this->input->post('fax', true),
-                'city'               => $this->input->post('city', true),
-                'state'              => $this->input->post('state', true),
-                'zip'                => $this->input->post('zip', true),
-                'country'            => $this->input->post('country', true),
-                'customer_address'   => $this->input->post('customer_address', true),
-                'address2'           => !empty($this->input->post('address2', true)) ? $this->input->post('address2', true) : NULL,
-                'sales_permit_number'=> $this->input->post('sales_permit_number', true),
-                'status'             => $this->input->post('status', true),
-                'create_by'          => $this->session->userdata('id')
-            ];
-
-            if (!empty($sales_permit)) {
-                $postData['sales_permit'] = $sales_permit;
-            }
+        if (!empty($sales_permit)) {
+            $postData['sales_permit'] = $sales_permit;
+        }
 
             if ($this->form_validation->run() === true) {
                 if (empty($postData['customer_id'])) {
@@ -291,7 +300,7 @@ class Customer extends MX_Controller {
                         $commission_data = [
                             'customer_id'     => $customer_id,
                             'comission_type'  => $this->input->post('comission_type', true),
-                            'commision_value' => $this->input->post('comission_value', true),
+                            'commision_value' => $this->input->post('comission_value', true), // ⚠️ double "m"
                             'notes'           => $this->input->post('comission_note', true),
                             'create_by'       => $this->session->userdata('id'),
                             'status'          => 1,
@@ -313,7 +322,6 @@ class Customer extends MX_Controller {
                             ]);
                         }
 
-                        // API call to external ERP
                         $query = http_build_query([
                             'name'     => $postData['customer_name'],
                             'email'    => $email,
@@ -324,7 +332,6 @@ class Customer extends MX_Controller {
                         $api_response = file_get_contents($api_url);
                         log_message('debug', "📤 ERP API Response: $api_response");
 
-                        // Send welcome email
                         $this->load->library('sendmail_lib');
                         $this->sendmail_lib->send(
                             $email,
@@ -340,6 +347,46 @@ class Customer extends MX_Controller {
                     }
                 } else {
                     if ($this->customer_model->update($postData)) {
+                        $password_option = $this->input->post('password_option', true);
+                        $password_value  = $this->input->post('password', true);
+
+                        if (in_array($password_option, ['set', 'reset']) && !empty($password_value)) {
+                            $hashed_password = password_hash($password_value, PASSWORD_BCRYPT);
+                            $auth_row = $this->db->get_where('customer_auth', ['customer_id' => $postData['customer_id']])->row();
+
+                            if ($auth_row) {
+                                $this->db->where('customer_id', $postData['customer_id'])->update('customer_auth', [
+                                    'password'   => $hashed_password,
+                                    'updated_at' => date('Y-m-d H:i:s')
+                                ]);
+                            } else {
+                                $this->db->insert('customer_auth', [
+                                    'customer_id' => $postData['customer_id'],
+                                    'username'    => $postData['customer_email'],
+                                    'password'    => $hashed_password,
+                                    'status'      => 1
+                                ]);
+                            }
+
+                            $this->load->library('sendmail_lib');
+                            $this->sendmail_lib->send(
+                                $postData['customer_email'],
+                                'Password Updated',
+                                "<p>Dear {$postData['customer_name']},</p><p>Your password has been updated.</p><p><strong>Password:</strong> {$password_value}</p><br><p>Thanks,<br>DeshiShad Tech Team(PSB)</p>"
+                            );
+
+                            $admin_users = $this->db->where('status', 1)->get('users')->result();
+                            foreach ($admin_users as $admin) {
+                                $this->sendmail_lib->send(
+                                    $admin->email,
+                                    'Customer Password Changed',
+                                    "<p>Customer <strong>{$postData['customer_name']}</strong> has changed password.</p><p>Email: {$postData['customer_email']}</p>"
+                                );
+                            }
+
+                            log_message('debug', "[CustomerUpdate] Password {$password_option} for customer_id={$postData['customer_id']}");
+                        }
+
                         $info['msg'] = display('update_successfully');
                         $info['status'] = 1;
                     } else {

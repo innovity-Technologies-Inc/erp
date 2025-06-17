@@ -432,55 +432,49 @@ public function paysenz_currencyform($id = null)
 
     public function paysenz_mail_config()
 	{ 
-
 		$this->check_mail_config();
+
 		$data['title']        = display('mail_setting');
 		$data['module']       = "dashboard";  
 		$data['mail_setting'] = $this->setting_model->mail_settingdata();
 		$data['page']         = "currency/mail_setting";  
+
 		echo Modules::run('template/layout', $data);
 	}
 
+	public function mail_config_update()
+	{
+		$this->form_validation->set_rules('protocol', 'Protocol', 'required|max_length[200]');
+		$this->form_validation->set_rules('smtp_host', 'Host', 'required|max_length[250]');
+		$this->form_validation->set_rules('smtp_port', 'Port', 'required|max_length[100]');
+		$this->form_validation->set_rules('smtp_user', 'SMTP User', 'required|max_length[250]');
+		$this->form_validation->set_rules('smtp_pass', 'SMTP Password', 'required|max_length[250]');
 
-	    public function mail_config_update() {
-	    	$this->form_validation->set_rules('protocol', 'Protocol','required|max_length[200]');
-		$this->form_validation->set_rules('smtp_host', 'Host','required|max_length[250]');
-		#------------------------#
-       	$this->form_validation->set_rules('smtp_port', 'Port', "required|max_length[100]");
-       	$this->form_validation->set_rules('smtp_user', 'smtp_user','required|max_length[250]');
-       	$this->form_validation->set_rules('smtp_pass', 'smtp_pass','required|max_length[250]');	
-        $protocol  = $this->input->post('protocol',true);
-        $smtp_host = $this->input->post('smtp_host',true);
-        $smtp_port = $this->input->post('smtp_port',true);
-        $smtp_user = $this->input->post('smtp_user',true);
-        $smtp_pass = $this->input->post('smtp_pass',true);
-        $mailtype  = $this->input->post('mailtype',true);
-        $invoice   = $this->input->post('isinvoice',true);
-        $service   = $this->input->post('isservice',true);
-        $quotation = $this->input->post('isquotation',true);
+		if ($this->form_validation->run()) {
+			$mail_data = [
+				'protocol'     => $this->input->post('protocol', true),
+				'smtp_host'    => $this->input->post('smtp_host', true),
+				'smtp_port'    => $this->input->post('smtp_port', true),
+				'smtp_user'    => $this->input->post('smtp_user', true),
+				'smtp_pass'    => $this->input->post('smtp_pass', true),
+				'mailtype'     => $this->input->post('mailtype', true),
+				'isinvoice'    => $this->input->post('isinvoice', true),
+				'isservice'    => $this->input->post('isservice', true),
+				'isquotation'  => $this->input->post('isquotation', true)
+			];
 
-        $mail_data = array(
-            'protocol'  => $protocol,
-            'smtp_host' => $smtp_host,
-            'smtp_port' => $smtp_port,
-            'smtp_user' => $smtp_user,
-            'smtp_pass' => $smtp_pass,
-            'mailtype'  => $mailtype,
-            'isinvoice' => $invoice,
-            'isservice' => $service,
-            'isquotation'=>$quotation,
-        );
-        if ($this->form_validation->run()) {
-        $this->db->where('id', $this->input->post('id',true))->update('email_config', $mail_data);
-        $this->session->set_flashdata('message', display('update_successfully'));
-         redirect(base_url('mail_setting'));
-    }else{
-            $this->session->set_flashdata(array('exception' => validation_errors()));
-             redirect(base_url('mail_setting'));
-        }
-        
-       
-    }
+			$config_id = $this->input->post('id', true);
+
+			// ✅ Directly update the single row
+			$this->db->where('id', $config_id)->update('email_config', $mail_data);
+
+			$this->session->set_flashdata('message', display('update_successfully'));
+			redirect(base_url('mail_setting'));
+		} else {
+			$this->session->set_flashdata('exception', validation_errors());
+			redirect(base_url('mail_setting'));
+		}
+	}
 
 		public function check_mail_config()
 	{
@@ -499,6 +493,61 @@ public function paysenz_currencyform($id = null)
 		}
 	}
 
+	public function test_mail_config()
+	{
+		$this->form_validation->set_rules('test_email', 'Test Email', 'required|valid_email|max_length[255]');
+
+		if ($this->form_validation->run()) {
+			$test_email = $this->input->post('test_email', true);
+			log_message('debug', "[test_mail_config] 📬 Sending test email to: {$test_email}");
+
+			// ✅ Load dynamic mail config
+			$this->load->model('Setting_model');
+			$smtp = $this->Setting_model->getMailConfig();
+
+			if (empty($smtp)) {
+				log_message('error', '[test_mail_config] ❌ No SMTP config found.');
+				$this->session->set_flashdata('mail_test_error', 'SMTP configuration missing.');
+				redirect(base_url('mail_setting'));
+				return;
+			}
+
+			// ✅ Safe log config summary (without password)
+			log_message('debug', '[test_mail_config] SMTP config loaded: ' . json_encode([
+				'protocol' => $smtp['protocol'],
+				'smtp_host' => $smtp['smtp_host'],
+				'smtp_port' => $smtp['smtp_port'],
+				'smtp_user' => $smtp['smtp_user'],
+				'smtp_crypto' => $smtp['smtp_crypto'],
+			]));
+
+			// ✅ Prepare message
+			$subject = "📧 DeshiShad Test Email";
+			$message = "
+				<h3>This is a test email</h3>
+				<p>You're receiving this because a test was requested from the admin panel.</p>
+				<p><small>Server Time: " . date("Y-m-d H:i:s") . "</small></p>
+			";
+
+			// ✅ Load mail lib and send
+			$this->load->library('Sendmail_lib');
+			$sent = $this->sendmail_lib->send($test_email, $subject, $message, $smtp['smtp_user'], 'DeshiShad Test Mail');
+
+			if ($sent) {
+				log_message('debug', "[test_mail_config] ✅ Test email successfully sent to {$test_email}");
+				$this->session->set_flashdata('mail_test_success', "✅ Test email sent to {$test_email}");
+			} else {
+				log_message('error', "[test_mail_config] ❌ Test email failed to send to {$test_email}");
+				$this->session->set_flashdata('mail_test_error', "❌ Test email failed. Check logs or SMTP configuration.");
+			}
+
+			redirect(base_url('mail_setting'));
+
+		} else {
+			$this->session->set_flashdata('mail_test_error', validation_errors());
+			redirect(base_url('mail_setting'));
+		}
+	}
 
 	    public function paysenz_sms_config()
 	{ 

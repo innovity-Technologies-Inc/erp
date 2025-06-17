@@ -1016,70 +1016,85 @@ function customer_form(){
   });
 }
 
-$(document).ready(function() { 
-  var CSRF_TOKEN = $('#CSRF_TOKEN').val();
-  var base_url  = $('#base_url').val();
 
-  var mydatatable = $('#CustomerList').DataTable({ 
-      responsive: true,
-      "aaSorting": [[1, "asc"]],
-      "columnDefs": [
-          { "bSortable": false, "aTargets": [0,2,3,4,5,6,7,8,9,10,11,12] },
-      ],
-      'processing': true,
-      'serverSide': true,
-      'lengthMenu': [[50, 100, 250, 500, -1], [50, 100, 250, 500, "All"]],
-      'serverMethod': 'post',
-      'ajax': {
-          'url': base_url + 'customer/customer/paysenz_CheckCustomerList',
-          "data": function (data) {
-              data.csrf_test_name = CSRF_TOKEN;
-              data.customer_id = $('#customer_id').val();
-              data.customfiled = $("select[name='customsearch[]']").val();
-              console.log("DEBUG: Sending AJAX Request ->", data);
-          },
-          "dataSrc": function(json) {
-              console.log("DEBUG: Server Response ->", json);
-              return json.aaData || [];
-          }
+  $(document).ready(function () {
+  var CSRF_TOKEN = $('#CSRF_TOKEN').val();
+  var base_url = $('#base_url').val();
+
+  var mydatatable = $('#CustomerList').DataTable({
+    responsive: true,
+    aaSorting: [[1, "asc"]],
+    columnDefs: [
+      { bSortable: false, aTargets: [0, 2, 3, 4, 5, 6, 7, 9] } // Status (index 8) is now sortable
+    ],
+    processing: true,
+    serverSide: true,
+    lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
+    serverMethod: 'post',
+    ajax: {
+      url: base_url + 'customer/customer/paysenz_CheckCustomerList',
+      data: function (data) {
+        data.csrf_test_name = CSRF_TOKEN;
+        data.customer_id = $('#customer_id').val();
+        data.customfiled = $("select[name='customsearch[]']").val();
+        console.log("DEBUG: Sending AJAX Request ->", data);
       },
-      'columns': [
-          { data: 'sl' },
-          { data: 'customer_name' },
-          { data: 'address' },
-          { data: 'mobile' },
-          { data: 'email' },
-          { data: 'vat_no' },
-          { data: 'sales_permit_number' },
-          { data: 'sales_permit' },
-          { data: 'zip' },
-          { data: 'country' },
-          { data: 'balance', class: "balance" },
-          { 
-            data: 'status', 
-            render: function(data, type, row) { 
-              if (data == 1) {
-                return '<span class="badge badge-success">Active</span>';
-              } else if (data == 2) {
-                return '<span class="badge badge-danger">Deleted</span>';
-              } else {
-                return '<span class="badge badge-secondary">Inactive</span>';
-              }
-            }
-          },
-          { 
-            data: 'button', 
-            render: function(data, type, row) {
-                console.log("DEBUG: Action Buttons Data ->", data); // Log button data
-                return data ? data : '<span class="text-muted">No Actions</span>'; // Ensure it doesn't break
-            }
+      dataSrc: function (json) {
+        console.log("DEBUG: Server Response ->", json);
+        return json.aaData || [];
+      }
+    },
+    columns: [
+      {
+        data: null,
+        render: function (data, type, row, meta) {
+          return meta.row + meta.settings._iDisplayStart + 1;
+        }
+      },
+      { data: 'customer_name' },
+      { data: 'mobile' },
+      { data: 'email' },
+      { data: 'vat_no' },
+      { data: 'sales_permit_number' },
+      {
+        data: 'sales_permit',
+        render: function (data) {
+          return data ? data : '<span class="text-muted">N/A</span>';
+        }
+      },
+      {
+        data: 'balance',
+        className: "balance",
+        render: function (data) {
+          return parseFloat(data).toFixed(2);
+        }
+      },
+      {
+        data: 'status',
+        render: function (data) {
+          if (data == 1) {
+            return '<span class="badge badge-success" style="cursor: pointer;" title="Click for more details">Active</span>';
+          } else if (data == 2) {
+            return '<span class="badge badge-danger" style="cursor: pointer;" title="Click for more details">Deleted</span>';
+          } else {
+            return '<span class="badge badge-secondary" style="cursor: pointer;" title="Click for more details">Inactive</span>';
           }
-      ]
+        }
+      },
+      {
+        data: 'button',
+        render: function (data) {
+          console.log("DEBUG: Action Buttons Data ->", data);
+          return data ? data : '<span class="text-muted">No Actions</span>';
+        }
+      }
+    ]
   });
 
-  $("#customer_id, #customsearch").on('change', function(){
-      console.log("DEBUG: Reloading DataTable...");
-      mydatatable.ajax.reload();  
+  // Reload on filter change
+  $("#customer_id, #customsearch").on('change', function () {
+    console.log("DEBUG: Reloading DataTable...");
+    mydatatable.ajax.reload();
   });
 });
 

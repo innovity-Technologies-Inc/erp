@@ -269,6 +269,9 @@
                                     $clean_shipping = (float) str_replace(',', '', $shipping_cost);
 
                                     $grand_total = $price_after_discount + $clean_vat + $clean_tax + $clean_shipping;
+
+                                    // ✅ force paid amount to match grand total
+                                    $clean_paid_amount = $grand_total;
                                 ?>
 
                                 <?php if (!empty($total_discount_cal) && $total_discount_cal > 0): ?>
@@ -368,9 +371,6 @@
                                     </tr>
                                 <?php endif; ?>
 
-                                <?php 
-                                    $clean_paid_amount = (float) str_replace(',', '', $paid_amount);
-                                ?>
                                 <tr style="border-top: 3px double #000;">
                                     <th class="text-left grand_total"><?php echo display('paid_ammount'); ?> :</th>
                                     <td class="text-right grand_total">
@@ -381,23 +381,7 @@
                                         ?>
                                     </td>
                                 </tr>
-
-                                <?php 
-                                    $clean_previous = (float) str_replace(',', '', $previous);
-                                    $total_due = $grand_total + $clean_previous - $clean_paid_amount;
-                                    if ($total_due > 0): 
-                                ?>
-                                    <tr>
-                                        <th class="text-left grand_total"><?php echo display('due') ?> :</th>
-                                        <td class="text-right grand_total">
-                                            <?php 
-                                            echo ($position == 0)
-                                                ? $currency . ' ' . number_format($total_due, 2)
-                                                : number_format($total_due, 2) . ' ' . $currency;
-                                            ?>
-                                        </td>
-                                    </tr>
-                                <?php endif; ?>
+                                <!-- 🟡 No "Due" row because paid == grand total -->
                             </table>
                         </div>
                     </div>

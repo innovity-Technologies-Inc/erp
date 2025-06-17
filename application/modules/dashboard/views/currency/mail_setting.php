@@ -96,14 +96,40 @@
                </div>
 
 </div>
-                            <div class="form-group row">
-                                <label for="example-text-input" class="col-sm-3 col-form-label"></label>
-                                <div class="col-sm-6 text-right">
-                                    <input type="submit" class="btn btn-success btn-large" value="Save Changes">
-                                </div>
-                            </div>
-                       <?php echo form_close();?>
+                            <!-- Save Mail Configuration Button -->
+                <div class="form-group row">
+                    <label class="col-sm-3 col-form-label"></label>
+                    <div class="col-sm-6 text-right">
+                        <input type="submit" class="btn btn-success btn-large" value="Save Changes">
                     </div>
+                </div>
+                <?php echo form_close(); ?>
+
+                <!-- 🔽 Divider -->
+                <hr>
+                <h4 class="text-center text-info mt-4"><?php echo display('send_test_mail'); ?></h4>
+
+                <!-- ✅ Test Mail Form -->
+                <?php echo form_open('dashboard/setting/test_mail_config', 'class="form-inline text-center"'); ?>
+                    <div class="form-group mb-3">
+                        <label for="test_email" class="mr-2"><?php echo display('test_email'); ?>:</label>
+                        <input type="email" name="test_email" id="test_email" class="form-control" placeholder="Enter test email" required style="width: 250px;">
+                    </div>
+                    <button type="submit" class="btn btn-primary ml-2"><?php echo display('send_test'); ?></button>
+                <?php echo form_close(); ?>
+
+                <!-- ✅ Show Success/Error Message -->
+                <?php if ($this->session->flashdata('mail_test_success')): ?>
+                    <div class="alert alert-success text-center mt-3">
+                        <?php echo $this->session->flashdata('mail_test_success'); ?>
+                    </div>
+                <?php elseif ($this->session->flashdata('mail_test_error')): ?>
+                    <div class="alert alert-danger text-center mt-3">
+                        <?php echo $this->session->flashdata('mail_test_error'); ?>
+                    </div>
+                <?php endif; ?>
+                    </div>
+                    
                 </div>
             </div>
         </div>
