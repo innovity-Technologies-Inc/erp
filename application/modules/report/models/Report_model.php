@@ -478,109 +478,80 @@ class Report_model extends CI_Model {
         }
         return false;
     }
-    public function get_retrieve_dateWise_DueReports($postData=null){
-
+    public function get_retrieve_dateWise_DueReports($postData = null)
+    {
         $response = array();
 
         $fromdate = $this->input->post('fromdate');
         $todate   = $this->input->post('todate');
-        if(!empty($fromdate)){
-           $datbetween = "(a.date BETWEEN '$fromdate' AND '$todate')";
-        }else{
-           $datbetween = "";
-        }
-        // dd($datbetween);
 
-        ## Read value
+        $datbetween = '';
+        if (!empty($fromdate) && !empty($todate)) {
+            $datbetween = "DATE(a.date) BETWEEN '$fromdate' AND '$todate'";
+        }
+
+        ## Read values
         $draw = $postData['draw'];
         $start = $postData['start'];
-        $rowperpage = $postData['length']; // Rows display per page
-        $columnIndex = $postData['order'][0]['column']; // Column index
-        $columnName = $postData['columns'][$columnIndex]['data']; // Column name
-        $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
-        $searchValue = $postData['search']['value']; // Search value
+        $rowperpage = $postData['length'];
+        $columnIndex = $postData['order'][0]['column'];
+        $columnName = $postData['columns'][$columnIndex]['data'];
+        $columnSortOrder = $postData['order'][0]['dir'];
+        $searchValue = $postData['search']['value'];
 
         ## Search 
         $searchQuery = "";
-        if($searchValue != ''){
-           $searchQuery = " (a.date like '%".$searchValue."%' or a.invoice_id like '%".$searchValue."%' or a.total_amount like'%".$searchValue."%' or b.customer_name like'%".$searchValue."%') ";
+        if ($searchValue != '') {
+            $searchQuery = "(a.date LIKE '%$searchValue%' OR a.invoice_id LIKE '%$searchValue%' OR a.total_amount LIKE '%$searchValue%' OR b.customer_name LIKE '%$searchValue%')";
         }
 
         ## Total number of records without filtering
-        $this->db->select('count(*) as allcount');
+        $this->db->select('COUNT(DISTINCT a.invoice_id) as allcount');
         $this->db->from('invoice a');
-        $this->db->join('invoice_details c', 'c.invoice_id = a.id');
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
-        $this->db->where('a.due_amount >',0);
-        if(!empty($fromdate) && !empty($todate)){
-            $this->db->where($datbetween);
-        }
-         if($searchValue != '')
-        $this->db->where($searchQuery);
-        $records = $this->db->get()->result();
-        $totalRecords = $records[0]->allcount;
-
-        ## Total number of record with filtering
-        $this->db->select('count(*) as allcount');
-        $this->db->from('invoice a');
-        $this->db->join('invoice_details c', 'c.invoice_id = a.id');
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
-        $this->db->where('a.due_amount >',0);
-        if(!empty($fromdate) && !empty($todate)){
-            $this->db->where($datbetween);
-        }
-        if($searchValue != '')
-           $this->db->where($searchQuery);
-        $records = $this->db->get()->result();
-        $totalRecordwithFilter = $records[0]->allcount;
+        $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left');
+        $this->db->where('a.due_amount >', 0);
+        if (!empty($datbetween)) $this->db->where($datbetween);
+        if ($searchQuery != '') $this->db->where($searchQuery);
+        $totalRecords = $this->db->get()->row()->allcount;
 
         ## Fetch records
-        $this->db->select("a.*,b.customer_id,b.customer_name");
+        $this->db->select("a.invoice_id, a.date, b.customer_name, a.total_amount, a.paid_amount, a.due_amount");
         $this->db->from('invoice a');
-        $this->db->join('invoice_details c', 'c.invoice_id = a.id');
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
-        $this->db->where('a.due_amount >',0);
-        if(!empty($fromdate) && !empty($todate)){
-            $this->db->where($datbetween);
-        }
-        if($searchValue != '')
-        $this->db->where($searchQuery);
+        $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left');
+        $this->db->where('a.due_amount >', 0);
+        if (!empty($datbetween)) $this->db->where($datbetween);
+        if ($searchQuery != '') $this->db->where($searchQuery);
+        $this->db->group_by('a.invoice_id');
         $this->db->order_by($columnName, $columnSortOrder);
         $this->db->limit($rowperpage, $start);
         $records = $this->db->get()->result();
-        $data = array();
-        $sl =1;
- 
+
+        $data = [];
         $sales_amount = 0;
-        // dd($records);
-        foreach($records as $record ){
-         $button = '';
-         $base_url = base_url();
-        $customer = $record->customer_name;
-              
-           $data[] = array( 
-               'date'                   =>$record->date,               
-               'invoice_id'             =>$record->invoice_id,               
-               'customer_name'          =>$customer,
-               'total_amount'           =>$record->total_amount,               
-               'paid_amount'            =>$record->paid_amount,               
-               'due_amount'             =>$record->due_amount,               
-           ); 
-           $sales_amount += $record->total_amount;
-           $sl++;
+
+        foreach ($records as $record) {
+            $data[] = array(
+                'date' => $record->date,
+                'invoice_id' => $record->invoice_id,
+                'customer_name' => $record->customer_name,
+                'total_amount' => $record->total_amount,
+                'paid_amount' => $record->paid_amount,
+                'due_amount' => $record->due_amount,
+            );
+            $sales_amount += $record->total_amount;
         }
 
         ## Response
         $response = array(
-           "draw" => intval($draw),
-           "iTotalRecords" => $totalRecordwithFilter,
-           "iTotalDisplayRecords" => $totalRecords,
-           "sales_amount" => $sales_amount,
-           "aaData" => $data
+            "draw" => intval($draw),
+            "iTotalRecords" => $totalRecords,
+            "iTotalDisplayRecords" => $totalRecords,
+            "sales_amount" => $sales_amount,
+            "aaData" => $data
         );
 
-        return $response; 
-   }
+        return $response;
+    }
 
 
 
