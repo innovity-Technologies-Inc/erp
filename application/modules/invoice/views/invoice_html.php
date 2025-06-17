@@ -261,7 +261,7 @@
                             <table class="table print-font-size">
                                 <?php
                                     $clean_sub_total = (float) str_replace(',', '', $subTotal_amount_cal);
-                                    $clean_discount = (!empty($total_discount_cal)) ? (float) str_replace(',', '', $total_discount_cal) : 0.00;
+                                    $clean_discount = (float) str_replace(',', '', $total_discount_cal);
                                     $price_after_discount = $clean_sub_total - $clean_discount;
 
                                     $clean_vat = (float) str_replace(',', '', $total_vat);
@@ -269,81 +269,66 @@
                                     $clean_shipping = (float) str_replace(',', '', $shipping_cost);
 
                                     $grand_total = $price_after_discount + $clean_vat + $clean_tax + $clean_shipping;
-
-                                    // ✅ force paid amount to match grand total
-                                    $clean_paid_amount = $grand_total;
+                                    $clean_paid_amount = (float) str_replace(',', '', $paid_amount);
+                                    $clean_due_amount = (float) str_replace(',', '', $due_amount);
                                 ?>
 
-                                <?php if (!empty($total_discount_cal) && $total_discount_cal > 0): ?>
+                                <?php if ($clean_discount > 0): ?>
                                     <tr>
                                         <th><?php echo 'Total Price Before Discount' ?> :</th>
                                         <td class="text-right">
-                                            <?php 
-                                            echo ($position == 0)
+                                            <?php echo ($position == 0)
                                                 ? $currency . ' ' . number_format($subTotal_amount_cal, 2)
-                                                : number_format($subTotal_amount_cal, 2) . ' ' . $currency;
-                                            ?>
+                                                : number_format($subTotal_amount_cal, 2) . ' ' . $currency; ?>
                                         </td>
                                     </tr>
-
                                     <tr>
                                         <th><?php echo display('dis_val') ?> :</th>
                                         <td class="text-right">
-                                            <?php 
-                                            echo ($position == 0)
+                                            <?php echo ($position == 0)
                                                 ? $currency . ' ' . number_format($total_discount_cal, 2)
-                                                : number_format($total_discount_cal, 2) . ' ' . $currency;
-                                            ?>
+                                                : number_format($total_discount_cal, 2) . ' ' . $currency; ?>
                                         </td>
                                     </tr>
-
                                     <tr>
                                         <th><?php echo 'Total Price After Discount' ?> :</th>
                                         <td class="text-right">
-                                            <?php
-                                            echo ($position == 0)
+                                            <?php echo ($position == 0)
                                                 ? $currency . ' ' . number_format($price_after_discount, 2)
-                                                : number_format($price_after_discount, 2) . ' ' . $currency;
-                                            ?>
+                                                : number_format($price_after_discount, 2) . ' ' . $currency; ?>
                                         </td>
                                     </tr>
                                 <?php endif; ?>
 
-                                <?php if (!empty($total_vat) && $total_vat != 0): ?>
+                                <?php if (!empty($total_vat) && $clean_vat > 0): ?>
                                     <tr>
                                         <th><?php echo display('vat_val') ?> :</th>
                                         <td class="text-right">
-                                            <?php 
-                                            echo ($position == 0)
+                                            <?php echo ($position == 0)
                                                 ? $currency . ' ' . number_format($total_vat, 2)
-                                                : number_format($total_vat, 2) . ' ' . $currency;
-                                            ?>
+                                                : number_format($total_vat, 2) . ' ' . $currency; ?>
                                         </td>
                                     </tr>
                                 <?php endif; ?>
 
-                                <?php if (!empty($total_tax) && $total_tax != 0): ?>
+                                <?php if (!empty($total_tax) && $clean_tax > 0): ?>
                                     <tr>
                                         <th class="text-left"><?php echo display('tax') ?> :</th>
                                         <td class="text-right">
-                                            <?php 
-                                            echo ($position == 0)
+                                            <?php echo ($position == 0)
                                                 ? $currency . ' ' . number_format($total_tax, 2)
-                                                : number_format($total_tax, 2) . ' ' . $currency;
-                                            ?>
+                                                : number_format($total_tax, 2) . ' ' . $currency; ?>
                                         </td>
                                     </tr>
                                 <?php endif; ?>
 
-                                <?php if (!empty($shipping_cost) && $shipping_cost != 0): ?>
+                                <?php if (!empty($shipping_cost) && $clean_shipping > 0): ?>
                                     <tr>
                                         <th class="text-left"><?php echo 'Shipping Cost' ?> :</th>
                                         <td class="text-right">
-                                            <?php 
-                                            echo ($position == 0)
+                                            <?php echo ($position == 0)
                                                 ? $currency . ' ' . number_format($shipping_cost, 2)
-                                                : number_format($shipping_cost, 2) . ' ' . $currency;
-                                            ?>
+                                                : number_format($shipping_cost, 2) . ' ' . $currency; ?>
                                         </td>
                                     </tr>
                                 <?php endif; ?>
@@ -353,8 +338,7 @@
                                     <td class="text-right grand_total">
                                         <?php echo ($position == 0)
                                             ? $currency . ' ' . number_format($grand_total, 2)
-                                            : number_format($grand_total, 2) . ' ' . $currency;
-                                        ?>
+                                            : number_format($grand_total, 2) . ' ' . $currency; ?>
                                     </td>
                                 </tr>
 
@@ -362,11 +346,9 @@
                                     <tr>
                                         <th class="text-left grand_total"><?php echo display('previous'); ?> :</th>
                                         <td class="text-right grand_total">
-                                            <?php 
-                                            echo ($position == 0)
+                                            <?php echo ($position == 0)
                                                 ? $currency . ' ' . number_format($previous, 2)
-                                                : number_format($previous, 2) . ' ' . $currency;
-                                            ?>
+                                                : number_format($previous, 2) . ' ' . $currency; ?>
                                         </td>
                                     </tr>
                                 <?php endif; ?>
@@ -374,14 +356,22 @@
                                 <tr style="border-top: 3px double #000;">
                                     <th class="text-left grand_total"><?php echo display('paid_ammount'); ?> :</th>
                                     <td class="text-right grand_total">
-                                        <?php 
-                                        echo ($position == 0)
+                                        <?php echo ($position == 0)
                                             ? $currency . ' ' . number_format($clean_paid_amount, 2)
-                                            : number_format($clean_paid_amount, 2) . ' ' . $currency;
-                                        ?>
+                                            : number_format($clean_paid_amount, 2) . ' ' . $currency; ?>
                                     </td>
                                 </tr>
-                                <!-- 🟡 No "Due" row because paid == grand total -->
+
+                                <?php if ($clean_due_amount > 0): ?>
+                                    <tr>
+                                        <th class="text-left grand_total"><?php echo display('due_amount'); ?> :</th>
+                                        <td class="text-right grand_total">
+                                            <?php echo ($position == 0)
+                                                ? $currency . ' ' . number_format($clean_due_amount, 2)
+                                                : number_format($clean_due_amount, 2) . ' ' . $currency; ?>
+                                        </td>
+                                    </tr>
+                                <?php endif; ?>
                             </table>
                         </div>
                     </div>

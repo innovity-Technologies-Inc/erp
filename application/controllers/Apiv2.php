@@ -1361,21 +1361,16 @@ class Apiv2 extends CI_Controller {
                 }
             }
 
-            // ✅ Input decoding and validation
-            $input = json_decode(file_get_contents('php://input'), true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                return $this->_bad_request('Invalid JSON input: ' . json_last_error_msg());
-            }
-
+            // ✅ Input validation using POST
             $params = [
-                'product_id'   => $input['product_id'] ?? '',
-                'product_name' => $input['product_name'] ?? '',
-                'category_id'  => $input['category_id'] ?? '',
-                'min_price'    => $input['min_price'] ?? null,
-                'max_price'    => $input['max_price'] ?? null
+                'product_id'   => $this->input->post('product_id', TRUE) ?? '',
+                'product_name' => $this->input->post('product_name', TRUE) ?? '',
+                'category_id'  => $this->input->post('category_id', TRUE) ?? '',
+                'min_price'    => $this->input->post('min_price', TRUE),
+                'max_price'    => $this->input->post('max_price', TRUE)
             ];
-            $limit  = isset($input['limit']) ? (int)$input['limit'] : 10;
-            $page   = isset($input['page']) ? (int)$input['page'] : 1;
+            $limit  = (int) ($this->input->post('limit', TRUE) ?? 10);
+            $page   = (int) ($this->input->post('page', TRUE) ?? 1);
             $offset = ($page - 1) * $limit;
 
             // ✅ Search logic
@@ -1384,14 +1379,14 @@ class Apiv2 extends CI_Controller {
 
             log_message('debug', 'Fetched product count: ' . count($products));
 
-            // ✅ Map categories
+            // ✅ Category mapping
             $category_map = [];
             $categories = $this->db->select('category_id, category_name')->get('product_category')->result();
             foreach ($categories as $cat) {
                 $category_map[$cat->category_id] = $cat->category_name;
             }
 
-            // ✅ Process result
+            // ✅ Data post-processing
             foreach ($products as $k => $v) {
                 if (!empty($products[$k]['image'])) {
                     $products[$k]['image'] = base_url(str_replace('./', '', $products[$k]['image']));
@@ -1411,7 +1406,7 @@ class Apiv2 extends CI_Controller {
 
             $execution_time = microtime(true) - $start_time;
 
-            // ✅ Return formatted response
+            // ✅ Return structured success response
             return $this->_success([
                 'total_count'    => $total_count,
                 'matched_count'  => count($products),
@@ -1915,6 +1910,52 @@ class Apiv2 extends CI_Controller {
         } catch (Exception $e) {
             log_message('error', '❌ second_layer_login() failed: ' . $e->getMessage());
             return $this->_server_error('Something went wrong during 2nd layer login.');
+        }
+    }
+
+
+    public function get_customer_profile()
+    {
+        try {
+            log_message('debug', '[GetProfile] Initiated profile fetch');
+
+            // 🔐 First-layer token authentication
+            $user = $this->authenticate_token();
+            if (!$user || empty($user->uid)) {
+                return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
+            }
+
+            $customer_id = $user->uid;
+            log_message('debug', "[GetProfile] Authenticated customer_id: {$customer_id}");
+
+            // ✅ Fetch customer_information
+            $customer = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row_array();
+            if (!$customer) {
+                return $this->_not_found('Customer profile not found.');
+            }
+
+            // ✅ Fetch customer_auth
+            $auth = $this->db->select('username, status as auth_status, fcm_token')
+                            ->get_where('customer_auth', ['customer_id' => $customer_id])
+                            ->row_array();
+
+            // ✅ Fetch latest commission
+            $commission = $this->db->order_by('id', 'DESC')
+                                ->get_where('customer_comission', ['customer_id' => $customer_id])
+                                ->row_array();
+
+            // 🧩 Merge and respond
+            $profile = [
+                'customer'   => $customer,
+                'auth'       => $auth,
+                'commission' => $commission
+            ];
+
+            return $this->_success($profile, 'Customer profile fetched successfully.');
+
+        } catch (Exception $e) {
+            log_message('error', '[GetProfile] Error: ' . $e->getMessage());
+            return $this->_server_error('Failed to fetch profile.');
         }
     }
 
