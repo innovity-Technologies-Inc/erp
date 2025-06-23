@@ -4,6 +4,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 require_once(APPPATH . 'third_party/JWT/JWT.php');
 require_once(APPPATH . 'third_party/JWT/Key.php');
 
+use Firebase\JWT\ExpiredException;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
@@ -334,29 +335,29 @@ class Apiv2 extends CI_Controller {
             ]));
     }
 
-    private function authenticate_token()
-    {
-        $auth_header = $this->input->get_request_header('Authorization');
-        if (!$auth_header || !preg_match('/Bearer\s(\S+)/', $auth_header, $matches)) {
-            return false;
-        }
-    
-        $token = $matches[1];
-    
-        try {
-            $decoded = JWT::decode($token, new Key($this->jwt_key, $this->jwt_algo));
-    
-            // Reject token if it has no username/usertype (i.e., it's likely a refresh_token)
-            if (!isset($decoded->username) || !isset($decoded->usertype)) {
-                return false; // It's a refresh token, not access
+        private function authenticate_token()
+        {
+            $auth_header = $this->input->get_request_header('Authorization');
+            if (!$auth_header || !preg_match('/Bearer\s(\S+)/', $auth_header, $matches)) {
+                return false;
             }
-    
-            return $decoded;
-    
-        } catch (Exception $e) {
-            return false;
+        
+            $token = $matches[1];
+        
+            try {
+                $decoded = JWT::decode($token, new Key($this->jwt_key, $this->jwt_algo));
+        
+                // Reject token if it has no username/usertype (i.e., it's likely a refresh_token)
+                if (!isset($decoded->username) || !isset($decoded->usertype)) {
+                    return false; // It's a refresh token, not access
+                }
+        
+                return $decoded;
+        
+            } catch (Exception $e) {
+                return false;
+            }
         }
-    }
 
 
 
@@ -1345,7 +1346,8 @@ class Apiv2 extends CI_Controller {
             // ✅ First-layer token check
             $user = $this->authenticate_token();
             if (!$user) {
-                return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
+                log_message('error', '🔒 Unauthorized access: Invalid or expired token in product_search()');
+                return $this->_unauthorized('Unauthorized. Access token is invalid or expired.');
             }
 
             // ✅ Second-layer token (optional)
@@ -1361,23 +1363,33 @@ class Apiv2 extends CI_Controller {
                 }
             }
 
-            // ✅ Input validation using POST
+            // ✅ Input handling from raw JSON body
+            $body = json_decode(trim($this->input->raw_input_stream), true);
+
+            // Set defaults and validate types
             $params = [
-                'product_id'   => $this->input->post('product_id', TRUE) ?? '',
-                'product_name' => $this->input->post('product_name', TRUE) ?? '',
-                'category_id'  => $this->input->post('category_id', TRUE) ?? '',
-                'min_price'    => $this->input->post('min_price', TRUE),
-                'max_price'    => $this->input->post('max_price', TRUE)
+                'product_id'   => $body['product_id']   ?? '',
+                'product_name' => $body['product_name'] ?? '',
+                'category_id'  => $body['category_id']  ?? '',
+                'min_price'    => isset($body['min_price']) ? (float) $body['min_price'] : null,
+                'max_price'    => isset($body['max_price']) ? (float) $body['max_price'] : null,
             ];
-            $limit  = (int) ($this->input->post('limit', TRUE) ?? 10);
-            $page   = (int) ($this->input->post('page', TRUE) ?? 1);
+
+            $limit = isset($body['limit']) && is_numeric($body['limit']) ? (int) $body['limit'] : 10;
+            $page  = isset($body['page']) && is_numeric($body['page']) ? (int) $body['page'] : 1;
             $offset = ($page - 1) * $limit;
 
-            // ✅ Search logic
+            log_message('debug', "product_search() pagination => limit: {$limit}, page: {$page}, offset: {$offset}");
+
+            // ✅ Count & Fetch using model methods
             $total_count = $this->countProductSearchResults($params);
-            $products = $this->getProductSearchResults($params, $limit, $offset);
+            $products    = $this->getProductSearchResults($params, $limit, $offset);
 
             log_message('debug', 'Fetched product count: ' . count($products));
+
+            if (!empty($params['product_id']) && count($products) === 0) {
+                return $this->_not_found('Product ID ' . $params['product_id'] . ' is not available.');
+            }
 
             // ✅ Category mapping
             $category_map = [];
@@ -1386,7 +1398,7 @@ class Apiv2 extends CI_Controller {
                 $category_map[$cat->category_id] = $cat->category_name;
             }
 
-            // ✅ Data post-processing
+            // ✅ Post-process each product
             foreach ($products as $k => $v) {
                 if (!empty($products[$k]['image'])) {
                     $products[$k]['image'] = base_url(str_replace('./', '', $products[$k]['image']));
@@ -1400,13 +1412,12 @@ class Apiv2 extends CI_Controller {
                     $products[$k]['price'] = (float)$products[$k]['price'];
                 }
 
-                $products[$k]['qr_code'] = base_url('my-assets/image/qr/' . $v['product_id'] . '.png');
+                $products[$k]['qr_code']  = base_url('my-assets/image/qr/' . $v['product_id'] . '.png');
                 $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $v['product_id']);
             }
 
             $execution_time = microtime(true) - $start_time;
 
-            // ✅ Return structured success response
             return $this->_success([
                 'total_count'    => $total_count,
                 'matched_count'  => count($products),
@@ -1422,143 +1433,147 @@ class Apiv2 extends CI_Controller {
         }
     }
 
-    public function buildProductSearchQuery(array $params)
-    {
-        $this->db->from('product_information');
+    // ✅ Builds search query with reusable conditions
+public function buildProductSearchQuery(array $params)
+{
+    $this->db->start_cache();
+    $this->db->from('product_information');
 
-        if (!empty($params['product_id'])) {
-            $this->db->where('product_information.product_id', $params['product_id']);
-        }
-
-        if (!empty($params['product_name'])) {
-            $this->db->like('product_information.product_name', $params['product_name']);
-        }
-
-        if (!empty($params['category_id'])) {
-            $this->db->where('product_information.category_id', $params['category_id']);
-        }
-
-        if (!is_null($params['min_price'])) {
-            $this->db->where('product_information.price >=', $params['min_price']);
-        }
-
-        if (!is_null($params['max_price'])) {
-            $this->db->where('product_information.price <=', $params['max_price']);
-        }
-
-        return clone $this->db; // Optional: clone here to avoid mutation if reused multiple times
+    if (!empty($params['product_id'])) {
+        $this->db->where('product_information.product_id', $params['product_id']);
     }
 
-    // ✅ Result query logic
-    public function getProductSearchResults($params, $limit, $offset)
+    if (!empty($params['product_name'])) {
+        $this->db->like('product_information.product_name', $params['product_name']);
+    }
+
+    if (!empty($params['category_id'])) {
+        $category_ids = $this->get_all_related_category_ids($params['category_id']);
+        $this->db->where_in('product_information.category_id', $category_ids);
+    }
+
+    if (isset($params['min_price']) && is_numeric($params['min_price'])) {
+        $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) >=', (float)$params['min_price']);
+    }
+
+    if (isset($params['max_price']) && is_numeric($params['max_price'])) {
+        $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) <=', (float)$params['max_price']);
+    }
+
+    $this->db->stop_cache();
+    return $this->db;
+}
+
+// ✅ Fetches paginated product search results
+    public function getProductSearchResults(array $params, int $limit, int $offset)
     {
-        $this->db->from('product_information');
+        $this->db->select('p.*, c.category_name')
+            ->from('product_information p')
+            ->join('product_category c', 'c.category_id = p.category_id', 'left');
 
         if (!empty($params['product_id'])) {
-            $this->db->where('product_information.product_id', $params['product_id']);
+            $this->db->where('p.product_id', $params['product_id']);
         }
 
         if (!empty($params['product_name'])) {
-            $this->db->like('product_information.product_name', $params['product_name']);
+            $this->db->like('p.product_name', $params['product_name']);
         }
 
         if (!empty($params['category_id'])) {
-            $this->db->where('product_information.category_id', $params['category_id']);
+            $this->db->where('p.category_id', $params['category_id']);
         }
 
         if (!is_null($params['min_price'])) {
-            $this->db->where('product_information.price >=', $params['min_price']);
+            $this->db->where('p.price >=', $params['min_price']);
         }
 
         if (!is_null($params['max_price'])) {
-            $this->db->where('product_information.price <=', $params['max_price']);
+            $this->db->where('p.price <=', $params['max_price']);
         }
 
+        $this->db->order_by('p.id', 'DESC');
+
+        // ✅ Apply pagination here
         $this->db->limit($limit, $offset);
+
         return $this->db->get()->result_array();
     }
 
-    // ✅ Count query logic
-    public function countProductSearchResults($params)
+// ✅ Counts total product results matching filters
+    public function countProductSearchResults(array $params)
     {
         $this->db->from('product_information');
 
         if (!empty($params['product_id'])) {
-            $this->db->where('product_information.product_id', $params['product_id']);
+            $this->db->where('product_id', $params['product_id']);
         }
 
         if (!empty($params['product_name'])) {
-            $this->db->like('product_information.product_name', $params['product_name']);
+            $this->db->like('product_name', $params['product_name']);
         }
 
         if (!empty($params['category_id'])) {
-            $this->db->where('product_information.category_id', $params['category_id']);
+            $this->db->where('category_id', $params['category_id']);
         }
 
         if (!is_null($params['min_price'])) {
-            $this->db->where('product_information.price >=', $params['min_price']);
+            $this->db->where('price >=', $params['min_price']);
         }
 
         if (!is_null($params['max_price'])) {
-            $this->db->where('product_information.price <=', $params['max_price']);
+            $this->db->where('price <=', $params['max_price']);
         }
 
-        return $this->db->count_all_results(); // executes and resets
+        return $this->db->count_all_results();
     }
 
-    private function get_all_related_category_ids($category_id)
-    {
-        // Validate input
-        $category_id = (int)$category_id;
-        if ($category_id <= 0) {
-            return [];
+// ✅ Fetches all sub-category IDs for a given parent category ID
+private function get_all_related_category_ids($category_id)
+{
+    $category_id = (int)$category_id;
+    if ($category_id <= 0) {
+        return [];
+    }
+
+    $this->db->select('category_id, parent_id')
+             ->from('product_category')
+             ->where('status', 1);
+
+    $query = $this->db->get();
+    if (!$query) {
+        log_message('error', 'Failed to fetch categories: ' . $this->db->error()['message']);
+        return [$category_id];
+    }
+
+    $all_categories = $query->result_array();
+    $children_map = [];
+
+    foreach ($all_categories as $cat) {
+        $parent_id = (int)$cat['parent_id'];
+        if ($parent_id > 0) {
+            $children_map[$parent_id][] = (int)$cat['category_id'];
         }
+    }
 
-        // Get all active categories with parent relationships
-        $this->db->select('category_id, parent_id')
-                ->from('product_category')
-                ->where('status', 1); // Only active categories
+    $all_ids = [$category_id];
+    $queue = [$category_id];
 
-        $query = $this->db->get();
-        if (!$query) {
-            log_message('error', 'Failed to fetch categories: ' . $this->db->error()['message']);
-            return [$category_id];
-        }
+    while (!empty($queue)) {
+        $current = array_shift($queue);
 
-        $all_categories = $query->result_array();
-        $children_map = [];
-
-        // Build children mapping
-        foreach ($all_categories as $cat) {
-            $parent_id = (int)$cat['parent_id'];
-            if ($parent_id > 0) { // Only if has valid parent
-                if (!isset($children_map[$parent_id])) {
-                    $children_map[$parent_id] = [];
-                }
-                $children_map[$parent_id][] = (int)$cat['category_id'];
-            }
-        }
-
-        // Find all descendants using BFS
-        $all_ids = [$category_id];
-        $queue = [$category_id];
-
-        while (!empty($queue)) {
-            $current = array_shift($queue);
-            
-            if (isset($children_map[$current])) {
-                foreach ($children_map[$current] as $child_id) {
-                    if (!in_array($child_id, $all_ids)) {
-                        $all_ids[] = $child_id;
-                        $queue[] = $child_id;
-                    }
+        if (isset($children_map[$current])) {
+            foreach ($children_map[$current] as $child_id) {
+                if (!in_array($child_id, $all_ids)) {
+                    $all_ids[] = $child_id;
+                    $queue[] = $child_id;
                 }
             }
         }
-
-        log_message('debug', 'Found ' . count($all_ids) . ' related categories for ID ' . $category_id);
-        return $all_ids;
     }
+
+    log_message('debug', 'Found ' . count($all_ids) . ' related categories for ID ' . $category_id);
+    return $all_ids;
+}
 
     
 
@@ -1914,7 +1929,7 @@ class Apiv2 extends CI_Controller {
     }
 
 
-    public function get_customer_profile()
+    public function get_profile()
     {
         try {
             log_message('debug', '[GetProfile] Initiated profile fetch');

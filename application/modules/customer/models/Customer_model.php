@@ -156,120 +156,126 @@ class Customer_model extends CI_Model {
     }
 
 
-public function getCustomerList($postData = null)
-{
-    log_message('error', '========= getCustomerList() START =========');
+    public function getCustomerList($postData = null)
+    {
+        log_message('error', '========= getCustomerList() START =========');
 
-    $response = array();
-    log_message('error', 'POST Data: ' . json_encode($postData));
+        $response = array();
+        log_message('error', 'POST Data: ' . json_encode($postData));
 
-    $customer_id = $this->input->post('customer_id');
-    $custom_data = $this->input->post('customfiled');
+        $customer_id = $this->input->post('customer_id');
+        $custom_data = $this->input->post('customfiled');
 
-    $draw = (int) $postData['draw'];
-    $start = (int) $postData['start'];
-    $rowperpage = (int) $postData['length'];
-    $columnIndex = (int) $postData['order'][0]['column'];
-    $columnName = $postData['columns'][$columnIndex]['data'];
-    $columnSortOrder = $postData['order'][0]['dir'];
-    $searchValue = $postData['search']['value'];
+        $draw = (int) $postData['draw'];
+        $start = (int) $postData['start'];
+        $rowperpage = (int) $postData['length'];
+        $columnIndex = (int) $postData['order'][0]['column'];
+        $columnName = $postData['columns'][$columnIndex]['data'];
+        $columnSortOrder = $postData['order'][0]['dir'];
+        $searchValue = $postData['search']['value'];
 
-    // 🔢 Count total records (unfiltered)
-    $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
-    $this->db->from('customer_information a');
-    $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
-    $totalRecords = $this->db->get()->row()->allcount ?? 0;
+        // 🔢 Count total records (unfiltered)
+        $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
+        $this->db->from('customer_information a');
+        $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
+        $totalRecords = $this->db->get()->row()->allcount ?? 0;
 
-    // 🔍 Count total filtered records (for pagination)
-    $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
-    $this->db->from('customer_information a');
-    $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
-    if (!empty($searchValue)) {
-        $this->db->group_start();
-        $this->db->like('a.customer_name', $searchValue);
-        $this->db->or_like('a.customer_mobile', $searchValue);
-        $this->db->or_like('a.customer_email', $searchValue);
-        $this->db->or_like('a.sales_permit_number', $searchValue);
-        $this->db->group_end();
-    }
-    $totalFilteredRecords = $this->db->get()->row()->allcount ?? 0;
-
-    // 📦 Fetch paginated data
-    $this->db->select("
-        a.customer_id, 
-        a.customer_name, 
-        a.customer_mobile, 
-        a.customer_email, 
-        a.email_address AS vat_no, 
-        a.sales_permit_number, 
-        a.sales_permit, 
-        a.status, 
-        (
-            COALESCE((SELECT SUM(Debit - Credit) FROM acc_transaction WHERE subCode = s.id AND subType = 3 AND IsAppove = 1), 0) 
-            + 
-            COALESCE((SELECT SUM(due_amount + prevous_due) FROM invoice WHERE customer_id = a.customer_id), 0)
-        ) AS balance
-    ");
-    $this->db->from('customer_information a');
-    $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
-    $this->db->join('acc_subcode s', 'a.customer_id = s.referenceNo AND s.subTypeId = 3', 'left');
-
-    if (!empty($searchValue)) {
-        $this->db->group_start();
-        $this->db->like('a.customer_name', $searchValue);
-        $this->db->or_like('a.customer_mobile', $searchValue);
-        $this->db->or_like('a.customer_email', $searchValue);
-        $this->db->or_like('a.sales_permit_number', $searchValue);
-        $this->db->group_end();
-    }
-
-    $this->db->group_by('a.customer_id');
-    $this->db->order_by($columnName, $columnSortOrder);
-    if ($rowperpage !== -1) {
-        $this->db->limit($rowperpage, $start);
-    }
-
-    $records = $this->db->get()->result();
-
-    $data = [];
-    $sl = $start + 1;
-    $base_url = base_url();
-    foreach ($records as $record) {
-        $button = '';
-
-        if ($this->permission1->method('manage_customer', 'update')->access()) {
-            $button .= '<a href="' . $base_url . 'edit_customer/' . $record->customer_id . '" class="btn btn-info btn-xs m-b-5 custom_btn" title="Update"><i class="pe-7s-note"></i></a>';
+        // 🔍 Count total filtered records (for pagination)
+        $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
+        $this->db->from('customer_information a');
+        $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
+        if (!empty($searchValue)) {
+            $this->db->group_start();
+            $this->db->like('a.customer_name', $searchValue);
+            $this->db->or_like('a.customer_mobile', $searchValue);
+            $this->db->or_like('a.customer_email', $searchValue);
+            $this->db->or_like('a.sales_permit_number', $searchValue);
+            $this->db->group_end();
         }
-        if ($this->permission1->method('manage_customer', 'delete')->access()) {
-            $button .= '<a onclick="customerdelete(' . $record->customer_id . ')" href="javascript:void(0)" class="btn btn-danger btn-xs m-b-5 custom_btn" title="Delete"><i class="pe-7s-trash"></i></a>';
+        $totalFilteredRecords = $this->db->get()->row()->allcount ?? 0;
+
+        // 📦 Fetch paginated data with creator name
+        $this->db->select("
+            a.customer_id, 
+            a.customer_name, 
+            a.customer_mobile, 
+            a.customer_email, 
+            a.email_address AS vat_no, 
+            a.sales_permit_number, 
+            a.sales_permit, 
+            a.create_by,
+            a.create_date,
+            a.status, 
+            CONCAT(u.first_name, ' ', u.last_name) AS creator_name,
+            (
+                COALESCE((SELECT SUM(Debit - Credit) FROM acc_transaction WHERE subCode = s.id AND subType = 3 AND IsAppove = 1), 0) 
+                + 
+                COALESCE((SELECT SUM(due_amount + prevous_due) FROM invoice WHERE customer_id = a.customer_id), 0)
+            ) AS balance
+        ");
+        $this->db->from('customer_information a');
+        $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
+        $this->db->join('acc_subcode s', 'a.customer_id = s.referenceNo AND s.subTypeId = 3', 'left');
+        $this->db->join('users u', 'u.user_id = a.create_by', 'left');
+
+        if (!empty($searchValue)) {
+            $this->db->group_start();
+            $this->db->like('a.customer_name', $searchValue);
+            $this->db->or_like('a.customer_mobile', $searchValue);
+            $this->db->or_like('a.customer_email', $searchValue);
+            $this->db->or_like('a.sales_permit_number', $searchValue);
+            $this->db->group_end();
         }
 
-        $data[] = [
-            'sl'                  => $sl++,
-            'customer_name'       => $record->customer_name,
-            'mobile'              => $record->customer_mobile,
-            'email'               => $record->customer_email,
-            'vat_no'              => $record->vat_no,
-            'sales_permit_number' => $record->sales_permit_number,
-            'sales_permit'        => !empty($record->sales_permit) ? '<a href="' . base_url('uploads/sales_permits/' . $record->sales_permit) . '" target="_blank">View File</a>' : 'N/A',
-            'balance'             => number_format((float) $record->balance, 2),
-            'status'              => $record->status,
-            'button'              => $button,
+        $this->db->group_by('a.customer_id');
+        $this->db->order_by($columnName, $columnSortOrder);
+        if ($rowperpage !== -1) {
+            $this->db->limit($rowperpage, $start);
+        }
+
+        $records = $this->db->get()->result();
+
+        $data = [];
+        $sl = $start + 1;
+        $base_url = base_url();
+        foreach ($records as $record) {
+            $button = '';
+
+            if ($this->permission1->method('manage_customer', 'update')->access()) {
+                $button .= '<a href="' . $base_url . 'edit_customer/' . $record->customer_id . '" class="btn btn-info btn-xs m-b-5 custom_btn" title="Update"><i class="pe-7s-note"></i></a>';
+            }
+            if ($this->permission1->method('manage_customer', 'delete')->access()) {
+                $button .= '<a onclick="customerdelete(' . $record->customer_id . ')" href="javascript:void(0)" class="btn btn-danger btn-xs m-b-5 custom_btn" title="Delete"><i class="pe-7s-trash"></i></a>';
+            }
+
+            $data[] = [
+                'sl'                  => $sl++,
+                'customer_name'       => $record->customer_name,
+                'mobile'              => $record->customer_mobile,
+                'email'               => $record->customer_email,
+                'vat_no'              => $record->vat_no,
+                'sales_permit_number' => $record->sales_permit_number,
+                'sales_permit'        => !empty($record->sales_permit) ? '<a href="' . base_url('uploads/sales_permits/' . $record->sales_permit) . '" target="_blank">View File</a>' : 'N/A',
+                'balance'             => number_format((float) $record->balance, 2),
+                'create_by'           => $record->creator_name ?? 'System',
+                'create_date'         => date('Y-m-d', strtotime($record->create_date)),
+                'status'              => $record->status,
+                'button'              => $button,
+            ];
+        }
+
+        $response = [
+            "draw" => $draw,
+            "iTotalRecords" => $totalRecords,
+            "iTotalDisplayRecords" => $totalFilteredRecords,
+            "aaData" => $data
         ];
+
+        log_message('error', 'JSON Response: ' . json_encode($response));
+        log_message('error', '========= getCustomerList() END =========');
+
+        return $response;
     }
-
-    $response = [
-        "draw" => $draw,
-        "iTotalRecords" => $totalRecords,
-        "iTotalDisplayRecords" => $totalFilteredRecords,
-        "aaData" => $data
-    ];
-
-    log_message('error', 'JSON Response: ' . json_encode($response));
-    log_message('error', '========= getCustomerList() END =========');
-
-    return $response;
-}
 
 
 

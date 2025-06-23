@@ -1069,6 +1069,8 @@ function customer_form(){
           return parseFloat(data).toFixed(2);
         }
       },
+      { data: 'create_by' },
+      { data: 'create_date' },
       {
         data: 'status',
         render: function (data) {

@@ -189,8 +189,9 @@
                         <div class="form-group row">
                             <label for="image" class="col-sm-4 col-form-label"><?php echo display('image') ?> </label>
                             <div class="col-sm-8">
-                                <input type="file" name="image" class="form-control" id="image" tabindex="4">
-                                <input type="hidden" name="old_image" value="<?php echo $product->image;?>">
+                                <input type="file" name="image" class="form-control" id="image" tabindex="4" accept=".jpg,.jpeg,.png,.svg">
+                                <input type="hidden" name="old_image" value="<?php echo $product->image; ?>">
+                                <small class="text-muted">Only JPG, JPEG, PNG, or SVG files are allowed.</small>
                             </div>
                         </div>
                     </div>
