@@ -1434,37 +1434,37 @@ class Apiv2 extends CI_Controller {
     }
 
     // ✅ Builds search query with reusable conditions
-public function buildProductSearchQuery(array $params)
-{
-    $this->db->start_cache();
-    $this->db->from('product_information');
+    public function buildProductSearchQuery(array $params)
+    {
+        $this->db->start_cache();
+        $this->db->from('product_information');
 
-    if (!empty($params['product_id'])) {
-        $this->db->where('product_information.product_id', $params['product_id']);
+        if (!empty($params['product_id'])) {
+            $this->db->where('product_information.product_id', $params['product_id']);
+        }
+
+        if (!empty($params['product_name'])) {
+            $this->db->like('product_information.product_name', $params['product_name']);
+        }
+
+        if (!empty($params['category_id'])) {
+            $category_ids = $this->get_all_related_category_ids($params['category_id']);
+            $this->db->where_in('product_information.category_id', $category_ids);
+        }
+
+        if (isset($params['min_price']) && is_numeric($params['min_price'])) {
+            $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) >=', (float)$params['min_price']);
+        }
+
+        if (isset($params['max_price']) && is_numeric($params['max_price'])) {
+            $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) <=', (float)$params['max_price']);
+        }
+
+        $this->db->stop_cache();
+        return $this->db;
     }
 
-    if (!empty($params['product_name'])) {
-        $this->db->like('product_information.product_name', $params['product_name']);
-    }
-
-    if (!empty($params['category_id'])) {
-        $category_ids = $this->get_all_related_category_ids($params['category_id']);
-        $this->db->where_in('product_information.category_id', $category_ids);
-    }
-
-    if (isset($params['min_price']) && is_numeric($params['min_price'])) {
-        $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) >=', (float)$params['min_price']);
-    }
-
-    if (isset($params['max_price']) && is_numeric($params['max_price'])) {
-        $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) <=', (float)$params['max_price']);
-    }
-
-    $this->db->stop_cache();
-    return $this->db;
-}
-
-// ✅ Fetches paginated product search results
+    // Helper - ✅ Fetches paginated product search results
     public function getProductSearchResults(array $params, int $limit, int $offset)
     {
         $this->db->select('p.*, c.category_name')
@@ -1499,7 +1499,7 @@ public function buildProductSearchQuery(array $params)
         return $this->db->get()->result_array();
     }
 
-// ✅ Counts total product results matching filters
+    // Helper - ✅ Counts total product results matching filters
     public function countProductSearchResults(array $params)
     {
         $this->db->from('product_information');
@@ -1527,56 +1527,55 @@ public function buildProductSearchQuery(array $params)
         return $this->db->count_all_results();
     }
 
-// ✅ Fetches all sub-category IDs for a given parent category ID
-private function get_all_related_category_ids($category_id)
-{
-    $category_id = (int)$category_id;
-    if ($category_id <= 0) {
-        return [];
-    }
-
-    $this->db->select('category_id, parent_id')
-             ->from('product_category')
-             ->where('status', 1);
-
-    $query = $this->db->get();
-    if (!$query) {
-        log_message('error', 'Failed to fetch categories: ' . $this->db->error()['message']);
-        return [$category_id];
-    }
-
-    $all_categories = $query->result_array();
-    $children_map = [];
-
-    foreach ($all_categories as $cat) {
-        $parent_id = (int)$cat['parent_id'];
-        if ($parent_id > 0) {
-            $children_map[$parent_id][] = (int)$cat['category_id'];
+    // Helper - ✅ Fetches all sub-category IDs for a given parent category ID
+    private function get_all_related_category_ids($category_id)
+    {
+        $category_id = (int)$category_id;
+        if ($category_id <= 0) {
+            return [];
         }
-    }
 
-    $all_ids = [$category_id];
-    $queue = [$category_id];
+        $this->db->select('category_id, parent_id')
+                ->from('product_category')
+                ->where('status', 1);
 
-    while (!empty($queue)) {
-        $current = array_shift($queue);
+        $query = $this->db->get();
+        if (!$query) {
+            log_message('error', 'Failed to fetch categories: ' . $this->db->error()['message']);
+            return [$category_id];
+        }
 
-        if (isset($children_map[$current])) {
-            foreach ($children_map[$current] as $child_id) {
-                if (!in_array($child_id, $all_ids)) {
-                    $all_ids[] = $child_id;
-                    $queue[] = $child_id;
+        $all_categories = $query->result_array();
+        $children_map = [];
+
+        foreach ($all_categories as $cat) {
+            $parent_id = (int)$cat['parent_id'];
+            if ($parent_id > 0) {
+                $children_map[$parent_id][] = (int)$cat['category_id'];
+            }
+        }
+
+        $all_ids = [$category_id];
+        $queue = [$category_id];
+
+        while (!empty($queue)) {
+            $current = array_shift($queue);
+
+            if (isset($children_map[$current])) {
+                foreach ($children_map[$current] as $child_id) {
+                    if (!in_array($child_id, $all_ids)) {
+                        $all_ids[] = $child_id;
+                        $queue[] = $child_id;
+                    }
                 }
             }
         }
+
+        log_message('debug', 'Found ' . count($all_ids) . ' related categories for ID ' . $category_id);
+        return $all_ids;
     }
 
-    log_message('debug', 'Found ' . count($all_ids) . ' related categories for ID ' . $category_id);
-    return $all_ids;
-}
-
     
-
     /**
          * @OA\Post(
          *     path="/apiv2/insert_customer",
@@ -1928,20 +1927,97 @@ private function get_all_related_category_ids($category_id)
         }
     }
 
+    public function second_layer_logout()
+    {
+        try {
+            log_message('debug', '[SecondLayerLogout] Initiated logout process');
+
+            // ✅ First-layer Bearer token authentication
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->_unauthorized('Unauthorized. Bearer token required for 2nd layer logout.');
+            }
+
+            // ✅ Read second-layer JWT token from header
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (empty($second_token)) {
+                log_message('error', '[SecondLayerLogout] Missing second-layer token');
+                return $this->_unauthorized('Second-layer token required.');
+            }
+
+            // ✅ Decode second-layer JWT token
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                $customer_id = $decoded->customer_id ?? null;
+                $username = $decoded->username ?? null;
+
+                if (!$customer_id || !$username) {
+                    log_message('error', '[SecondLayerLogout] Token missing required fields.');
+                    return $this->_unauthorized('Invalid second-layer token.');
+                }
+            } catch (Exception $e) {
+                log_message('error', '[SecondLayerLogout] Token decode failed: ' . $e->getMessage());
+                return $this->_unauthorized('Invalid or expired second-layer token.');
+            }
+
+            log_message('debug', "[SecondLayerLogout] Logging out customer_id: {$customer_id}, username: {$username}");
+
+            // ✅ Clear FCM token from customer_auth
+            $this->db->where('customer_id', $customer_id)
+                    ->where('username', $username)
+                    ->update('customer_auth', [
+                        'fcm_token'  => null,
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ]);
+
+            if ($this->db->affected_rows() > 0) {
+                log_message('debug', "[SecondLayerLogout] FCM token cleared for customer_id: {$customer_id}");
+            } else {
+                log_message('warning', "[SecondLayerLogout] No rows affected. Possibly already logged out.");
+            }
+
+            return $this->_success(null, '2nd Layer Logout Successful.');
+
+        } catch (Exception $e) {
+            log_message('error', '[SecondLayerLogout] Error: ' . $e->getMessage());
+            return $this->_server_error('Something went wrong during 2nd layer logout.');
+        }
+    }
 
     public function get_profile()
     {
         try {
             log_message('debug', '[GetProfile] Initiated profile fetch');
 
-            // 🔐 First-layer token authentication
+            // 🔐 Step 1: First-layer token authentication
             $user = $this->authenticate_token();
-            if (!$user || empty($user->uid)) {
+            if (!$user) {
                 return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
             }
 
-            $customer_id = $user->uid;
-            log_message('debug', "[GetProfile] Authenticated customer_id: {$customer_id}");
+            // 🔐 Step 2: Validate and decode second-layer token
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (empty($second_token)) {
+                log_message('error', '🔒 Missing second-layer token');
+                return $this->_unauthorized('Secondary authentication required.');
+            }
+
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                log_message('debug', '🔍 Decoded second-layer token: ' . json_encode($decoded));
+
+                if (empty($decoded->customer_id)) {
+                    log_message('error', '🔒 customer_id missing in second-layer token');
+                    return $this->_unauthorized('Invalid second-layer token.');
+                }
+
+                $customer_id = $decoded->customer_id;
+                log_message('debug', "[GetProfile] Verified customer_id from second-layer token: {$customer_id}");
+
+            } catch (Exception $e) {
+                log_message('error', '🔒 Failed to decode second-layer token: ' . $e->getMessage());
+                return $this->_unauthorized('Invalid or expired second-layer token.');
+            }
 
             // ✅ Fetch customer_information
             $customer = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row_array();
@@ -1949,15 +2025,20 @@ private function get_all_related_category_ids($category_id)
                 return $this->_not_found('Customer profile not found.');
             }
 
-            // ✅ Fetch customer_auth
-            $auth = $this->db->select('username, status as auth_status, fcm_token')
-                            ->get_where('customer_auth', ['customer_id' => $customer_id])
-                            ->row_array();
+            // ✅ Fetch auth_status only
+            $auth_row = $this->db->select('status')->get_where('customer_auth', ['customer_id' => $customer_id])->row_array();
+            $auth = ['auth_status' => $auth_row['status'] ?? null];
 
-            // ✅ Fetch latest commission
-            $commission = $this->db->order_by('id', 'DESC')
-                                ->get_where('customer_comission', ['customer_id' => $customer_id])
-                                ->row_array();
+            // ✅ Fetch commission_type and commision_value only
+            $commission_row = $this->db->select('commision_value, comission_type')
+                ->order_by('id', 'DESC')
+                ->get_where('customer_comission', ['customer_id' => $customer_id])
+                ->row_array();
+
+            $commission = [
+                'comission_type'  => $commission_row['comission_type'] ?? null,
+                'commision_value' => $commission_row['commision_value'] ?? null
+            ];
 
             // 🧩 Merge and respond
             $profile = [
@@ -1974,6 +2055,78 @@ private function get_all_related_category_ids($category_id)
         }
     }
 
+    public function profile_update()
+    {
+        try {
+            log_message('debug', '[ProfileUpdate] Initiated');
+
+            // 🔐 First-layer token check
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
+            }
+
+            // 🔐 Second-layer token check
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (empty($second_token)) {
+                return $this->_unauthorized('Secondary authentication required.');
+            }
+
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                if (empty($decoded->customer_id)) {
+                    return $this->_unauthorized('Invalid second-layer token.');
+                }
+                $customer_id = $decoded->customer_id;
+                log_message('debug', "[ProfileUpdate] Authenticated customer_id: $customer_id");
+            } catch (Exception $e) {
+                return $this->_unauthorized('Invalid or expired second-layer token.');
+            }
+
+            // ✅ Optional file upload for sales_permit
+            $sales_permit = '';
+            if (!empty($_FILES['sales_permit']['name'])) {
+                $sales_permit = $this->_upload_file('sales_permit', './uploads/sales_permits/');
+                if ($sales_permit === false) return;
+            }
+
+            // ✅ Update data preparation
+            $update_data = [
+                'customer_name'        => $this->input->post('customer_name'),
+                'customer_address'     => $this->input->post('address'),
+                'address2'             => $this->input->post('address2'),
+                'email_address'        => $this->input->post('email_address'),
+                'contact'              => $this->input->post('contact'),
+                'phone'                => $this->input->post('phone'),
+                'fax'                  => $this->input->post('fax'),
+                'city'                 => $this->input->post('city'),
+                'state'                => $this->input->post('state'),
+                'zip'                  => $this->input->post('zip'),
+                'country'              => $this->input->post('country'),
+                'sales_permit_number'  => $this->input->post('sales_permit_number')
+            ];
+
+            // Only update sales permit if a new file is uploaded
+            if (!empty($sales_permit)) {
+                $update_data['sales_permit'] = $sales_permit;
+            }
+
+            // ✅ Perform update
+            $this->db->where('customer_id', $customer_id)->update('customer_information', $update_data);
+
+            if ($this->db->affected_rows() > 0) {
+                return $this->_success(null, 'Profile updated successfully.');
+            } else {
+                return $this->_success(null, 'No changes made to profile.');
+            }
+
+        } catch (Exception $e) {
+            log_message('error', '[ProfileUpdate] Error: ' . $e->getMessage());
+            return $this->_server_error('Failed to update profile.');
+        }
+    }
+
+    // Helper - ✅ Returns a JSON response for bad requests
     private function _bad_request($message)
     {
         log_message('error', '❌ ' . $message);
@@ -1981,6 +2134,7 @@ private function get_all_related_category_ids($category_id)
             ->set_output(json_encode(['status' => 'error', 'message' => $message]));
     }
 
+    // Helper - ✅ Returns a JSON response for conflicts (e.g., duplicate entries)
     private function _conflict($message)
     {
         log_message('error', '❗ ' . $message);
@@ -1988,6 +2142,7 @@ private function get_all_related_category_ids($category_id)
             ->set_output(json_encode(['status' => 'error', 'message' => $message]));
     }
 
+    // Helper - ✅ Returns a JSON response for server errors
     private function _server_error($message)
     {
         log_message('error', '❌ ' . $message);
@@ -1995,6 +2150,7 @@ private function get_all_related_category_ids($category_id)
             ->set_output(json_encode(['status' => 'error', 'message' => $message]));
     }
 
+    // Helper - ✅ Uploads a file and returns the filename or false on failure
     private function _upload_file($field_name, $upload_path)
     {
         $config = [
@@ -2021,6 +2177,7 @@ private function get_all_related_category_ids($category_id)
     /**
      * 200 OK
      */
+    // Helper - ✅ Returns a JSON response for successful operations
     private function _success($data = [], $message = 'Success')
     {
         return $this->output
@@ -2036,6 +2193,7 @@ private function get_all_related_category_ids($category_id)
     /**
      * 201 Created
      */
+    // Helper - ✅ Returns a JSON response for successful resource creation
     private function _created($data = [], $message = 'Resource created successfully')
     {
         return $this->output
@@ -2051,6 +2209,8 @@ private function get_all_related_category_ids($category_id)
     /**
      * 401 Unauthorized
      */
+
+     // Helper - ✅ Returns a JSON response for unauthorized access
     private function _unauthorized($message = 'Unauthorized')
     {
         log_message('error', '🔒 ' . $message);
@@ -2066,6 +2226,7 @@ private function get_all_related_category_ids($category_id)
     /**
      * 403 Forbidden
      */
+    // Helper - ✅ Returns a JSON response for forbidden access
     private function _forbidden($message = 'Forbidden')
     {
         log_message('error', '🚫 ' . $message);
@@ -2081,6 +2242,7 @@ private function get_all_related_category_ids($category_id)
     /**
      * 404 Not Found
      */
+    // Helper - ✅ Returns a JSON response for not found resources
     private function _not_found($message = 'Resource not found')
     {
         log_message('error', '❓ ' . $message);
@@ -2096,6 +2258,8 @@ private function get_all_related_category_ids($category_id)
     /**
      * 422 Unprocessable Entity (Validation errors)
      */
+
+    // Helper - ✅ Returns a JSON response for validation errors
     private function _validation_error($errors = [], $message = 'Validation failed')
     {
         log_message('error', '🧪 Validation failed: ' . json_encode($errors));
