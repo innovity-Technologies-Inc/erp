@@ -32,8 +32,14 @@ class Invoice extends MX_Controller {
         $walking_customer      = $this->invoice_model->pos_customer_setup();
         $data['all_pmethod']   = $this->invoice_model->pmethod_dropdown();
         
-        $data['customer_name'] = $walking_customer[0]['customer_name'];
-        $data['customer_id']   = $walking_customer[0]['customer_id'];
+        if (!empty($walking_customer) && isset($walking_customer[0])) {
+            $data['customer_name'] = $walking_customer[0]['customer_name'];
+            $data['customer_id']   = $walking_customer[0]['customer_id'];
+        } else {
+            log_message('error', '[Invoice] Walking customer data not found.');
+            $data['customer_name'] = '';
+            $data['customer_id']   = '';
+        }
         $data['invoice_no']    = $this->number_generator();
         $data['title']         = display('add_invoice');
         $data['taxes']         = $this->invoice_model->tax_fileds();

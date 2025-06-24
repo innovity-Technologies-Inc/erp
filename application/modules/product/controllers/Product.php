@@ -271,30 +271,27 @@ class Product extends MX_Controller {
     }
 
     // product part
-    public function paysenz_product_form($id = null) {
+    public function paysenz_product_form($id = null)
+    {
         $data['title'] = display('add_product');
-    
+
         #-------------------------------#
         $this->form_validation->set_rules('product_name', display('product_name'), 'required|max_length[200]');
         $this->form_validation->set_rules('model', display('model'), 'max_length[200]');
         $this->form_validation->set_rules('category_id', display('category'), 'required|max_length[20]');
         $this->form_validation->set_rules('price', display('price'), 'max_length[12]');
-    
+
         $product_id = (!empty($this->input->post('product_id', TRUE)) ? $this->input->post('product_id', TRUE) : $this->generator(8));
         $sup_price = $this->input->post('supplier_price', TRUE);
         $s_id = $this->input->post('supplier_id', TRUE);
         $product_model = $this->input->post('model', TRUE);
-        
+
         # Fetch tax settings
         $taxfield = $this->db->select('tax_name,default_value')
                             ->from('tax_settings')
                             ->get()
                             ->result_array();
-    
-        # Handle Image Upload
-        $image_url = $this->fileupload->do_upload('./my-assets/image/product/', 'image');
-        $image = (!empty($image_url) ? $image_url : $this->input->post('old_image', TRUE));
-    
+
         #-------------------------------#
         $data['product'] = (object)$postData = [
             'product_id'     => (!empty($id) ? $id : $product_id),
@@ -307,10 +304,9 @@ class Product extends MX_Controller {
             'product_model'  => $this->input->post('model', TRUE),
             'product_details'=> $this->input->post('description', TRUE),
             'product_vat'    => $this->input->post('product_vat', TRUE),
-            'image'          => (!empty($image) ? $image : 'my-assets/image/product.png'),
             'status'         => 1,
         ];
-    
+
         # Handle dynamic tax columns
         $tablecolumn = $this->db->list_fields('tax_collection');
         $num_column = count($tablecolumn) - 4;
@@ -323,9 +319,20 @@ class Product extends MX_Controller {
                 $postData[$value] = (!empty($this->input->post($value)) ? $this->input->post($value) : 0) / 100;
             }
         }
-    
+
         #-------------------------------#
         if ($this->form_validation->run() === true) {
+
+            // ✅ Image validation only during POST/form submission
+            $image = $this->process_product_image('image', './my-assets/image/product/');
+            if (!$image && empty($this->input->post('old_image', TRUE))) {
+                $this->session->set_flashdata('exception', 'Invalid image. Please upload JPG, PNG, or SVG.');
+                redirect($_SERVER['HTTP_REFERER']);
+            }
+
+            $image = (!empty($image) ? $image : $this->input->post('old_image', TRUE));
+            $postData['image'] = (!empty($image) ? $image : 'my-assets/image/product.png');
+
             if (empty($id)) {  # Insert new product
                 if ($this->product_model->create_product($postData)) {
                     for ($i = 0, $n = count($s_id); $i < $n; $i++) {
@@ -362,7 +369,8 @@ class Product extends MX_Controller {
                 }
                 redirect("product_list");
             }
-        } else { 
+
+        } else {
             if (!empty($id)) {
                 $data['title'] = display('edit_product');
                 $data['product'] = $this->product_model->single_product_data($id);
@@ -371,26 +379,110 @@ class Product extends MX_Controller {
                 $category_ids = $this->product_model->get_category_hierarchy($data['product']->category_id);
                 $data = array_merge($data, $category_ids);
             }
-    
+
             # ✅ Fetch Parent & Child Categories
             $data['parent_categories'] = $this->product_model->get_parent_categories();
             $data['sub_categories'] = $this->product_model->get_sub_categories();
             $data['child_categories'] = $this->product_model->get_child_categories();
-    
+
             $data['supplier'] = $this->product_model->supplier_list();
             $data['vattaxinfo'] = $this->product_model->vat_tax_setting();
             $data['id'] = $id;
             $data['unit_list'] = $this->product_model->active_unit();
             $data['supplier_pr'] = $this->product_model->supplier_product_list($id);
             $data['taxfield'] = $taxfield;
-            $data['module'] = "product";  
-            $data['page'] = "product_form";  
-            echo Modules::run('template/layout', $data); 
+            $data['module'] = "product";
+            $data['page'] = "product_form";
+            echo Modules::run('template/layout', $data);
         }
     }
 
 
+    private function process_product_image($field_name, $upload_path)
+    {
+        if (!isset($_FILES[$field_name]) || $_FILES[$field_name]['error'] !== UPLOAD_ERR_OK) {
+            return null;
+        }
 
+        $allowed_ext = ['jpg', 'jpeg', 'png', 'svg'];
+        $file_info = pathinfo($_FILES[$field_name]['name']);
+        $extension = strtolower($file_info['extension']);
+
+        if (!in_array($extension, $allowed_ext)) {
+            return null;
+        }
+
+        $file_tmp = $_FILES[$field_name]['tmp_name'];
+        $file_name = uniqid() . '.' . $extension;
+        $full_path = $upload_path . $file_name;
+
+        // Create upload directory if not exists
+        if (!file_exists($upload_path)) {
+            mkdir($upload_path, 0755, true);
+        }
+
+        if ($extension === 'svg') {
+            // SVG: move without compression
+            move_uploaded_file($file_tmp, $full_path);
+        } else {
+            // JPG/PNG: compress and save
+            $this->compress_image($file_tmp, $full_path, 75); // 75% quality
+        }
+
+        return str_replace('./', '', $full_path);
+    }
+
+    private function compress_image($source, $destination, $quality)
+    {
+        $info = getimagesize($source);
+        if (!$info) return false;
+
+        $mime = $info['mime'];
+
+        // Load original image
+        if ($mime === 'image/jpeg') {
+            $image = imagecreatefromjpeg($source);
+        } elseif ($mime === 'image/png') {
+            $image = imagecreatefrompng($source);
+            imagepalettetotruecolor($image);
+            imagealphablending($image, true);
+            imagesavealpha($image, true);
+        } else {
+            return false; // Unsupported
+        }
+
+        $orig_width = $info[0];
+        $orig_height = $info[1];
+
+        // Resize to fixed height 500px, width = ratio
+        $new_height = 500;
+        $ratio = $new_height / $orig_height;
+        $new_width = (int)($orig_width * $ratio);
+
+        $resized_image = imagecreatetruecolor($new_width, $new_height);
+
+        // Handle transparency for PNG
+        if ($mime === 'image/png') {
+            imagealphablending($resized_image, false);
+            imagesavealpha($resized_image, true);
+        }
+
+        // Resize the image
+        imagecopyresampled($resized_image, $image, 0, 0, 0, 0, $new_width, $new_height, $orig_width, $orig_height);
+
+        // Save to destination
+        if ($mime === 'image/jpeg') {
+            imagejpeg($resized_image, $destination, $quality);
+        } elseif ($mime === 'image/png') {
+            imagepng($resized_image, $destination, 6); // Compression level 6 (0-9)
+        }
+
+        // Free memory
+        imagedestroy($image);
+        imagedestroy($resized_image);
+
+        return true;
+    }
 
     public function paysenz_product_list(){
         $data['title']         = display('manage_product');

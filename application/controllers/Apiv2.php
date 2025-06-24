@@ -4,6 +4,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 require_once(APPPATH . 'third_party/JWT/JWT.php');
 require_once(APPPATH . 'third_party/JWT/Key.php');
 
+use Firebase\JWT\ExpiredException;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
@@ -334,29 +335,29 @@ class Apiv2 extends CI_Controller {
             ]));
     }
 
-    private function authenticate_token()
-    {
-        $auth_header = $this->input->get_request_header('Authorization');
-        if (!$auth_header || !preg_match('/Bearer\s(\S+)/', $auth_header, $matches)) {
-            return false;
-        }
-    
-        $token = $matches[1];
-    
-        try {
-            $decoded = JWT::decode($token, new Key($this->jwt_key, $this->jwt_algo));
-    
-            // Reject token if it has no username/usertype (i.e., it's likely a refresh_token)
-            if (!isset($decoded->username) || !isset($decoded->usertype)) {
-                return false; // It's a refresh token, not access
+        private function authenticate_token()
+        {
+            $auth_header = $this->input->get_request_header('Authorization');
+            if (!$auth_header || !preg_match('/Bearer\s(\S+)/', $auth_header, $matches)) {
+                return false;
             }
-    
-            return $decoded;
-    
-        } catch (Exception $e) {
-            return false;
+        
+            $token = $matches[1];
+        
+            try {
+                $decoded = JWT::decode($token, new Key($this->jwt_key, $this->jwt_algo));
+        
+                // Reject token if it has no username/usertype (i.e., it's likely a refresh_token)
+                if (!isset($decoded->username) || !isset($decoded->usertype)) {
+                    return false; // It's a refresh token, not access
+                }
+        
+                return $decoded;
+        
+            } catch (Exception $e) {
+                return false;
+            }
         }
-    }
 
 
 
@@ -1345,7 +1346,8 @@ class Apiv2 extends CI_Controller {
             // ✅ First-layer token check
             $user = $this->authenticate_token();
             if (!$user) {
-                return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
+                log_message('error', '🔒 Unauthorized access: Invalid or expired token in product_search()');
+                return $this->_unauthorized('Unauthorized. Access token is invalid or expired.');
             }
 
             // ✅ Second-layer token (optional)
@@ -1361,23 +1363,33 @@ class Apiv2 extends CI_Controller {
                 }
             }
 
-            // ✅ Input validation using POST
+            // ✅ Input handling from raw JSON body
+            $body = json_decode(trim($this->input->raw_input_stream), true);
+
+            // Set defaults and validate types
             $params = [
-                'product_id'   => $this->input->post('product_id', TRUE) ?? '',
-                'product_name' => $this->input->post('product_name', TRUE) ?? '',
-                'category_id'  => $this->input->post('category_id', TRUE) ?? '',
-                'min_price'    => $this->input->post('min_price', TRUE),
-                'max_price'    => $this->input->post('max_price', TRUE)
+                'product_id'   => $body['product_id']   ?? '',
+                'product_name' => $body['product_name'] ?? '',
+                'category_id'  => $body['category_id']  ?? '',
+                'min_price'    => isset($body['min_price']) ? (float) $body['min_price'] : null,
+                'max_price'    => isset($body['max_price']) ? (float) $body['max_price'] : null,
             ];
-            $limit  = (int) ($this->input->post('limit', TRUE) ?? 10);
-            $page   = (int) ($this->input->post('page', TRUE) ?? 1);
+
+            $limit = isset($body['limit']) && is_numeric($body['limit']) ? (int) $body['limit'] : 10;
+            $page  = isset($body['page']) && is_numeric($body['page']) ? (int) $body['page'] : 1;
             $offset = ($page - 1) * $limit;
 
-            // ✅ Search logic
+            log_message('debug', "product_search() pagination => limit: {$limit}, page: {$page}, offset: {$offset}");
+
+            // ✅ Count & Fetch using model methods
             $total_count = $this->countProductSearchResults($params);
-            $products = $this->getProductSearchResults($params, $limit, $offset);
+            $products    = $this->getProductSearchResults($params, $limit, $offset);
 
             log_message('debug', 'Fetched product count: ' . count($products));
+
+            if (!empty($params['product_id']) && count($products) === 0) {
+                return $this->_not_found('Product ID ' . $params['product_id'] . ' is not available.');
+            }
 
             // ✅ Category mapping
             $category_map = [];
@@ -1386,7 +1398,7 @@ class Apiv2 extends CI_Controller {
                 $category_map[$cat->category_id] = $cat->category_name;
             }
 
-            // ✅ Data post-processing
+            // ✅ Post-process each product
             foreach ($products as $k => $v) {
                 if (!empty($products[$k]['image'])) {
                     $products[$k]['image'] = base_url(str_replace('./', '', $products[$k]['image']));
@@ -1400,13 +1412,12 @@ class Apiv2 extends CI_Controller {
                     $products[$k]['price'] = (float)$products[$k]['price'];
                 }
 
-                $products[$k]['qr_code'] = base_url('my-assets/image/qr/' . $v['product_id'] . '.png');
+                $products[$k]['qr_code']  = base_url('my-assets/image/qr/' . $v['product_id'] . '.png');
                 $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $v['product_id']);
             }
 
             $execution_time = microtime(true) - $start_time;
 
-            // ✅ Return structured success response
             return $this->_success([
                 'total_count'    => $total_count,
                 'matched_count'  => count($products),
@@ -1422,8 +1433,10 @@ class Apiv2 extends CI_Controller {
         }
     }
 
+    // ✅ Builds search query with reusable conditions
     public function buildProductSearchQuery(array $params)
     {
+        $this->db->start_cache();
         $this->db->from('product_information');
 
         if (!empty($params['product_id'])) {
@@ -1435,89 +1448,96 @@ class Apiv2 extends CI_Controller {
         }
 
         if (!empty($params['category_id'])) {
-            $this->db->where('product_information.category_id', $params['category_id']);
+            $category_ids = $this->get_all_related_category_ids($params['category_id']);
+            $this->db->where_in('product_information.category_id', $category_ids);
         }
 
-        if (!is_null($params['min_price'])) {
-            $this->db->where('product_information.price >=', $params['min_price']);
+        if (isset($params['min_price']) && is_numeric($params['min_price'])) {
+            $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) >=', (float)$params['min_price']);
         }
 
-        if (!is_null($params['max_price'])) {
-            $this->db->where('product_information.price <=', $params['max_price']);
+        if (isset($params['max_price']) && is_numeric($params['max_price'])) {
+            $this->db->where('CAST(product_information.price AS DECIMAL(10,2)) <=', (float)$params['max_price']);
         }
 
-        return clone $this->db; // Optional: clone here to avoid mutation if reused multiple times
+        $this->db->stop_cache();
+        return $this->db;
     }
 
-    // ✅ Result query logic
-    public function getProductSearchResults($params, $limit, $offset)
+    // Helper - ✅ Fetches paginated product search results
+    public function getProductSearchResults(array $params, int $limit, int $offset)
     {
-        $this->db->from('product_information');
+        $this->db->select('p.*, c.category_name')
+            ->from('product_information p')
+            ->join('product_category c', 'c.category_id = p.category_id', 'left');
 
         if (!empty($params['product_id'])) {
-            $this->db->where('product_information.product_id', $params['product_id']);
+            $this->db->where('p.product_id', $params['product_id']);
         }
 
         if (!empty($params['product_name'])) {
-            $this->db->like('product_information.product_name', $params['product_name']);
+            $this->db->like('p.product_name', $params['product_name']);
         }
 
         if (!empty($params['category_id'])) {
-            $this->db->where('product_information.category_id', $params['category_id']);
+            $this->db->where('p.category_id', $params['category_id']);
         }
 
         if (!is_null($params['min_price'])) {
-            $this->db->where('product_information.price >=', $params['min_price']);
+            $this->db->where('p.price >=', $params['min_price']);
         }
 
         if (!is_null($params['max_price'])) {
-            $this->db->where('product_information.price <=', $params['max_price']);
+            $this->db->where('p.price <=', $params['max_price']);
         }
 
+        $this->db->order_by('p.id', 'DESC');
+
+        // ✅ Apply pagination here
         $this->db->limit($limit, $offset);
+
         return $this->db->get()->result_array();
     }
 
-    // ✅ Count query logic
-    public function countProductSearchResults($params)
+    // Helper - ✅ Counts total product results matching filters
+    public function countProductSearchResults(array $params)
     {
         $this->db->from('product_information');
 
         if (!empty($params['product_id'])) {
-            $this->db->where('product_information.product_id', $params['product_id']);
+            $this->db->where('product_id', $params['product_id']);
         }
 
         if (!empty($params['product_name'])) {
-            $this->db->like('product_information.product_name', $params['product_name']);
+            $this->db->like('product_name', $params['product_name']);
         }
 
         if (!empty($params['category_id'])) {
-            $this->db->where('product_information.category_id', $params['category_id']);
+            $this->db->where('category_id', $params['category_id']);
         }
 
         if (!is_null($params['min_price'])) {
-            $this->db->where('product_information.price >=', $params['min_price']);
+            $this->db->where('price >=', $params['min_price']);
         }
 
         if (!is_null($params['max_price'])) {
-            $this->db->where('product_information.price <=', $params['max_price']);
+            $this->db->where('price <=', $params['max_price']);
         }
 
-        return $this->db->count_all_results(); // executes and resets
+        return $this->db->count_all_results();
     }
 
+    // Helper - ✅ Fetches all sub-category IDs for a given parent category ID
     private function get_all_related_category_ids($category_id)
     {
-        // Validate input
         $category_id = (int)$category_id;
         if ($category_id <= 0) {
             return [];
         }
 
-        // Get all active categories with parent relationships
         $this->db->select('category_id, parent_id')
                 ->from('product_category')
-                ->where('status', 1); // Only active categories
+                ->where('status', 1);
 
         $query = $this->db->get();
         if (!$query) {
@@ -1528,24 +1548,19 @@ class Apiv2 extends CI_Controller {
         $all_categories = $query->result_array();
         $children_map = [];
 
-        // Build children mapping
         foreach ($all_categories as $cat) {
             $parent_id = (int)$cat['parent_id'];
-            if ($parent_id > 0) { // Only if has valid parent
-                if (!isset($children_map[$parent_id])) {
-                    $children_map[$parent_id] = [];
-                }
+            if ($parent_id > 0) {
                 $children_map[$parent_id][] = (int)$cat['category_id'];
             }
         }
 
-        // Find all descendants using BFS
         $all_ids = [$category_id];
         $queue = [$category_id];
 
         while (!empty($queue)) {
             $current = array_shift($queue);
-            
+
             if (isset($children_map[$current])) {
                 foreach ($children_map[$current] as $child_id) {
                     if (!in_array($child_id, $all_ids)) {
@@ -1561,7 +1576,6 @@ class Apiv2 extends CI_Controller {
     }
 
     
-
     /**
          * @OA\Post(
          *     path="/apiv2/insert_customer",
@@ -1913,20 +1927,97 @@ class Apiv2 extends CI_Controller {
         }
     }
 
+    public function second_layer_logout()
+    {
+        try {
+            log_message('debug', '[SecondLayerLogout] Initiated logout process');
 
-    public function get_customer_profile()
+            // ✅ First-layer Bearer token authentication
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->_unauthorized('Unauthorized. Bearer token required for 2nd layer logout.');
+            }
+
+            // ✅ Read second-layer JWT token from header
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (empty($second_token)) {
+                log_message('error', '[SecondLayerLogout] Missing second-layer token');
+                return $this->_unauthorized('Second-layer token required.');
+            }
+
+            // ✅ Decode second-layer JWT token
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                $customer_id = $decoded->customer_id ?? null;
+                $username = $decoded->username ?? null;
+
+                if (!$customer_id || !$username) {
+                    log_message('error', '[SecondLayerLogout] Token missing required fields.');
+                    return $this->_unauthorized('Invalid second-layer token.');
+                }
+            } catch (Exception $e) {
+                log_message('error', '[SecondLayerLogout] Token decode failed: ' . $e->getMessage());
+                return $this->_unauthorized('Invalid or expired second-layer token.');
+            }
+
+            log_message('debug', "[SecondLayerLogout] Logging out customer_id: {$customer_id}, username: {$username}");
+
+            // ✅ Clear FCM token from customer_auth
+            $this->db->where('customer_id', $customer_id)
+                    ->where('username', $username)
+                    ->update('customer_auth', [
+                        'fcm_token'  => null,
+                        'updated_at' => date('Y-m-d H:i:s')
+                    ]);
+
+            if ($this->db->affected_rows() > 0) {
+                log_message('debug', "[SecondLayerLogout] FCM token cleared for customer_id: {$customer_id}");
+            } else {
+                log_message('warning', "[SecondLayerLogout] No rows affected. Possibly already logged out.");
+            }
+
+            return $this->_success(null, '2nd Layer Logout Successful.');
+
+        } catch (Exception $e) {
+            log_message('error', '[SecondLayerLogout] Error: ' . $e->getMessage());
+            return $this->_server_error('Something went wrong during 2nd layer logout.');
+        }
+    }
+
+    public function get_profile()
     {
         try {
             log_message('debug', '[GetProfile] Initiated profile fetch');
 
-            // 🔐 First-layer token authentication
+            // 🔐 Step 1: First-layer token authentication
             $user = $this->authenticate_token();
-            if (!$user || empty($user->uid)) {
+            if (!$user) {
                 return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
             }
 
-            $customer_id = $user->uid;
-            log_message('debug', "[GetProfile] Authenticated customer_id: {$customer_id}");
+            // 🔐 Step 2: Validate and decode second-layer token
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (empty($second_token)) {
+                log_message('error', '🔒 Missing second-layer token');
+                return $this->_unauthorized('Secondary authentication required.');
+            }
+
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                log_message('debug', '🔍 Decoded second-layer token: ' . json_encode($decoded));
+
+                if (empty($decoded->customer_id)) {
+                    log_message('error', '🔒 customer_id missing in second-layer token');
+                    return $this->_unauthorized('Invalid second-layer token.');
+                }
+
+                $customer_id = $decoded->customer_id;
+                log_message('debug', "[GetProfile] Verified customer_id from second-layer token: {$customer_id}");
+
+            } catch (Exception $e) {
+                log_message('error', '🔒 Failed to decode second-layer token: ' . $e->getMessage());
+                return $this->_unauthorized('Invalid or expired second-layer token.');
+            }
 
             // ✅ Fetch customer_information
             $customer = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row_array();
@@ -1934,15 +2025,20 @@ class Apiv2 extends CI_Controller {
                 return $this->_not_found('Customer profile not found.');
             }
 
-            // ✅ Fetch customer_auth
-            $auth = $this->db->select('username, status as auth_status, fcm_token')
-                            ->get_where('customer_auth', ['customer_id' => $customer_id])
-                            ->row_array();
+            // ✅ Fetch auth_status only
+            $auth_row = $this->db->select('status')->get_where('customer_auth', ['customer_id' => $customer_id])->row_array();
+            $auth = ['auth_status' => $auth_row['status'] ?? null];
 
-            // ✅ Fetch latest commission
-            $commission = $this->db->order_by('id', 'DESC')
-                                ->get_where('customer_comission', ['customer_id' => $customer_id])
-                                ->row_array();
+            // ✅ Fetch commission_type and commision_value only
+            $commission_row = $this->db->select('commision_value, comission_type')
+                ->order_by('id', 'DESC')
+                ->get_where('customer_comission', ['customer_id' => $customer_id])
+                ->row_array();
+
+            $commission = [
+                'comission_type'  => $commission_row['comission_type'] ?? null,
+                'commision_value' => $commission_row['commision_value'] ?? null
+            ];
 
             // 🧩 Merge and respond
             $profile = [
@@ -1959,6 +2055,78 @@ class Apiv2 extends CI_Controller {
         }
     }
 
+    public function profile_update()
+    {
+        try {
+            log_message('debug', '[ProfileUpdate] Initiated');
+
+            // 🔐 First-layer token check
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
+            }
+
+            // 🔐 Second-layer token check
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (empty($second_token)) {
+                return $this->_unauthorized('Secondary authentication required.');
+            }
+
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                if (empty($decoded->customer_id)) {
+                    return $this->_unauthorized('Invalid second-layer token.');
+                }
+                $customer_id = $decoded->customer_id;
+                log_message('debug', "[ProfileUpdate] Authenticated customer_id: $customer_id");
+            } catch (Exception $e) {
+                return $this->_unauthorized('Invalid or expired second-layer token.');
+            }
+
+            // ✅ Optional file upload for sales_permit
+            $sales_permit = '';
+            if (!empty($_FILES['sales_permit']['name'])) {
+                $sales_permit = $this->_upload_file('sales_permit', './uploads/sales_permits/');
+                if ($sales_permit === false) return;
+            }
+
+            // ✅ Update data preparation
+            $update_data = [
+                'customer_name'        => $this->input->post('customer_name'),
+                'customer_address'     => $this->input->post('address'),
+                'address2'             => $this->input->post('address2'),
+                'email_address'        => $this->input->post('email_address'),
+                'contact'              => $this->input->post('contact'),
+                'phone'                => $this->input->post('phone'),
+                'fax'                  => $this->input->post('fax'),
+                'city'                 => $this->input->post('city'),
+                'state'                => $this->input->post('state'),
+                'zip'                  => $this->input->post('zip'),
+                'country'              => $this->input->post('country'),
+                'sales_permit_number'  => $this->input->post('sales_permit_number')
+            ];
+
+            // Only update sales permit if a new file is uploaded
+            if (!empty($sales_permit)) {
+                $update_data['sales_permit'] = $sales_permit;
+            }
+
+            // ✅ Perform update
+            $this->db->where('customer_id', $customer_id)->update('customer_information', $update_data);
+
+            if ($this->db->affected_rows() > 0) {
+                return $this->_success(null, 'Profile updated successfully.');
+            } else {
+                return $this->_success(null, 'No changes made to profile.');
+            }
+
+        } catch (Exception $e) {
+            log_message('error', '[ProfileUpdate] Error: ' . $e->getMessage());
+            return $this->_server_error('Failed to update profile.');
+        }
+    }
+
+    // Helper - ✅ Returns a JSON response for bad requests
     private function _bad_request($message)
     {
         log_message('error', '❌ ' . $message);
@@ -1966,6 +2134,7 @@ class Apiv2 extends CI_Controller {
             ->set_output(json_encode(['status' => 'error', 'message' => $message]));
     }
 
+    // Helper - ✅ Returns a JSON response for conflicts (e.g., duplicate entries)
     private function _conflict($message)
     {
         log_message('error', '❗ ' . $message);
@@ -1973,6 +2142,7 @@ class Apiv2 extends CI_Controller {
             ->set_output(json_encode(['status' => 'error', 'message' => $message]));
     }
 
+    // Helper - ✅ Returns a JSON response for server errors
     private function _server_error($message)
     {
         log_message('error', '❌ ' . $message);
@@ -1980,6 +2150,7 @@ class Apiv2 extends CI_Controller {
             ->set_output(json_encode(['status' => 'error', 'message' => $message]));
     }
 
+    // Helper - ✅ Uploads a file and returns the filename or false on failure
     private function _upload_file($field_name, $upload_path)
     {
         $config = [
@@ -2006,6 +2177,7 @@ class Apiv2 extends CI_Controller {
     /**
      * 200 OK
      */
+    // Helper - ✅ Returns a JSON response for successful operations
     private function _success($data = [], $message = 'Success')
     {
         return $this->output
@@ -2021,6 +2193,7 @@ class Apiv2 extends CI_Controller {
     /**
      * 201 Created
      */
+    // Helper - ✅ Returns a JSON response for successful resource creation
     private function _created($data = [], $message = 'Resource created successfully')
     {
         return $this->output
@@ -2036,6 +2209,8 @@ class Apiv2 extends CI_Controller {
     /**
      * 401 Unauthorized
      */
+
+     // Helper - ✅ Returns a JSON response for unauthorized access
     private function _unauthorized($message = 'Unauthorized')
     {
         log_message('error', '🔒 ' . $message);
@@ -2051,6 +2226,7 @@ class Apiv2 extends CI_Controller {
     /**
      * 403 Forbidden
      */
+    // Helper - ✅ Returns a JSON response for forbidden access
     private function _forbidden($message = 'Forbidden')
     {
         log_message('error', '🚫 ' . $message);
@@ -2066,6 +2242,7 @@ class Apiv2 extends CI_Controller {
     /**
      * 404 Not Found
      */
+    // Helper - ✅ Returns a JSON response for not found resources
     private function _not_found($message = 'Resource not found')
     {
         log_message('error', '❓ ' . $message);
@@ -2081,6 +2258,8 @@ class Apiv2 extends CI_Controller {
     /**
      * 422 Unprocessable Entity (Validation errors)
      */
+
+    // Helper - ✅ Returns a JSON response for validation errors
     private function _validation_error($errors = [], $message = 'Validation failed')
     {
         log_message('error', '🧪 Validation failed: ' . json_encode($errors));
