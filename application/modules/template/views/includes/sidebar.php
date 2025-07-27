@@ -35,7 +35,8 @@
                 $this->permission1->method('pos_invoice','create')->access() || 
                 $this->permission1->method('gui_pos','create')->access() || 
                 $this->permission1->method('terms_list','read')->access()  || 
-                $this->permission1->method('terms_add','read')->access()
+                $this->permission1->method('terms_add','read')->access() ||
+                $this->permission1->method('cart_management','read')->access() // ✅ NEW PERMISSION CHECK
                 ){
         ?>
         <li class="treeview 
@@ -48,7 +49,8 @@
                     $this->uri->segment('1') == ("invoice_pad_print") || 
                     $this->uri->segment('1') == ("invoice_edit") || 
                     $this->uri->segment('1') == ("terms_list")  || 
-                    $this->uri->segment('1') == ("terms_add") 
+                    $this->uri->segment('1') == ("terms_add") ||
+                    $this->uri->segment('1') == "cart_management" // ✅ NEW ACTIVE CLASS CHECK
                     ) {
                     echo "active";
                 } else {
@@ -134,9 +136,21 @@
                     
                     <?php } ?>
                     <!-- close -->
+                    <!-- start -->
+                    <?php if($this->permission1->method('cart_management','read')->access()){ ?>
+                    <li class="treeview <?php
+                        if ($this->uri->segment('1') == "cart_management") {
+                            echo "active";
+                        } else {
+                            echo " ";
+                        }
+                    ?>">
+                    <a href="<?php echo base_url('cart_management') ?>"><?php echo display('cart_management') ?></a></li>
+                    <?php } ?>
+
                 </ul>
-        </li>
-        <?php } ?>
+            </li>
+            <?php } ?>
 
         <?php if($this->permission1->method('add_customer','create')->access() || $this->permission1->method('manage_customer','read')->access()|| $this->permission1->method('credit_customer','read')->access() || $this->permission1->method('paid_customer','read')->access() || $this->permission1->method('customer_ledger','read')->access() || $this->permission1->method('customer_advance','create')->access()){?>
         <li

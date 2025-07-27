@@ -82,9 +82,9 @@
                 <div class="form-group">
                     <label for="new_status">Select Status</label>
                     <select name="new_status" id="new_status" class="form-control">
+                    <option value="0">Unapproved</option>
                     <option value="1">Approved</option>
                     <option value="2">Pending</option>
-                    <option value="0">Unapproved</option>
                     </select>
                 </div>
                 </div>

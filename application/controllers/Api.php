@@ -419,71 +419,106 @@ class Api extends CI_Controller {
 
    
     
-        public function product_list() 
-        {
-            $start = $this->input->get('start');
-            if ($start) {  
-                $start = ($start == 1 ? 0 : $start);
-                $products = $this->Api_model->product_list($limit = 15, $start);
-            } else {
-                $products = $this->Api_model->searchproduct_list();
-            }
+    public function product_list()
+    {
+        $start = $this->input->get('start');
+        $products = $start
+            ? $this->Api_model->product_list($limit = 15, $start == 1 ? 0 : $start)
+            : $this->Api_model->searchproduct_list();
 
-            if (!empty($products)) {
-                // Load the Warehouse_model with alias
-                $this->load->model('warehouse/Warehouse_model', 'warehouse_model');
+        // ✅ Load warehouse model from the 'warehouse' module (HMVC)
+        $this->load->model('warehouse/Warehouse_model');
 
-                foreach ($products as $k => $v) {
-                    // Stock calculations
-                    $s = $this->db->select('SUM(quantity) AS totalSalesQnty')->where('product_id', $v['product_id'])->get('invoice_details')->row();
-                    $p = $this->db->select('SUM(quantity) AS totalBuyQnty')->where('product_id', $v['product_id'])->get('product_purchase_details')->row();
-                    $stokqty = $p->totalBuyQnty - $s->totalSalesQnty;
-
-                    // QR Code
-                    $config['cacheable'] = true;
-                    $config['cachedir'] = '';
-                    $config['errorlog'] = '';
-                    $config['quality'] = true;
-                    $config['size'] = '1024';
-                    $config['black'] = [224, 255, 255];
-                    $config['white'] = [70, 130, 180];
-                    $this->ciqrcode->initialize($config);
-
-                    $params['data'] = $products[$k]['product_id'];
-                    $products[$k]['stock_qty'] = (!empty($stokqty) ? $stokqty : 0);
-                    $params['level'] = 'H';
-                    $params['size'] = 10;
-                    $image_name = $products[$k]['product_id'] . '.png';
-                    $params['savename'] = FCPATH . 'my-assets/image/qr/' . $image_name;
-                    $this->ciqrcode->generate($params);
-
-                    // Barcode and QR Code URLs
-                    $products[$k]['product_info_bybarcode'] = $this->Api_model->product_info_bybarcode($products[$k]['product_id']);
-                    $products[$k]['qr_code']  = base_url('my-assets/image/qr/' . $image_name);
-                    $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $products[$k]['product_id']);
-
-                    // 👉 Warehouse-wise stock
-                    $warehouse_stock = $this->warehouse_model->get_warehouse_stock_by_product($products[$k]['product_id']);
-                    $products[$k]['warehouse_stock_qty'] = $warehouse_stock;
-                }
-            }
-
-            if (!empty($products)) {
-                $json['response'] = [
-                    'status'       => 'ok',
-                    'product_list' => $products,
-                    'total_val'    => $this->db->count_all("product_information"),
-                ];
-            } else {
-                $json['response'] = [
-                    'status'       => 'error',
-                    'product_list' => [],
-                    'message'      => 'No Product Found',
-                ];
-            }
-
-            echo json_encode($json, JSON_UNESCAPED_UNICODE);
+        // Load category names
+        $category_map = [];
+        foreach ($this->db->get('product_category')->result() as $cat) {
+            $category_map[$cat->category_id] = $cat->category_name;
         }
+
+        if (!empty($products)) {
+            foreach ($products as $k => $v) {
+                $product_id = $v['product_id'];
+
+                // Calculate stock
+                $totalSalesQnty = $this->db->select('SUM(quantity) AS totalSalesQnty')
+                    ->where('product_id', $product_id)
+                    ->get('invoice_details')->row()->totalSalesQnty ?? 0;
+
+                $totalBuyQnty = $this->db->select('SUM(quantity) AS totalBuyQnty')
+                    ->where('product_id', $product_id)
+                    ->get('product_purchase_details')->row()->totalBuyQnty ?? 0;
+
+                $stock_qty = $totalBuyQnty - $totalSalesQnty;
+
+                // Image URL
+                $products[$k]['image'] = !empty($v['image']) 
+                    ? str_replace('./', '', $v['image']) 
+                    : null;
+
+                // Category and status
+                $products[$k]['category_name'] = $category_map[$v['category_id']] ?? '';
+                $products[$k]['status'] = $v['status'] ?? "1";
+
+                // QR & Barcode
+                $qr_filename = $product_id . '.png';
+                $qr_path = FCPATH . 'my-assets/image/qr/' . $qr_filename;
+
+                if (!file_exists($qr_path)) {
+                    $this->ciqrcode->initialize([
+                        'cacheable' => true,
+                        'cachedir'  => '',
+                        'errorlog'  => '',
+                        'quality'   => true,
+                        'size'      => '1024',
+                        'black'     => [224, 255, 255],
+                        'white'     => [70, 130, 180]
+                    ]);
+                    $this->ciqrcode->generate([
+                        'data'     => $product_id,
+                        'level'    => 'H',
+                        'size'     => 10,
+                        'savename' => $qr_path
+                    ]);
+                }
+
+                $products[$k]['qr_code']  = base_url('my-assets/image/qr/' . $qr_filename);
+                $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $product_id);
+
+                // Product info by barcode
+                $product_info = $this->Api_model->product_info_bybarcode($product_id);
+                $product_info['stock'] = (float)($product_info['stock'] ?? 0);
+                $product_info['price'] = number_format((float)($product_info['price'] ?? 0), 2, '.', '');
+                $products[$k]['product_info_bybarcode'] = $product_info;
+
+                // Stock quantity field
+                $products[$k]['stock_qty'] = number_format($stock_qty, 2, '.', '');
+
+                // ✅ Warehouse stock from HMVC module
+                $warehouse_stock = $this->Warehouse_model->get_warehouse_stock_by_product($product_id);
+                $products[$k]['warehouse_stock_qty'] = array_map(function ($row) {
+                    return [
+                        'warehouse_id'   => (string)($row['warehouse_id'] ?? ''),
+                        'warehouse_name' => $row['warehouse_name'] ?? '',
+                        'qty'            => number_format((float)($row['qty'] ?? 0), 2, '.', '')
+                    ];
+                }, $warehouse_stock);
+            }
+        }
+
+        $response = !empty($products)
+            ? [
+                'status'       => 'ok',
+                'product_list' => $products,
+                'total_val'    => $this->db->count_all("product_information")
+            ]
+            : [
+                'status'       => 'error',
+                'product_list' => [],
+                'message'      => 'No Product Found'
+            ];
+
+        echo json_encode(['response' => $response], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
 
   
     public function delete_product() {
@@ -950,26 +985,142 @@ class Api extends CI_Controller {
     }
 
 
-    public function insert_customer() {
+    // public function insert_customer() {
+    //     // Handle file upload
+    //     $sales_permit = '';
+    //     if (!empty($_FILES['sales_permit']['name'])) {
+    //         $config['upload_path']   = './uploads/sales_permits/';
+    //         $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
+    //         $config['max_size']      = 2048; // 2MB max
+    //         $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
+    
+    //         // Create directory if not exists
+    //         if (!is_dir($config['upload_path'])) {
+    //             mkdir($config['upload_path'], 0755, true);
+    //         }
+    
+    //         $this->load->library('upload', $config);
+    
+    //         if ($this->upload->do_upload('sales_permit')) {
+    //             $upload_data = $this->upload->data();
+    //             $sales_permit = $upload_data['file_name'];
+    //         } else {
+    //             echo json_encode([
+    //                 'response' => [
+    //                     'status' => 'error',
+    //                     'message' => 'File upload failed: ' . strip_tags($this->upload->display_errors())
+    //                 ]
+    //             ]);
+    //             return;
+    //         }
+    //     }
+    
+    //     // Build data from request
+    //     $data = array(
+    //         'customer_name'        => $this->input->post('customer_name'),
+    //         'customer_address'     => $this->input->post('address'),
+    //         'address2'             => $this->input->post('address2'),
+    //         'customer_mobile'      => $this->input->post('mobile'),
+    //         'customer_email'       => $this->input->post('email'),
+    //         'email_address'        => $this->input->post('email_address'),
+    //         'contact'              => $this->input->post('contact'),
+    //         'phone'                => $this->input->post('phone'),
+    //         'fax'                  => $this->input->post('fax'),
+    //         'city'                 => $this->input->post('city'),
+    //         'state'                => $this->input->post('state'),
+    //         'zip'                  => $this->input->post('zip'),
+    //         'country'              => $this->input->post('country'),
+    //         'sales_permit'         => $sales_permit,
+    //         'sales_permit_number'  => $this->input->post('sales_permit_number'),
+    //         'status'               => 0,
+    //         'create_date'          => date('Y-m-d H:i:s'),
+    //         'create_by'            => 1 // Set session user ID if needed
+    //     );
+    
+    //     $checkC = $this->db->where('customer_mobile', $this->input->post('mobile'))->get('customer_information')->row();
+    
+    //     if (empty($checkC)) {
+    //         if ($this->Api_model->customer_create($data)) {
+    //             $customer_id = $this->db->insert_id();
+    
+    //             $coa = $this->Api_model->customerheadcode();
+    //             $headcode = ($coa && $coa->HeadCode != NULL) ? $coa->HeadCode + 1 : "102030000001";
+    //             $c_acc = $customer_id . '-' . $this->input->post('customer_name');
+    
+    //             $customer_coa = [
+    //                 'HeadCode'         => $headcode,
+    //                 'HeadName'         => $c_acc,
+    //                 'PHeadName'        => 'Merchant Receivable',
+    //                 'HeadLevel'        => '4',
+    //                 'IsActive'         => '1',
+    //                 'IsTransaction'    => '1',
+    //                 'IsGL'             => '0',
+    //                 'customer_id'      => $customer_id,
+    //                 'HeadType'         => 'A',
+    //                 'IsBudget'         => '0',
+    //                 'IsDepreciation'   => '0',
+    //                 'DepreciationRate' => '0',
+    //                 'CreateBy'         => 1,
+    //                 'CreateDate'       => date('Y-m-d H:i:s')
+    //             ];
+    
+    //             $this->db->insert('acc_coa', $customer_coa);
+    
+    //             // Previous balance
+    //             $this->Api_model->customer_previous_balance_add($this->input->post('previous_balance'), $customer_id);
+    
+    //             $json['response'] = [
+    //                 'status'     => 'ok',
+    //                 'message'    => 'Successfully Added',
+    //                 'permission' => 'write'
+    //             ];
+    //         } else {
+    //             $json['response'] = [
+    //                 'status'     => 'error',
+    //                 'message'    => 'Please try again',
+    //                 'permission' => 'read'
+    //             ];
+    //         }
+    //     } else {
+    //         $json['response'] = [
+    //             'status'  => 'error',
+    //             'message' => 'This customer already exists'
+    //         ];
+    //     }
+    
+    //     echo json_encode($json, JSON_UNESCAPED_UNICODE);
+    // }
+
+
+    public function insert_customer()
+    {
+        log_message('debug', '[insert_customer] 🔄 Starting customer insert process');
+
+        // ✅ Log full raw input
+        log_message('debug', '[insert_customer] 🌐 Incoming API Request: ' . json_encode($this->input->post(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
         // Handle file upload
         $sales_permit = '';
         if (!empty($_FILES['sales_permit']['name'])) {
+            log_message('debug', '[insert_customer] 📎 Uploading sales permit file');
+
             $config['upload_path']   = './uploads/sales_permits/';
             $config['allowed_types'] = 'jpg|jpeg|png|pdf|doc|docx';
-            $config['max_size']      = 2048; // 2MB max
+            $config['max_size']      = 2048;
             $config['file_name']     = time() . '_' . $_FILES['sales_permit']['name'];
-    
-            // Create directory if not exists
+
             if (!is_dir($config['upload_path'])) {
                 mkdir($config['upload_path'], 0755, true);
             }
-    
+
             $this->load->library('upload', $config);
-    
+
             if ($this->upload->do_upload('sales_permit')) {
                 $upload_data = $this->upload->data();
                 $sales_permit = $upload_data['file_name'];
+                log_message('debug', '[insert_customer] ✅ File uploaded: ' . $sales_permit);
             } else {
+                log_message('error', '[insert_customer] ❌ File upload failed: ' . strip_tags($this->upload->display_errors()));
                 echo json_encode([
                     'response' => [
                         'status' => 'error',
@@ -979,14 +1130,22 @@ class Api extends CI_Controller {
                 return;
             }
         }
-    
+
         // Build data from request
-        $data = array(
-            'customer_name'        => $this->input->post('customer_name'),
+        $customer_email  = $this->input->post('email');
+        $customer_mobile = $this->input->post('mobile');
+        $customer_name   = $this->input->post('customer_name');
+        $password        = $this->input->post('password');
+
+        // ✅ Log plaintext password
+        log_message('debug', '[insert_customer] 🔑 Password received (plaintext): ' . $password);
+
+        $data = [
+            'customer_name'        => $customer_name,
             'customer_address'     => $this->input->post('address'),
             'address2'             => $this->input->post('address2'),
-            'customer_mobile'      => $this->input->post('mobile'),
-            'customer_email'       => $this->input->post('email'),
+            'customer_mobile'      => $customer_mobile,
+            'customer_email'       => $customer_email,
             'email_address'        => $this->input->post('email_address'),
             'contact'              => $this->input->post('contact'),
             'phone'                => $this->input->post('phone'),
@@ -999,19 +1158,22 @@ class Api extends CI_Controller {
             'sales_permit_number'  => $this->input->post('sales_permit_number'),
             'status'               => 0,
             'create_date'          => date('Y-m-d H:i:s'),
-            'create_by'            => 1 // Set session user ID if needed
-        );
-    
-        $checkC = $this->db->where('customer_mobile', $this->input->post('mobile'))->get('customer_information')->row();
-    
+            'create_by'            => 1
+        ];
+
+        log_message('debug', '[insert_customer] 📦 Data prepared: ' . json_encode($data));
+
+        $checkC = $this->db->where('customer_mobile', $customer_mobile)->get('customer_information')->row();
+
         if (empty($checkC)) {
             if ($this->Api_model->customer_create($data)) {
                 $customer_id = $this->db->insert_id();
-    
+                log_message('debug', "[insert_customer] ✅ Customer created with ID: $customer_id");
+
                 $coa = $this->Api_model->customerheadcode();
                 $headcode = ($coa && $coa->HeadCode != NULL) ? $coa->HeadCode + 1 : "102030000001";
-                $c_acc = $customer_id . '-' . $this->input->post('customer_name');
-    
+                $c_acc = $customer_id . '-' . $customer_name;
+
                 $customer_coa = [
                     'HeadCode'         => $headcode,
                     'HeadName'         => $c_acc,
@@ -1028,18 +1190,69 @@ class Api extends CI_Controller {
                     'CreateBy'         => 1,
                     'CreateDate'       => date('Y-m-d H:i:s')
                 ];
-    
                 $this->db->insert('acc_coa', $customer_coa);
-    
-                // Previous balance
+                log_message('debug', "[insert_customer] 💰 Chart of Account created");
+
                 $this->Api_model->customer_previous_balance_add($this->input->post('previous_balance'), $customer_id);
-    
+                log_message('debug', "[insert_customer] 💳 Previous balance added");
+
+                // ✅ Log before auth entry creation
+                log_message('debug', "[insert_customer] 🔐 Creating auth entry with email: $customer_email and plaintext password: $password");
+
+                $this->db->insert('customer_auth', [
+                    'customer_id' => $customer_id,
+                    'username'    => $customer_email,
+                    'password'    => password_hash($password, PASSWORD_BCRYPT),
+                    'status'      => 3
+                ]);
+                log_message('debug', "[insert_customer] 🔐 Auth entry created");
+
+                $token = bin2hex(random_bytes(32));
+                $this->db->insert('email_verification_tokens', [
+                    'customer_id' => $customer_id,
+                    'token'       => $token
+                ]);
+                log_message('debug', "[insert_customer] 📧 Token generated: $token");
+
+                $verify_url = base_url("apiv2/verify_email?token=$token");
+
+                $this->load->library('sendmail_lib');
+
+                $this->sendmail_lib->send(
+                    $customer_email,
+                    'Verify your email address',
+                    "<h3>Registration Successful!</h3>
+                    <p>Thank you for registering. Please click the button below to verify your email:</p>
+                    <p><a href='$verify_url' style='padding:10px 20px; background:#4CAF50; color:#fff;'>Verify Email</a></p>",
+                    'noreply@hostelevate.com',
+                    'DeshiShad'
+                );
+                log_message('debug', "[insert_customer] ✉️ Verification email sent to customer");
+
+                $admin_query = $this->db->where_in('id', [1, 2])->get('user_login');
+                foreach ($admin_query->result() as $admin) {
+                    $this->sendmail_lib->send(
+                        $admin->username,
+                        'New Customer Registered',
+                        "<h4>New customer registration alert</h4>
+                        <p><strong>Name:</strong> {$customer_name}</p>
+                        <p><strong>Email:</strong> {$customer_email}</p>
+                        <p><strong>Mobile:</strong> {$customer_mobile}</p>
+                        <p><strong>Who Created:</strong> API Web (User ID: 1)</p>
+                        <p><strong>Registered At:</strong> " . date('Y-m-d H:i:s') . "</p>",
+                        'noreply@hostelevate.com',
+                        'DeshiShad Alert System'
+                    );
+                }
+                log_message('debug', "[insert_customer] 🔔 Admins notified");
+
                 $json['response'] = [
                     'status'     => 'ok',
-                    'message'    => 'Successfully Added',
+                    'message'    => 'Customer created. Verification email sent.',
                     'permission' => 'write'
                 ];
             } else {
+                log_message('error', '[insert_customer] ❌ Failed to create customer');
                 $json['response'] = [
                     'status'     => 'error',
                     'message'    => 'Please try again',
@@ -1047,28 +1260,29 @@ class Api extends CI_Controller {
                 ];
             }
         } else {
+            log_message('debug', '[insert_customer] ⚠️ Customer already exists with same mobile');
             $json['response'] = [
                 'status'  => 'error',
                 'message' => 'This customer already exists'
             ];
         }
-    
-        echo json_encode($json, JSON_UNESCAPED_UNICODE);
-    }
 
+        echo json_encode($json, JSON_UNESCAPED_UNICODE);
+        log_message('debug', '[insert_customer] ✅ Process completed');
+    }
 
     public function customer_password_change()
     {
         try {
             // ✅ Step 1: Parse and Validate Input
             $input = json_decode(trim(file_get_contents("php://input")), true);
-            log_message('debug', '[customer_password_change_no_auth] 🔐 Input: ' . json_encode($input));
+            log_message('debug', '[customer_password_change] 🔐 Input: ' . json_encode($input));
 
-            if (!isset($input['customer_id']) || !isset($input['old_password']) || !isset($input['new_password'])) {
-                return $this->_bad_request('customer_id, old_password, and new_password are required.');
+            if (!isset($input['email']) || !isset($input['old_password']) || !isset($input['new_password'])) {
+                return $this->_bad_request('email, old_password, and new_password are required.');
             }
 
-            $customer_id = (int) $input['customer_id'];
+            $email        = trim($input['email']);
             $old_password = trim($input['old_password']);
             $new_password = trim($input['new_password']);
 
@@ -1076,38 +1290,43 @@ class Api extends CI_Controller {
                 return $this->_bad_request('New password must be at least 6 characters long.');
             }
 
-            // ✅ Step 2: Verify old password
+            // ✅ Step 2: Fetch Customer Info
+            $customer_info = $this->db->get_where('customer_information', ['customer_email' => $email])->row();
+            if (!$customer_info) {
+                return $this->_bad_request('Customer not found with this email.');
+            }
+
+            $customer_id   = $customer_info->customer_id;
+            $customer_name = $customer_info->customer_name ?? 'Unknown';
+            $customer_email = $customer_info->customer_email;
+
+            // ✅ Step 3: Verify old password
             $auth = $this->db->get_where('customer_auth', ['customer_id' => $customer_id])->row();
             if (!$auth || !password_verify($old_password, $auth->password)) {
                 return $this->_bad_request('Old password is incorrect.');
             }
 
-            // ✅ Step 3: Hash and save new password
+            // ✅ Step 4: Update password
             $hashed_new_password = password_hash($new_password, PASSWORD_BCRYPT);
             $this->db->where('customer_id', $customer_id)->update('customer_auth', [
                 'password'    => $hashed_new_password,
                 'updated_at'  => date('Y-m-d H:i:s')
             ]);
 
-            log_message('debug', "[customer_password_change_no_auth] 🔁 Password updated for customer_id={$customer_id}");
-
-            // ✅ Step 4: Fetch customer info
-            $customer_info = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row();
-            $customer_name = $customer_info->customer_name ?? 'Unknown';
-            $customer_email = $customer_info->customer_email ?? '';
+            log_message('debug', "[customer_password_change] 🔁 Password updated for customer_id={$customer_id}");
 
             // ✅ Step 5: Load SMTP config
             $smtp = $this->db->get('email_config')->row_array();
             if (empty($smtp)) {
-                log_message('error', '[customer_password_change_no_auth] ❌ SMTP config missing');
+                log_message('error', '[customer_password_change] ❌ SMTP config missing');
             }
 
             $this->load->library('Sendmail_lib');
 
             // ✅ Step 6: Notify Admins
-            $admin_subject = "🔐 Password Changed Without Auth - {$customer_name}";
+            $admin_subject = "🔐 Password Changed - {$customer_name}";
             $admin_message = "
-                <h4>Password Change (Unauthenticated)</h4>
+                <h4>Password Change Notification</h4>
                 <p><strong>Name:</strong> {$customer_name}</p>
                 <p><strong>Email:</strong> {$customer_email}</p>
                 <p><strong>Customer ID:</strong> {$customer_id}</p>
@@ -1146,16 +1365,17 @@ class Api extends CI_Controller {
                 );
             }
 
+            // ✅ Step 8: Response
             return $this->output
                 ->set_content_type('application/json')
                 ->set_status_header(200)
                 ->set_output(json_encode([
                     'status'  => 'success',
-                    'message' => 'Password updated without authentication and notifications sent.'
+                    'message' => 'Password updated using email and notifications sent.'
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
 
         } catch (Exception $e) {
-            log_message('error', '[customer_password_change_no_auth] ❌ Exception: ' . $e->getMessage());
+            log_message('error', '[customer_password_change] ❌ Exception: ' . $e->getMessage());
             return $this->_server_error('Unexpected server error: ' . $e->getMessage());
         }
     }
@@ -2088,60 +2308,73 @@ class Api extends CI_Controller {
     public function insert_invoice_payment() {
         header('Content-Type: application/json');
         log_message('debug', '🧾 insert_invoice_payment API called');
-    
+
         $input = $this->input->post();
-    
-        // ✅ Decode 'detailsinfo' JSON string to array
-        if (!empty($input['detailsinfo'])) {
+
+        // ✅ Decode 'detailsinfo' if string
+        if (!empty($input['detailsinfo']) && is_string($input['detailsinfo'])) {
             $input['detailsinfo'] = json_decode($input['detailsinfo'], true);
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Missing product details']);
+        }
+
+        if (empty($input['detailsinfo']) || !is_array($input['detailsinfo'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Missing or invalid product details']);
             return;
         }
-    
+
         log_message('debug', '📥 Parsed Input: ' . print_r($input, true));
         log_message('debug', '📦 Parsed Products: ' . print_r($input['detailsinfo'], true));
-    
+
         // ✅ Check for duplicate transaction_ref
-        if (!isset($input['transaction_ref']) || empty($input['transaction_ref'])) {
+        if (empty($input['transaction_ref'])) {
             echo json_encode(['status' => 'error', 'message' => 'transaction_ref is required']);
             return;
         }
-    
+
         $existing = $this->db->get_where('invoice_payment', ['transaction_ref' => $input['transaction_ref']])->row();
         if (!empty($existing)) {
             echo json_encode(['status' => 'error', 'message' => 'Duplicate transaction_ref']);
             return;
         }
-    
-        // ✅ Handle file upload with dynamic name
+
+        // ✅ Handle optional file upload
         $input['payment_ref_doc'] = '';
         if (!empty($_FILES['payment_ref_doc']['name'])) {
             $original_name = $_FILES['payment_ref_doc']['name'];
             $tmp_name = $_FILES['payment_ref_doc']['tmp_name'];
-    
+
             $upload_path = 'uploads/payment_refs/';
             if (!is_dir($upload_path)) {
                 mkdir($upload_path, 0777, true);
             }
-    
+
             $ext = pathinfo($original_name, PATHINFO_EXTENSION);
             $safe_filename = preg_replace('/[^a-zA-Z0-9_-]/', '', pathinfo($original_name, PATHINFO_FILENAME));
             $unique_id = uniqid();
             $new_filename = $safe_filename . '_' . time() . '_' . $unique_id . '.' . $ext;
-    
             $file_path = $upload_path . $new_filename;
-    
+
             if (move_uploaded_file($tmp_name, $file_path)) {
                 $input['payment_ref_doc'] = $file_path;
             } else {
                 log_message('error', '❌ Failed to move uploaded file.');
             }
         }
-    
+
+        // ✅ Fetch customer_name using customer_id
+        $customer = $this->db->get_where('customer_information', ['customer_id' => $input['customer_id']])->row();
+        if (!$customer) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid customer_id']);
+            return;
+        }
+
+        $customer_name = $customer->customer_name ?? '';
+        if (empty($customer_name)) {
+            log_message('warning', '⚠️ customer_name not found for customer_id: ' . $input['customer_id']);
+        }
+
         $this->load->database();
         $this->db->trans_begin();
-    
+
         try {
             $invoice_data = [
                 'invoice_date'     => $input['invoice_date'] ?? date('Y-m-d'),
@@ -2154,17 +2387,22 @@ class Api extends CI_Controller {
                 'total_amount'     => $input['total_amount'],
                 'payment_type'     => $input['payment_type'],
                 'payment_ref_doc'  => $input['payment_ref_doc'],
-                'payment_ref'      => $input['payment_ref'] ?? '',
+                'payment_ref'      => $input['payment_ref'] ?? $customer_name,
                 'transaction_ref'  => $input['transaction_ref'],
                 'status'           => $input['status'] ?? 2,
                 'created_at'       => date('Y-m-d H:i:s'),
             ];
-    
+
             $this->db->insert('invoice_payment', $invoice_data);
             $invoice_id = $this->db->insert_id();
             log_message('debug', "✅ Invoice payment inserted with ID: $invoice_id");
-    
+
             foreach ($input['detailsinfo'] as $item) {
+                if (empty($item['product_id']) || empty($item['product_quantity']) || empty($item['product_rate'])) {
+                    log_message('error', '❌ Missing required fields in product item: ' . print_r($item, true));
+                    throw new Exception('Invalid product data');
+                }
+
                 $details_data = [
                     'invoice_id'       => $invoice_id,
                     'product_id'       => $item['product_id'],
@@ -2173,17 +2411,17 @@ class Api extends CI_Controller {
                     'serial_no'        => $item['serial_no'] ?? '',
                     'created_at'       => date('Y-m-d H:i:s')
                 ];
-    
+
                 $this->db->insert('invoice_payment_details', $details_data);
             }
-    
+
             if ($this->db->trans_status() === FALSE) {
                 $this->db->trans_rollback();
-                log_message('error', '❌ Transaction failed, rolling back');
+                log_message('error', '❌ Transaction failed, rolling back: ' . $this->db->last_query());
                 echo json_encode(['status' => 'error', 'message' => 'Failed to insert invoice']);
                 return;
             }
-    
+
             $this->db->trans_commit();
             echo json_encode([
                 'status'     => 'success',
@@ -3374,6 +3612,27 @@ class Api extends CI_Controller {
         echo json_encode($json, JSON_UNESCAPED_UNICODE);
     }
 
+    private function _bad_request($message)
+    {
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(400)
+            ->set_output(json_encode([
+                'status' => 'error',
+                'message' => $message
+            ], JSON_UNESCAPED_UNICODE));
+    }
+
+    private function _server_error($message)
+    {
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(500)
+            ->set_output(json_encode([
+                'status' => 'error',
+                'message' => $message
+            ], JSON_UNESCAPED_UNICODE));
+    }
 
 
 }

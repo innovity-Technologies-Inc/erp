@@ -408,7 +408,7 @@ class Apiv2 extends CI_Controller {
                 ->set_output(json_encode([
                     'status' => 'error',
                     'message' => 'Unauthorized. Please provide a valid access token.'
-                ]));
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
         }
 
         $categories = $this->Api_model->category_list();
@@ -442,7 +442,10 @@ class Apiv2 extends CI_Controller {
             ];
         }
 
-        echo json_encode($json, JSON_UNESCAPED_UNICODE);
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(200)
+            ->set_output(json_encode($json, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
     }
 
     // From here all application functionality will be there 
@@ -490,135 +493,146 @@ class Apiv2 extends CI_Controller {
 
     public function product_list()
     {
-        // Step 1: Authenticate the Access Token (First Layer Login)
-        $user = $this->authenticate_token();
-        if (!$user) {
+        try {
+            // ✅ First-layer Token Auth
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'status'  => 'unauthorized',
+                        'message' => 'Unauthorized. Please provide a valid access token.'
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            }
+
+            log_message('info', 'Headers: ' . json_encode(getallheaders()));
+
+            // ✅ Second-layer Token Check
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            $view_sensitive_data = false;
+
+            if ($second_token) {
+                try {
+                    $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                    if (isset($decoded->customer_id)) {
+                        $view_sensitive_data = true;
+                        log_message('info', 'Second Layer Token Decoded Successfully.');
+                    }
+                } catch (Exception $e) {
+                    log_message('error', 'Second Layer Token Decode Failed: ' . $e->getMessage());
+                }
+            } else {
+                log_message('error', 'X-Second-Token header not found.');
+            }
+
+            // ✅ Pagination Support
+            $start = $this->input->get('start');
+            $products = $start
+                ? $this->Api_model->product_list(15, ($start == 1 ? 0 : $start))
+                : $this->Api_model->searchproduct_list();
+
+            // ✅ Load Warehouse Model
+            $this->load->model('warehouse/Warehouse_model', 'warehouse_model');
+
+            // ✅ Map Category IDs to Names
+            $category_map = [];
+            $categories = $this->db->get('product_category')->result();
+            foreach ($categories as $cat) {
+                $category_map[$cat->category_id] = $cat->category_name;
+            }
+
+            // ✅ Process Products
+            if (!empty($products)) {
+                foreach ($products as $k => $v) {
+                    $product_id = $v['product_id'];
+
+                    // Sales and Purchase Quantity
+                    $totalSalesQnty = $this->db->select('SUM(quantity) AS totalSalesQnty')
+                        ->where('product_id', $product_id)
+                        ->get('invoice_details')->row()->totalSalesQnty ?? 0;
+
+                    $totalBuyQnty = $this->db->select('SUM(quantity) AS totalBuyQnty')
+                        ->where('product_id', $product_id)
+                        ->get('product_purchase_details')->row()->totalBuyQnty ?? 0;
+
+                    $stock_qty = $totalBuyQnty - $totalSalesQnty;
+
+                    // ✅ Image Fix
+                    if (!empty($v['image'])) {
+                        $products[$k]['image'] = base_url(str_replace('./', '', $v['image']));
+                    }
+
+                    // ✅ Add Category Name
+                    $products[$k]['category_name'] = $category_map[$v['category_id']] ?? '';
+
+                    // ✅ Sensitive Stock Data
+                    if ($view_sensitive_data) {
+                        $products[$k]['warehouse_stock_qty'] = $this->warehouse_model->get_warehouse_stock_by_product($product_id);
+                    } else {
+                        unset($products[$k]['price']);
+                        unset($products[$k]['stock_qty']);
+                        unset($products[$k]['warehouse_stock_qty']);
+                    }
+
+                    // ✅ QR Code Generation
+                    $qrImagePath = FCPATH . 'my-assets/image/qr/' . $product_id . '.png';
+                    if (!file_exists($qrImagePath)) {
+                        $this->ciqrcode->initialize([
+                            'cacheable' => true,
+                            'cachedir'  => '',
+                            'errorlog'  => '',
+                            'quality'   => true,
+                            'size'      => '1024',
+                            'black'     => [224, 255, 255],
+                            'white'     => [70, 130, 180]
+                        ]);
+
+                        $params = [
+                            'data'     => $product_id,
+                            'level'    => 'H',
+                            'size'     => 10,
+                            'savename' => $qrImagePath
+                        ];
+                        $this->ciqrcode->generate($params);
+                    }
+
+                    // ✅ Attach QR & Barcode
+                    $products[$k]['qr_code']  = base_url('my-assets/image/qr/' . $product_id . '.png');
+                    $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $product_id);
+
+                    // ✅ Product Info By Barcode
+                    $product_info = $this->Api_model->product_info_bybarcode($product_id);
+                    if (!$view_sensitive_data) {
+                        unset($product_info['price']);
+                        unset($product_info['stock']);
+                    }
+                    $products[$k]['product_info_bybarcode'] = $product_info;
+                }
+            }
+
+            // ✅ Final Response
+            $response = !empty($products)
+                ? [
+                    'status'       => 'success',
+                    'message'      => 'Products retrieved successfully.',
+                    'product_list' => $products,
+                    'total_val'    => $this->db->count_all('product_information')
+                ]
+                : [
+                    'status'       => 'error',
+                    'message'      => 'No Product Found',
+                    'product_list' => []
+                ];
+
             return $this->output
                 ->set_content_type('application/json')
-                ->set_status_header(401)
-                ->set_output(json_encode([
-                    'status' => 'error',
-                    'message' => 'Unauthorized. Please provide a valid access token.'
-                ]));
+                ->set_status_header(200)
+                ->set_output(json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+
+        } catch (Exception $e) {
+            return $this->_server_error('Unexpected server error: ' . $e->getMessage());
         }
-
-        // 🔍 Debugging - Log the headers
-        log_message('info', 'Headers: ' . json_encode(getallheaders()));
-
-        // Step 2: Authenticate the 2nd Layer (Optional)
-        $second_token = $this->input->get_request_header('X-Second-Token');
-        $view_sensitive_data = false;
-
-        if ($second_token) {
-            try {
-                // ✅ Decode with the new syntax for Firebase JWT
-                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
-                if (isset($decoded->customer_id)) {
-                    log_message('info', 'Second Layer Token Decoded Successfully.');
-                    $view_sensitive_data = true;
-                }
-            } catch (Exception $e) {
-                log_message('error', 'Second Layer Token Decode Failed: ' . $e->getMessage());
-            }
-        } else {
-            log_message('error', 'X-Second-Token header not found.');
-        }
-
-        // Step 3: Fetch Products based on the start parameter
-        $start = $this->input->get('start');
-        $products = $start ?
-            $this->Api_model->product_list($limit = 15, $start == 1 ? 0 : $start) :
-            $this->Api_model->searchproduct_list();
-
-        // Step 4: Fetch all categories and map them by ID
-        $category_map = [];
-        $category_list = $this->db->get('product_category')->result();
-        foreach ($category_list as $cat) {
-            $category_map[$cat->category_id] = $cat->category_name;
-        }
-
-        // Step 5: Process each product
-        if (!empty($products)) {
-            foreach ($products as $k => $v) {
-                // Calculate stock quantity
-                $totalSalesQnty = $this->db->select('SUM(quantity) AS totalSalesQnty')
-                    ->where('product_id', $v['product_id'])
-                    ->get('invoice_details')
-                    ->row()->totalSalesQnty ?? 0;
-
-                $totalBuyQnty = $this->db->select('SUM(quantity) AS totalBuyQnty')
-                    ->where('product_id', $v['product_id'])
-                    ->get('product_purchase_details')
-                    ->row()->totalBuyQnty ?? 0;
-
-                $stokqty = $totalBuyQnty - $totalSalesQnty;
-
-                // ✅ Fix image path
-                if (!empty($products[$k]['image'])) {
-                    $products[$k]['image'] = base_url(str_replace('./', '', $products[$k]['image']));
-                }
-
-                // ✅ Attach category name
-                $products[$k]['category_name'] = $category_map[$v['category_id']] ?? null;
-
-                // ✅ Attach stock if 2nd layer is validated
-                if ($view_sensitive_data) {
-                    $products[$k]['stock_qty'] = $stokqty ?? 0;
-                } else {
-                    unset($products[$k]['price']);
-                    unset($products[$k]['stock_qty']);
-                }
-
-                // ✅ QR Code generation
-                $qrImagePath = FCPATH . 'my-assets/image/qr/' . $products[$k]['product_id'] . '.png';
-                if (!file_exists($qrImagePath)) {
-                    $this->ciqrcode->initialize([
-                        'cacheable' => true,
-                        'cachedir'  => '',
-                        'errorlog'  => '',
-                        'quality'   => true,
-                        'size'      => '1024',
-                        'black'     => [224, 255, 255],
-                        'white'     => [70, 130, 180]
-                    ]);
-
-                    $params = [
-                        'data'     => $products[$k]['product_id'],
-                        'level'    => 'H',
-                        'size'     => 10,
-                        'savename' => $qrImagePath
-                    ];
-
-                    $this->ciqrcode->generate($params);
-                }
-
-                // ✅ Append barcode and QR code URLs
-                $product_info = $this->Api_model->product_info_bybarcode($products[$k]['product_id']);
-                
-                // ✅ Remove price and stock if not 2nd layer logged in
-                if (!$view_sensitive_data) {
-                    unset($product_info['price']);
-                    unset($product_info['stock']);
-                }
-
-                $products[$k]['product_info_bybarcode'] = $product_info;
-                $products[$k]['qr_code'] = base_url('my-assets/image/qr/' . $products[$k]['product_id'] . '.png');
-                $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $products[$k]['product_id']);
-            }
-        }
-
-        // Step 6: Return JSON response
-        $json['response'] = !empty($products) ? [
-            'status'       => 'ok',
-            'product_list' => $products,
-            'total_val'    => $this->db->count_all("product_information"),
-        ] : [
-            'status'       => 'error',
-            'product_list' => [],
-            'message'      => 'No Product Found',
-        ];
-
-        echo json_encode($json, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
 
@@ -667,7 +681,7 @@ class Apiv2 extends CI_Controller {
             }
 
             // ✅ Step 5: Fetch customer info
-            $customer = $this->Api_model->get_customer_by_email($email);
+            $customer = $this->get_internal_customer_by_email($email);
 
             if (!$customer || !isset($customer->customer_id)) {
                 return $this->output
@@ -1116,6 +1130,124 @@ class Apiv2 extends CI_Controller {
         }
     }
 
+    public function insert_invoice_payment()
+    {
+        header('Content-Type: application/json');
+        log_message('debug', '🧾 insert_invoice_payment API called');
+
+        // ✅ First-layer authentication
+        $user = $this->authenticate_token();
+        if (!$user) {
+            echo json_encode(['status' => 'unauthorized', 'message' => 'Unauthorized. Bearer token missing or invalid.']);
+            return;
+        }
+
+        // ✅ Second-layer authentication
+        $second_token = $this->input->get_request_header('X-Second-Token');
+        if (!$second_token) {
+            echo json_encode(['status' => 'unauthorized', 'message' => 'Missing second-layer token (X-Second-Token).']);
+            return;
+        }
+
+        try {
+            $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+            if (!isset($decoded->customer_id)) {
+                echo json_encode(['status' => 'token-error', 'message' => 'Second-layer token invalid.']);
+                return;
+            }
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'token-error', 'message' => 'Second-layer token decode failed: ' . $e->getMessage()]);
+            return;
+        }
+
+        // ✅ Parse JSON input
+        $input = json_decode(file_get_contents("php://input"), true);
+        log_message('debug', '📥 Parsed Input: ' . print_r($input, true));
+
+        if (empty($input)) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid JSON input']);
+            return;
+        }
+
+        // ✅ Validate required fields
+        if (empty($input['transaction_ref'])) {
+            echo json_encode(['status' => 'error', 'message' => 'transaction_ref is required']);
+            return;
+        }
+
+        if (empty($input['detailsinfo']) || !is_array($input['detailsinfo'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Missing or invalid product details']);
+            return;
+        }
+
+        // ✅ Check for duplicate transaction_ref
+        $existing = $this->db->get_where('invoice_payment', ['transaction_ref' => $input['transaction_ref']])->row();
+        if (!empty($existing)) {
+            echo json_encode(['status' => 'error', 'message' => 'Duplicate transaction_ref']);
+            return;
+        }
+
+        // ✅ Begin transaction
+        $this->db->trans_begin();
+
+        try {
+            // ✅ Prepare invoice payment data
+            $invoice_data = [
+                'invoice_date'     => $input['invoice_date'] ?? date('Y-m-d'),
+                'createby'         => $input['createby'],
+                'customer_id'      => $input['customer_id'],
+                'paid_amount'      => $input['paid_amount'],
+                'due_amount'       => $input['due_amount'] ?? 0,
+                'total_discount'   => $input['total_discount'] ?? 0,
+                'total_tax'        => $input['total_tax'] ?? 0,
+                'total_amount'     => $input['total_amount'],
+                'payment_type'     => $input['payment_type'],
+                'payment_ref_doc'  => $input['payment_ref_doc'] ?? '', // optional, no file upload in raw JSON
+                'payment_ref'      => $input['payment_ref'] ?? '',
+                'transaction_ref'  => $input['transaction_ref'],
+                'status'           => $input['status'] ?? 2,
+                'created_at'       => date('Y-m-d H:i:s'),
+            ];
+
+            // ✅ Insert into invoice_payment table
+            $this->db->insert('invoice_payment', $invoice_data);
+            $invoice_id = $this->db->insert_id();
+            log_message('debug', "✅ Invoice payment inserted with ID: $invoice_id");
+
+            // ✅ Insert products into invoice_payment_details
+            foreach ($input['detailsinfo'] as $item) {
+                $details_data = [
+                    'invoice_id'       => $invoice_id,
+                    'product_id'       => $item['product_id'],
+                    'product_quantity' => $item['product_quantity'],
+                    'product_rate'     => $item['product_rate'],
+                    'serial_no'        => $item['serial_no'] ?? '',
+                    'created_at'       => date('Y-m-d H:i:s')
+                ];
+                $this->db->insert('invoice_payment_details', $details_data);
+            }
+
+            // ✅ Finalize transaction
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                log_message('error', '❌ Transaction failed, rolling back');
+                echo json_encode(['status' => 'error', 'message' => 'Failed to insert invoice']);
+                return;
+            }
+
+            $this->db->trans_commit();
+            echo json_encode([
+                'status'     => 'success',
+                'invoice_id' => $invoice_id,
+                'message'    => 'Invoice payment inserted successfully'
+            ]);
+        } catch (Exception $e) {
+            $this->db->trans_rollback();
+            log_message('error', '❌ Exception: ' . $e->getMessage());
+            echo json_encode(['status' => 'error', 'message' => 'Something went wrong']);
+        }
+    }
+
     public function insert_sale()
     {
         header('Content-Type: application/json');
@@ -1138,11 +1270,11 @@ class Apiv2 extends CI_Controller {
         try {
             $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
             if (!isset($decoded->customer_id)) {
-                echo json_encode(['status' => 'error', 'message' => 'Second-layer token invalid.']);
+                echo json_encode(['status' => 'token-error', 'message' => 'Second-layer token invalid.']);
                 return;
             }
         } catch (Exception $e) {
-            echo json_encode(['status' => 'error', 'message' => 'Second-layer token decode failed: ' . $e->getMessage()]);
+            echo json_encode(['status' => 'token-error', 'message' => 'Second-layer token decode failed: ' . $e->getMessage()]);
             return;
         }
 
@@ -1304,7 +1436,8 @@ class Apiv2 extends CI_Controller {
         ]);
     }
 
-    public function invoice_generator() {
+    public function invoice_generator() 
+    {
         $this->db->select_max('invoice', 'invoice_no');
         $query = $this->db->get('invoice');
         $result = $query->result_array();
@@ -1318,7 +1451,8 @@ class Apiv2 extends CI_Controller {
         return $invoice_no;
     }
 
-    public function autoapprove($invoice_id){
+    public function autoapprove($invoice_id)
+    {
         $this->load->model('account/Accounts_model', 'accounts_model');
         
         $vouchers = $this->db->select('referenceNo, VNo')->from('acc_vaucher')
@@ -1340,96 +1474,165 @@ class Apiv2 extends CI_Controller {
     public function product_search()
     {
         try {
-            $start_time = microtime(true);
-            log_message('debug', 'product_search() initiated');
+            log_message('info', '🔍 product_search() called.');
 
-            // ✅ First-layer token check
             $user = $this->authenticate_token();
             if (!$user) {
-                log_message('error', '🔒 Unauthorized access: Invalid or expired token in product_search()');
-                return $this->_unauthorized('Unauthorized. Access token is invalid or expired.');
+                log_message('warning', '❌ Unauthorized access attempt.');
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(401)
+                    ->set_output(json_encode([
+                        'response' => [
+                            'status'  => 'error',
+                            'message' => 'Unauthorized. Please provide a valid access token.'
+                        ]
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
             }
 
-            // ✅ Second-layer token (optional)
+            log_message('info', '✅ User authenticated.');
+            log_message('info', 'Headers: ' . json_encode(getallheaders()));
+
             $second_token = $this->input->get_request_header('X-Second-Token');
             $view_sensitive_data = false;
+
             if ($second_token) {
                 try {
                     $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
-                    $view_sensitive_data = isset($decoded->customer_id);
-                    log_message('info', 'Second Layer Token Decoded Successfully for customer: ' . $decoded->customer_id);
+                    if (isset($decoded->customer_id)) {
+                        log_message('info', '✅ Second Layer Token Decoded Successfully.');
+                        $view_sensitive_data = true;
+                    }
                 } catch (Exception $e) {
-                    log_message('error', 'Second layer token error: ' . $e->getMessage());
+                    log_message('error', '❌ Second Layer Token Decode Failed: ' . $e->getMessage());
                 }
             }
 
-            // ✅ Input handling from raw JSON body
             $body = json_decode(trim($this->input->raw_input_stream), true);
+            log_message('debug', '📦 Request body: ' . json_encode($body));
 
-            // Set defaults and validate types
             $params = [
                 'product_id'   => $body['product_id']   ?? '',
                 'product_name' => $body['product_name'] ?? '',
                 'category_id'  => $body['category_id']  ?? '',
-                'min_price'    => isset($body['min_price']) ? (float) $body['min_price'] : null,
-                'max_price'    => isset($body['max_price']) ? (float) $body['max_price'] : null,
+                'min_price'    => isset($body['min_price']) ? (float)$body['min_price'] : null,
+                'max_price'    => isset($body['max_price']) ? (float)$body['max_price'] : null,
+                'warehouse_id' => $body['warehouse_id'] ?? null
             ];
 
-            $limit = isset($body['limit']) && is_numeric($body['limit']) ? (int) $body['limit'] : 10;
-            $page  = isset($body['page']) && is_numeric($body['page']) ? (int) $body['page'] : 1;
+            $limit  = isset($body['limit']) && is_numeric($body['limit']) ? (int)$body['limit'] : 10;
+            $page   = isset($body['page']) && is_numeric($body['page']) ? (int)$body['page'] : 1;
             $offset = ($page - 1) * $limit;
 
-            log_message('debug', "product_search() pagination => limit: {$limit}, page: {$page}, offset: {$offset}");
+            log_message('debug', '📄 Params for DB query: ' . json_encode($params));
+            log_message('debug', "📄 Pagination - Limit: $limit, Page: $page, Offset: $offset");
 
-            // ✅ Count & Fetch using model methods
             $total_count = $this->countProductSearchResults($params);
             $products    = $this->getProductSearchResults($params, $limit, $offset);
 
-            log_message('debug', 'Fetched product count: ' . count($products));
+            log_message('info', '📦 Total products fetched: ' . count($products));
 
-            if (!empty($params['product_id']) && count($products) === 0) {
-                return $this->_not_found('Product ID ' . $params['product_id'] . ' is not available.');
-            }
+            $this->load->model('warehouse/Warehouse_model', 'warehouse_model');
 
-            // ✅ Category mapping
             $category_map = [];
-            $categories = $this->db->select('category_id, category_name')->get('product_category')->result();
+            $categories = $this->db->get('product_category')->result();
             foreach ($categories as $cat) {
                 $category_map[$cat->category_id] = $cat->category_name;
             }
 
-            // ✅ Post-process each product
             foreach ($products as $k => $v) {
-                if (!empty($products[$k]['image'])) {
-                    $products[$k]['image'] = base_url(str_replace('./', '', $products[$k]['image']));
-                }
+                $product_id = $v['product_id'];
 
-                $products[$k]['category_name'] = $category_map[$v['category_id']] ?? 'Uncategorized';
+                $totalSalesQnty = (float)($this->db->select('SUM(quantity) AS totalSalesQnty')
+                    ->where('product_id', $product_id)
+                    ->get('invoice_details')->row()->totalSalesQnty ?? 0);
 
-                if (!$view_sensitive_data) {
-                    unset($products[$k]['price']);
+                $totalBuyQnty = (float)($this->db->select('SUM(quantity) AS totalBuyQnty')
+                    ->where('product_id', $product_id)
+                    ->get('product_purchase_details')->row()->totalBuyQnty ?? 0);
+
+                $stock_qty = $totalBuyQnty - $totalSalesQnty;
+
+                // Image
+                $products[$k]['image'] = !empty($v['image']) ? base_url(str_replace('./', '', $v['image'])) : '';
+
+                // Category Name
+                $products[$k]['category_name'] = $category_map[$v['category_id']] ?? '';
+
+                // Stock Details
+                if ($view_sensitive_data) {
+                    $products[$k]['stock_qty'] = $stock_qty;
+                    $products[$k]['warehouse_stock_qty'] = $this->warehouse_model->get_warehouse_stock_by_product($product_id, $params['warehouse_id']);
                 } else {
-                    $products[$k]['price'] = (float)$products[$k]['price'];
+                    unset($products[$k]['price']);
+                    unset($products[$k]['stock_qty']);
+                    unset($products[$k]['warehouse_stock_qty']);
                 }
 
-                $products[$k]['qr_code']  = base_url('my-assets/image/qr/' . $v['product_id'] . '.png');
-                $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $v['product_id']);
+                // QR Code
+                $qrImagePath = FCPATH . 'my-assets/image/qr/' . $product_id . '.png';
+                if (!file_exists($qrImagePath)) {
+                    $this->ciqrcode->initialize([
+                        'cacheable' => true,
+                        'cachedir'  => '',
+                        'errorlog'  => '',
+                        'quality'   => true,
+                        'size'      => '1024',
+                        'black'     => [224, 255, 255],
+                        'white'     => [70, 130, 180]
+                    ]);
+                    $this->ciqrcode->generate([
+                        'data'     => $product_id,
+                        'level'    => 'H',
+                        'size'     => 10,
+                        'savename' => $qrImagePath
+                    ]);
+                    log_message('info', "🧾 QR generated for product_id: $product_id");
+                }
+
+                $products[$k]['qr_code']  = base_url('my-assets/image/qr/' . $product_id . '.png');
+                $products[$k]['bar_code'] = base_url('Cbarcode/barcode_generator/' . $product_id);
+
+                $product_info = $this->Api_model->product_info_bybarcode($product_id);
+                if (!$view_sensitive_data) {
+                    unset($product_info['price']);
+                    unset($product_info['stock']);
+                }
+                $products[$k]['product_info_bybarcode'] = $product_info;
             }
 
-            $execution_time = microtime(true) - $start_time;
+            $response = !empty($products)
+                ? [
+                    'status'        => 'ok',
+                    'product_list'  => $products,
+                    'total_val'     => $total_count,
+                    'page'          => $page,
+                    'page_count'    => ceil($total_count / $limit)
+                ]
+                : [
+                    'status'        => 'error',
+                    'product_list'  => [],
+                    'total_val'     => 0,
+                    'page'          => $page,
+                    'page_count'    => 0,
+                    'message'       => 'No Product Found'
+                ];
 
-            return $this->_success([
-                'total_count'    => $total_count,
-                'matched_count'  => count($products),
-                'page'           => $page,
-                'page_count'     => ceil($total_count / $limit),
-                'execution_time' => round($execution_time, 4),
-                'limit'          => $limit,
-                'result'         => $products
-            ], 'Product search completed successfully.');
+            log_message('debug', '🟢 Final API Response: ' . json_encode(['response' => $response]));
+            return $this->output
+                ->set_content_type('application/json')
+                ->set_output(json_encode(['response' => $response], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
 
         } catch (Exception $e) {
-            return $this->_server_error('product_search() failed: ' . $e->getMessage());
+            log_message('error', '❌ Exception in product_search(): ' . $e->getMessage());
+            return $this->output
+                ->set_content_type('application/json')
+                ->set_output(json_encode([
+                    'response' => [
+                        'status'  => 'error',
+                        'message' => 'Server error: ' . $e->getMessage()
+                    ]
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
         }
     }
 
@@ -1467,9 +1670,73 @@ class Apiv2 extends CI_Controller {
     // Helper - ✅ Fetches paginated product search results
     public function getProductSearchResults(array $params, int $limit, int $offset)
     {
-        $this->db->select('p.*, c.category_name')
-            ->from('product_information p')
-            ->join('product_category c', 'c.category_id = p.category_id', 'left');
+        log_message('info', '🔍 getProductSearchResults called with params: ' . json_encode($params));
+        log_message('debug', 'Applying base SELECT and JOIN product_category');
+
+        // ✅ FIX: Correct use of DISTINCT
+        $this->db->distinct();
+        $this->db->select('p.product_id, p.id, p.category_id, p.product_name, p.price, p.unit, p.tax, p.serial_no, p.product_vat, p.product_model, p.product_details, p.image, p.status, c.category_name');
+        $this->db->from('product_information p');
+        $this->db->join('product_category c', 'c.category_id = p.category_id', 'left');
+
+        if (!empty($params['warehouse_id'])) {
+            log_message('debug', 'Joining batch_master on warehouse_id: ' . $params['warehouse_id']);
+            $this->db->join('batch_master bm', 'bm.product_id = p.product_id', 'inner');
+            $this->db->where('bm.warehouse_id', $params['warehouse_id']);
+            $this->db->where('bm.available_quantity >', 0);
+        }
+
+        if (!empty($params['product_id'])) {
+            log_message('debug', 'Filtering by product_id: ' . $params['product_id']);
+            $this->db->where('p.product_id', $params['product_id']);
+        }
+
+        if (!empty($params['product_name'])) {
+            log_message('debug', 'Searching product_name like: ' . $params['product_name']);
+            $this->db->like('p.product_name', $params['product_name']);
+        }
+
+        if (!empty($params['category_id'])) {
+            log_message('debug', 'Filtering by category_id: ' . $params['category_id']);
+            $this->db->where('p.category_id', $params['category_id']);
+        }
+
+        if (!is_null($params['min_price'])) {
+            log_message('debug', 'Filtering by min_price: ' . $params['min_price']);
+            $this->db->where('p.price >=', $params['min_price']);
+        }
+
+        if (!is_null($params['max_price'])) {
+            log_message('debug', 'Filtering by max_price: ' . $params['max_price']);
+            $this->db->where('p.price <=', $params['max_price']);
+        }
+
+        log_message('debug', 'Applying order by p.id DESC');
+        $this->db->order_by('p.id', 'DESC');
+
+        log_message('debug', 'Applying pagination: limit=' . $limit . ', offset=' . $offset);
+        $this->db->limit($limit, $offset);
+
+        $query = $this->db->get();
+        log_message('debug', 'Final SQL Query: ' . $this->db->last_query());
+
+        $results = $query->result_array();
+        log_message('info', 'Total products fetched: ' . count($results));
+
+        return $results;
+    }
+
+    // Helper - ✅ Counts total product results matching filters
+    public function countProductSearchResults(array $params)
+    {
+        $this->db->from('product_information p');
+
+        // Join product_category only if needed
+        if (!empty($params['warehouse_id'])) {
+            $this->db->join('batch_master bm', 'bm.product_id = p.product_id', 'inner');
+            $this->db->where('bm.warehouse_id', $params['warehouse_id']);
+            $this->db->where('bm.available_quantity >', 0);
+        }
 
         if (!empty($params['product_id'])) {
             $this->db->where('p.product_id', $params['product_id']);
@@ -1489,39 +1756,6 @@ class Apiv2 extends CI_Controller {
 
         if (!is_null($params['max_price'])) {
             $this->db->where('p.price <=', $params['max_price']);
-        }
-
-        $this->db->order_by('p.id', 'DESC');
-
-        // ✅ Apply pagination here
-        $this->db->limit($limit, $offset);
-
-        return $this->db->get()->result_array();
-    }
-
-    // Helper - ✅ Counts total product results matching filters
-    public function countProductSearchResults(array $params)
-    {
-        $this->db->from('product_information');
-
-        if (!empty($params['product_id'])) {
-            $this->db->where('product_id', $params['product_id']);
-        }
-
-        if (!empty($params['product_name'])) {
-            $this->db->like('product_name', $params['product_name']);
-        }
-
-        if (!empty($params['category_id'])) {
-            $this->db->where('category_id', $params['category_id']);
-        }
-
-        if (!is_null($params['min_price'])) {
-            $this->db->where('price >=', $params['min_price']);
-        }
-
-        if (!is_null($params['max_price'])) {
-            $this->db->where('price <=', $params['max_price']);
         }
 
         return $this->db->count_all_results();
@@ -1574,62 +1808,6 @@ class Apiv2 extends CI_Controller {
         log_message('debug', 'Found ' . count($all_ids) . ' related categories for ID ' . $category_id);
         return $all_ids;
     }
-
-    
-    /**
-         * @OA\Post(
-         *     path="/apiv2/insert_customer",
-         *     tags={"Customer"},
-         *     summary="Insert a new customer",
-         *     description="Adds a new customer and creates login credentials. Requires a Bearer access token.",
-         *     security={{"bearerAuth":{}}},
-         *     @OA\RequestBody(
-         *         required=true,
-         *         @OA\MediaType(
-         *             mediaType="multipart/form-data",
-         *             @OA\Schema(
-         *                 required={"customer_name", "mobile", "password"},
-         *                 @OA\Property(property="customer_name", type="string", example="John Doe"),
-         *                 @OA\Property(property="address", type="string", example="123 Street"),
-         *                 @OA\Property(property="address2", type="string", example="Suite 500"),
-         *                 @OA\Property(property="mobile", type="string", example="01710000000"),
-         *                 @OA\Property(property="email", type="string", example="john@example.com"),
-         *                 @OA\Property(property="email_address", type="string", example="billing@example.com"),
-         *                 @OA\Property(property="contact", type="string", example="Jane Smith"),
-         *                 @OA\Property(property="phone", type="string", example="09666000000"),
-         *                 @OA\Property(property="fax", type="string", example="0881234567"),
-         *                 @OA\Property(property="city", type="string", example="Dhaka"),
-         *                 @OA\Property(property="state", type="string", example="Gulshan"),
-         *                 @OA\Property(property="zip", type="string", example="1212"),
-         *                 @OA\Property(property="country", type="string", example="Bangladesh"),
-         *                 @OA\Property(property="sales_permit", type="file", description="Upload sales permit"),
-         *                 @OA\Property(property="sales_permit_number", type="string", example="PERMIT-12345"),
-         *                 @OA\Property(property="previous_balance", type="number", format="float", example="1500.50"),
-         *                 @OA\Property(property="password", type="string", format="password", example="secure123")
-         *             )
-         *         )
-         *     ),
-         *     @OA\Response(
-         *         response=200,
-         *         description="Customer successfully added",
-         *         @OA\JsonContent(
-         *             @OA\Property(property="response", type="object",
-         *                 @OA\Property(property="status", type="string", example="ok"),
-         *                 @OA\Property(property="message", type="string", example="Successfully Added"),
-         *                 @OA\Property(property="permission", type="string", example="write")
-         *             )
-         *         )
-         *     ),
-         *     @OA\Response(
-         *         response=401,
-         *         description="Unauthorized - Missing or invalid token"
-         *     ),
-         *     @OA\Response(
-         *         response=400,
-         *         description="File upload or validation failed"
-         *     )
-         * )
-     */
 
 
     public function insert_customer()
@@ -2025,6 +2203,11 @@ class Apiv2 extends CI_Controller {
                 return $this->_not_found('Customer profile not found.');
             }
 
+            // 🔁 Update sales_permit with full URL if available
+            if (!empty($customer['sales_permit'])) {
+                $customer['sales_permit'] = base_url(str_replace('./', '', 'uploads/sales_permits/' . $customer['sales_permit']));
+            }
+
             // ✅ Fetch auth_status only
             $auth_row = $this->db->select('status')->get_where('customer_auth', ['customer_id' => $customer_id])->row_array();
             $auth = ['auth_status' => $auth_row['status'] ?? null];
@@ -2126,31 +2309,859 @@ class Apiv2 extends CI_Controller {
         }
     }
 
-    // Helper - ✅ Returns a JSON response for bad requests
-    private function _bad_request($message)
+    public function insert_cart()
     {
-        log_message('error', '❌ ' . $message);
-        return $this->output->set_content_type('application/json')->set_status_header(400)
-            ->set_output(json_encode(['status' => 'error', 'message' => $message]));
+        header('Content-Type: application/json');
+        log_message('debug', '🛒 API insert_cart called');
+
+        // ✅ Log headers
+        $headers = getallheaders();
+        log_message('debug', '📋 Request headers: ' . print_r($headers, true));
+
+        // ✅ First-layer authentication
+        $user = $this->authenticate_token();
+        if (!$user) {
+            log_message('error', '❌ First-layer token invalid');
+            return $this->_unauthorized('Unauthorized. Bearer token missing or invalid.', 'unauthorized_token');
+        }
+        log_message('debug', '✅ First-layer token verified. User: ' . print_r($user, true));
+
+        // ✅ Second-layer token
+        $second_token = $this->input->get_request_header('X-Second-Token');
+        if (!$second_token) {
+            log_message('error', '❌ Missing X-Second-Token header');
+            return $this->_forbidden('Missing second-layer token.', 'missing_second_layer_token');
+        }
+
+        try {
+            $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+            log_message('debug', '🔓 Decoded second-layer token: ' . print_r($decoded, true));
+
+            if (!isset($decoded->customer_id)) {
+                log_message('error', '❌ customer_id not found in second-layer token');
+                return $this->_unauthorized('Invalid or expired second-layer token.', 'invalid_second_layer_token');
+            }
+        } catch (Exception $e) {
+            log_message('error', '❌ Second-layer token decode failed: ' . $e->getMessage());
+            return $this->_server_error_exception($e, 'second_layer_token_decode_failed', 'Second-layer token decode failed');
+        }
+
+        $customer_id = $decoded->customer_id;
+        log_message('debug', "🧑 customer_id from second-layer token: $customer_id");
+
+        // ✅ Parse JSON input
+        $raw_input = file_get_contents("php://input");
+        $input = json_decode($raw_input, true);
+        log_message('debug', '📦 Raw JSON input: ' . $raw_input);
+        log_message('debug', '🧾 Parsed input: ' . print_r($input, true));
+
+        if (empty($input) || !isset($input['cart_items']) || !is_array($input['cart_items'])) {
+            log_message('error', '❌ Invalid or missing cart_items array');
+            return $this->_bad_request('Invalid or missing cart_items array.', 'invalid_cart_items');
+        }
+
+        $success_count = 0;
+        $failed_items  = [];
+
+        foreach ($input['cart_items'] as $item) {
+            log_message('debug', '📥 Processing cart item: ' . print_r($item, true));
+
+            $missing_fields = [];
+
+            if (!isset($item['product_id']))   $missing_fields[] = 'product_id';
+            if (!isset($item['batch_id']))     $missing_fields[] = 'batch_id';
+            if (!isset($item['warehouse_id'])) $missing_fields[] = 'warehouse_id';
+            if (!isset($item['quantity']))     $missing_fields[] = 'quantity';
+
+            if (!empty($missing_fields)) {
+                log_message('error', '⚠️ Missing fields in cart_items: ' . implode(', ', $missing_fields));
+                $failed_items[] = [
+                    'item' => $item,
+                    'reason' => 'Missing required fields: ' . implode(', ', $missing_fields)
+                ];
+                continue;
+            }
+
+            $product_id   = $item['product_id'];
+            $batch_id     = $item['batch_id'];
+            $warehouse_id = $item['warehouse_id'];
+            $quantity     = $item['quantity'];
+
+            // ✅ Ensure batch exists
+            $batch_exists = $this->db->select('1')
+                ->from('batch_master')
+                ->where('batch_id', $batch_id)
+                ->where('product_id', $product_id)
+                ->where('warehouse_id', $warehouse_id)
+                ->limit(1)
+                ->get()
+                ->row();
+
+            if (!$batch_exists) {
+                log_message('error', "❌ Batch not found: batch_id=$batch_id, product_id=$product_id, warehouse_id=$warehouse_id");
+                $failed_items[] = [
+                    'item' => $item,
+                    'reason' => 'Batch not found for product and warehouse.'
+                ];
+                continue;
+            }
+
+            // ✅ Get product price
+            $product = $this->db->select('price')
+                ->from('product_information')
+                ->where('product_id', $product_id)
+                ->get()
+                ->row();
+
+            if (!$product) {
+                log_message('error', "❌ Product not found: $product_id");
+                $failed_items[] = [
+                    'item' => $item,
+                    'reason' => 'Product not found.'
+                ];
+                continue;
+            }
+
+            $price = (float) $product->price;
+
+            // ✅ Get commission (discount)
+            $discount_row = $this->db->select('commision_value')
+                ->from('customer_comission')
+                ->where('customer_id', $customer_id)
+                ->get()
+                ->row();
+
+            $discount = $discount_row ? (float) $discount_row->commision_value : 0.00;
+
+            log_message('debug', '💸 Final discount data: ' . print_r($discount_row, true));
+            $data = [
+                'customer_id'  => $customer_id,
+                'product_id'   => $product_id,
+                'batch_id'     => $batch_id,
+                'warehouse_id' => $warehouse_id,
+                'quantity'     => (int)$quantity,
+                'price'        => $price,
+                'discount'     => $discount,
+                'note'         => null,
+                'status'       => 'pending',
+                'created_at'   => date('Y-m-d H:i:s'),
+                'updated_at'   => date('Y-m-d H:i:s')
+            ];
+
+            log_message('debug', '📋 Final cart insert data: ' . json_encode($data));
+
+            try {
+                $this->db->insert('cart', $data);
+                $success_count++;
+                log_message('debug', '✅ Cart item inserted successfully');
+            } catch (Exception $e) {
+                log_message('error', '❌ DB Insert failed: ' . $e->getMessage());
+                $failed_items[] = [
+                    'item' => $item,
+                    'reason' => 'Database insert failed: ' . $e->getMessage()
+                ];
+            }
+        }
+
+        if ($success_count === 0) {
+            log_message('error', '❌ No cart items inserted. All failed.');
+            return $this->_server_error('No cart items were inserted. Check logs for details.', 'insert_cart_failed');
+        }
+
+        log_message('debug', "✅ Cart insertion completed. Success: $success_count | Failed: " . count($failed_items));
+        return $this->_success([
+            'inserted_count' => $success_count,
+            'failed_items'   => $failed_items
+        ], 'Cart items inserted successfully.');
     }
 
-    // Helper - ✅ Returns a JSON response for conflicts (e.g., duplicate entries)
-    private function _conflict($message)
+
+    public function cart_list()
+    {
+        header('Content-Type: application/json');
+        log_message('debug', '🛒 API cart_list called');
+
+        // ✅ First-layer authentication
+        $user = $this->authenticate_token();
+        if (!$user) {
+            echo json_encode([
+                'status' => 'token-error',
+                'message' => 'Unauthorized. Bearer token missing or invalid.'
+            ]);
+            return;
+        }
+
+        // ✅ Second-layer authentication
+        $second_token = $this->input->get_request_header('X-Second-Token');
+        if (!$second_token) {
+            echo json_encode([
+                'status' => '2nd-token-error',
+                'message' => 'Missing second-layer token.'
+            ]);
+            return;
+        }
+
+        try {
+            $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+            if (!isset($decoded->customer_id)) {
+                echo json_encode([
+                    'status' => 'token-error',
+                    'message' => 'Second-layer token invalid.'
+                ]);
+                return;
+            }
+        } catch (Exception $e) {
+            echo json_encode([
+                'status' => 'token-error',
+                'message' => 'Second-layer token decode failed: ' . $e->getMessage()
+            ]);
+            return;
+        }
+
+        $customer_id = $decoded->customer_id;
+
+        // ✅ Fetch cart items with image
+        $cart_items = $this->db->select('
+                cart.id as cart_id,
+                cart.product_id,
+                cart.batch_id,
+                cart.warehouse_id,
+                cart.quantity,
+                cart.price,
+                cart.discount,
+                cart.note,
+                cart.status,
+                cart.created_at,
+                cart.updated_at,
+                product_information.product_name,
+                product_information.image'
+            )
+            ->from('cart')
+            ->join('product_information', 'product_information.product_id = cart.product_id', 'left')
+            ->where('cart.customer_id', $customer_id)
+            ->where('cart.status', 'pending')
+            ->get()
+            ->result_array();
+
+        // ✅ Add image URL formatting
+        foreach ($cart_items as &$item) {
+            if (!empty($item['image'])) {
+                $item['image'] = base_url(str_replace('./', '', $item['image']));
+            } else {
+                $item['image'] = null;
+            }
+        }
+
+        // ✅ Respond
+        echo json_encode([
+            'status'      => 'success',
+            'message'     => 'Cart items retrieved successfully.',
+            'cart_items'  => $cart_items
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    }
+
+    public function remove_cart_item_by_id()
+    {
+        header('Content-Type: application/json');
+        log_message('debug', '🗑️ API remove_cart_item_by_id called');
+
+        // ✅ First-layer authentication
+        $user = $this->authenticate_token();
+        if (!$user) {
+            echo json_encode(['status' => 'unauthorized', 'message' => 'Unauthorized. Bearer token missing or invalid.']);
+            return;
+        }
+
+        // ✅ Second-layer authentication
+        $second_token = $this->input->get_request_header('X-Second-Token');
+        if (!$second_token) {
+            echo json_encode(['status' => 'token-error', 'message' => 'Missing second-layer token.']);
+            return;
+        }
+
+        try {
+            $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+            if (!isset($decoded->customer_id)) {
+                echo json_encode(['status' => 'token-error', 'message' => 'Second-layer token invalid.']);
+                return;
+            }
+        } catch (Exception $e) {
+            echo json_encode(['status' => 'token-error', 'message' => 'Second-layer token decode failed: ' . $e->getMessage()]);
+            return;
+        }
+
+        $customer_id = $decoded->customer_id;
+
+        // ✅ Parse input
+        $input = json_decode(file_get_contents("php://input"), true);
+        log_message('debug', '🧾 Raw remove_cart_item_by_id input: ' . print_r($input, true));
+
+        if (empty($input['cart_id'])) {
+            echo json_encode(['status' => 'error', 'message' => 'Missing required parameter: cart_id.']);
+            return;
+        }
+
+        // ✅ DELETE using cart_id and customer_id for safety
+        $this->db->where('id', $input['cart_id'])
+                ->where('customer_id', $customer_id)
+                ->delete('cart');
+
+        if ($this->db->affected_rows() > 0) {
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Cart item removed successfully using cart_id.'
+            ]);
+        } else {
+            echo json_encode([
+                'status'  => 'info',
+                'message' => 'No matching cart item found with the provided cart_id.'
+            ]);
+        }
+    }
+
+
+    public function cart_update()
+    {
+        header('Content-Type: application/json');
+        log_message('debug', '🛒 API cart_update called');
+
+        // ✅ First-layer authentication
+        $user = $this->authenticate_token();
+        if (!$user) {
+            return $this->_unauthorized('Unauthorized. Bearer token missing or invalid.', 'unauthorized_token');
+        }
+
+        // ✅ Second-layer authentication
+        $second_token = $this->input->get_request_header('X-Second-Token');
+        if (!$second_token) {
+            return $this->_forbidden('Missing second-layer token.', 'missing_second_layer_token');
+        }
+
+        try {
+            $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+            if (!isset($decoded->customer_id)) {
+                return $this->_unauthorized('Invalid or expired second-layer token.', 'invalid_second_layer_token');
+            }
+        } catch (Exception $e) {
+            return $this->_server_error('Second-layer token decode failed: ' . $e->getMessage(), 'second_layer_token_decode_failed');
+        }
+
+        $customer_id = $decoded->customer_id;
+
+        // ✅ Parse incoming JSON
+        $input = json_decode(trim(file_get_contents('php://input')), true);
+
+        if (!isset($input['cart_id']) || !is_numeric($input['cart_id'])) {
+            return $this->_bad_request('Invalid or missing cart_id.', 'invalid_cart_id');
+        }
+
+        $cart_id = $input['cart_id'];
+
+        // ✅ Fetch the cart record and validate customer ownership
+        $cart = $this->db->get_where('cart', ['id' => $cart_id, 'customer_id' => $customer_id])->row();
+        if (!$cart) {
+            return $this->_not_found('Cart item not found or does not belong to customer.', 'cart_not_found');
+        }
+
+        // ✅ Prepare update data
+        $update_data = [];
+
+        if (isset($input['quantity']) && is_numeric($input['quantity'])) {
+            $update_data['quantity'] = (int)$input['quantity'];
+        }
+        if (isset($input['batch_id'])) {
+            $update_data['batch_id'] = $input['batch_id'];
+        }
+        if (isset($input['warehouse_id'])) {
+            $update_data['warehouse_id'] = $input['warehouse_id'];
+        }
+        if (isset($input['note'])) {
+            $update_data['note'] = $input['note'];
+        }
+        if (isset($input['price']) && is_numeric($input['price'])) {
+            $update_data['price'] = (float)$input['price'];
+        }
+        if (isset($input['discount']) && is_numeric($input['discount'])) {
+            $update_data['discount'] = (float)$input['discount'];
+        }
+
+        if (empty($update_data)) {
+            return $this->_bad_request('No valid fields provided for update.', 'no_update_fields');
+        }
+
+        $update_data['updated_at'] = date('Y-m-d H:i:s');
+
+        // ✅ Update the cart item
+        try {
+            $this->db->where('id', $cart_id)->update('cart', $update_data);
+        } catch (Exception $e) {
+            return $this->_server_error('Failed to update cart item: ' . $e->getMessage(), 'cart_update_failed');
+        }
+
+        return $this->_success([
+            'cart_id'        => $cart_id,
+            'updated_fields' => $update_data
+        ], 'Cart item updated successfully.');
+    }
+
+
+    public function check_out()
+    {
+        log_message('debug', '🛒 API check_out called');
+
+        $user = $this->authenticate_token();
+        if (!$user) {
+            return $this->_unauthorized('Unauthorized. Bearer token missing or invalid.');
+        }
+
+        $second_token = $this->input->get_request_header('X-Second-Token');
+        if (!$second_token) {
+            return $this->_unauthorized('Missing second-layer token (X-Second-Token).');
+        }
+
+        try {
+            $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+            log_message('debug', '📦 Decoded second-layer JWT: ' . print_r($decoded, true));
+
+            if (!isset($decoded->customer_id)) {
+                log_message('error', '❌ customer_id missing in second-layer token');
+                return $this->_unauthorized('Second-layer token invalid.');
+            }
+
+            $customer_id = $decoded->customer_id;
+            log_message('debug', "✅ Extracted customer_id from token: $customer_id");
+        } catch (Exception $e) {
+            log_message('error', '❌ JWT decode error: ' . $e->getMessage());
+            return $this->_unauthorized('Second-layer token decode failed: ' . $e->getMessage());
+        }
+
+        $input = $this->input->post();
+        $cart_ids_raw  = $input['cart_id'] ?? null;
+        $paid_amount   = floatval($input['paid_amount'] ?? 0);
+        $delivery_note = $input['delivery_note'] ?? '';
+        $payment_type  = intval($input['payment_type'] ?? 1);
+        $payment_ref   = $input['payment_ref'] ?? '';
+
+        $payment_ref_doc = '';
+        if (!empty($_FILES['payment_ref_doc']['name'])) {
+            $upload_dir = './uploads/payment_refs/';
+            if (!is_dir($upload_dir)) {
+                mkdir($upload_dir, 0755, true);
+            }
+
+            $this->load->library('upload');
+
+            $ext = pathinfo($_FILES['payment_ref_doc']['name'], PATHINFO_EXTENSION);
+            $unique_name = 'file_upload_' . time() . '_' . uniqid() . '.' . $ext;
+
+            // Override $_FILES entry with the new unique file name
+            $_FILES['payment_ref_doc']['name'] = $unique_name;
+
+            $config['upload_path']   = $upload_dir;
+            $config['allowed_types'] = 'pdf|jpg|jpeg|png';
+            $config['file_name']     = $unique_name;
+            $config['max_size']      = 2048;
+
+            $this->upload->initialize($config);
+
+            if ($this->upload->do_upload('payment_ref_doc')) {
+                $payment_ref_doc = 'uploads/payment_refs/' . $unique_name;
+            } else {
+                log_message('error', '❌ Upload error: ' . $this->upload->display_errors());
+                return $this->_bad_request('File upload failed: ' . strip_tags($this->upload->display_errors()));
+            }
+        }
+
+        if (empty($cart_ids_raw)) {
+            log_message('error', '❌ Missing required parameter: cart_id');
+            return $this->_bad_request('Missing required parameter: cart_id');
+        }
+
+        $cart_ids = array_filter(array_map('intval', explode(',', $cart_ids_raw)));
+        if (empty($cart_ids)) {
+            log_message('error', '❌ Invalid cart_id values: ' . $cart_ids_raw);
+            return $this->_bad_request('Invalid cart_id values');
+        }
+
+        $this->db->where_in('id', $cart_ids);
+        $this->db->where('status', 'pending');
+        $this->db->where('customer_id', $customer_id);
+        $carts = $this->db->get('cart')->result_array();
+
+        if (empty($carts)) {
+            return $this->_not_found('No pending carts found for given IDs and customer.');
+        }
+
+        $detailsinfo = [];
+        $total_discount = 0;
+        $total = 0;
+
+        foreach ($carts as $cart) {
+            $qty = (float) $cart['quantity'];
+            $rate = (float) $cart['price'];
+            $discount_percent = (float) $cart['discount'];
+            $line_total = $qty * $rate;
+            $line_discount = ($discount_percent / 100) * $line_total;
+
+            $detailsinfo[] = [
+                'product_id'       => $cart['product_id'],
+                'product_quantity' => $qty,
+                'product_rate'     => $rate,
+                'discount'         => $discount_percent,
+                'serial_no'        => ''
+            ];
+
+            $total += $line_total;
+            $total_discount += $line_discount;
+        }
+
+        $due_amount = max(0, $total - $paid_amount - $total_discount);
+
+        $payload = [
+            'customer_id'     => $customer_id,
+            'createby'        => $customer_id,
+            'paid_amount'     => $paid_amount,
+            'due_amount'      => $due_amount,
+            'total_discount'  => $total_discount,
+            'total_tax'       => 0,
+            'total_amount'    => 0,
+            'invoice_date'    => date('Y-m-d'),
+            'inva_details'    => 'Cart Checkout (Multiple)',
+            'payment_type'    => $payment_type,
+            'payment_ref'     => $payment_ref,
+            'payment_ref_doc' => $payment_ref_doc,
+            'invoice_by'      => 2,
+            'delivery_note'   => $delivery_note,
+            'status'          => 2,
+            'transaction_ref' => 'TXN-' . time(),
+            'detailsinfo'     => $detailsinfo
+        ];
+
+        $response = $this->internal_insert_invoice_payment($payload);
+        log_message('debug', '🧾 Invoice payment response: ' . json_encode($response));
+
+        $this->db->where_in('id', $cart_ids)->update('cart', ['status' => 'completed']);
+
+        return $this->_success($response, 'Invoice created successfully via check_out');
+    }
+
+
+    public function invoice_list()
+    {
+        try {
+            log_message('debug', 'API Request: invoice_list');
+
+            // ✅ Step 1: First-layer Auth
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
+            }
+
+            // ✅ Step 2: Second-layer Token
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (!$second_token) {
+                return $this->_unauthorized('Missing required second-layer authentication token (X-Second-Token).');
+            }
+
+            try {
+                    $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                    if (empty($decoded->customer_id)) {
+                        return $this->_unauthorized('Second-layer token is invalid or expired.');
+                    }
+                    $customer_id = $decoded->customer_id;
+                } catch (Exception $e) {
+                    return $this->_unauthorized('Second-layer token decode failed: ' . $e->getMessage());
+                }
+
+            // ✅ Step 3: Load Model and Get Data
+            $this->load->model('invoice/Invoice_model', 'invoice_model');
+
+            $postData = $this->input->post();
+            $postData['customer_id'] = $customer_id;
+
+            $invoices = $this->invoice_model->get_customer_invoice_list($postData);
+
+            return $this->output
+                ->set_content_type('application/json')
+                ->set_status_header(200)
+                ->set_output(json_encode([
+                    'status'  => 'success',
+                    'message' => 'Invoices retrieved successfully.',
+                    'data'    => $invoices
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+
+        } catch (Exception $e) {
+            return $this->_server_error('Unexpected server error: ' . $e->getMessage());
+        }
+    }
+
+
+    // This function retrieves the details of a specific invoice.
+    // It requires a valid access token and a second-layer token for authentication.
+
+    public function invoice_details()
+    {
+        try {
+            log_message('debug', 'API Request: invoice_details');
+
+            // ✅ Step 1: First-layer Token
+            $user = $this->authenticate_token();
+            if (!$user) {
+                return $this->_unauthorized('Unauthorized. Please provide a valid access token.');
+            }
+
+            // ✅ Step 2: Second-layer Token
+            $second_token = $this->input->get_request_header('X-Second-Token');
+            if (!$second_token) {
+                return $this->_unauthorized('Missing required second-layer authentication token (X-Second-Token).');
+            }
+
+            try {
+                $decoded = JWT::decode($second_token, new Key($this->jwt_key, $this->jwt_algo));
+                if (!isset($decoded->customer_id)) {
+                    return $this->_bad_request('Second-layer token is invalid or missing customer_id.');
+                }
+                $customer_id = $decoded->customer_id;
+            } catch (Exception $e) {
+                return $this->_bad_request('Second-layer token decode failed: ' . $e->getMessage());
+            }
+
+            // ✅ Step 3: Validate Input
+            $invoice_id = $this->input->get('invoice_id', TRUE);
+
+            if (!$invoice_id) {
+                $invoice_id = $this->input->post('invoice_id', TRUE);
+            }
+
+            if (!$invoice_id) {
+                $json = json_decode(file_get_contents('php://input'), true);
+                $invoice_id = $json['invoice_id'] ?? null;
+            }
+
+            if (empty($invoice_id)) {
+                return $this->_bad_request('Missing required parameter: invoice_id');
+            }
+
+            // ✅ Step 4: Fetch Invoice Record
+            $invoice = $this->db->select('id, customer_id')
+                ->from('invoice')
+                ->where('invoice_id', $invoice_id)
+                ->get()
+                ->row();
+
+            if (!$invoice) {
+                return $this->_bad_request("Invoice not found for invoice_id: $invoice_id");
+            }
+
+            // ✅ Step 5: Validate ownership
+            if ($invoice->customer_id != $customer_id) {
+                return $this->_unauthorized("You do not have access to this invoice.");
+            }
+
+            // ✅ Step 6: Fetch invoice details
+            $this->load->model('invoice/Invoice_model', 'invoice_model');
+            $details = $this->invoice_model->invoice_details_by_invoice_id($invoice->id);
+
+            return $this->output
+                ->set_content_type('application/json')
+                ->set_status_header(200)
+                ->set_output(json_encode([
+                    'status'     => 'success',
+                    'message'    => 'Invoice details retrieved successfully.',
+                    'invoice_id' => $invoice_id,
+                    'details'    => $details
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+
+        } catch (Exception $e) {
+            return $this->_server_error('Unexpected server error: ' . $e->getMessage());
+        }
+    }
+
+    // Web Contact Form Submission
+    // This function allows users to submit contact messages through a web form.
+    // It requires a valid access token for authentication.
+    // ✅ 200 - OK
+
+    public function insert_contact()
+    {
+        log_message('debug', '🔐 Checking authentication for insert_contact...');
+        $user = $this->authenticate_token();
+        if (!$user) {
+            log_message('error', '❌ Unauthorized access attempt to insert_contact');
+            return $this->output
+                ->set_content_type('application/json')
+                ->set_status_header(401)
+                ->set_output(json_encode([
+                    'status'  => 'token-error',
+                    'message' => 'Unauthorized. Please provide a valid access token.'
+                ]));
+        }
+
+        $input = json_decode(trim(file_get_contents('php://input')), true);
+
+        $name    = isset($input['name']) ? trim($input['name']) : '';
+        $email   = isset($input['email']) ? trim($input['email']) : '';
+        $phone   = isset($input['phone']) ? trim($input['phone']) : null;
+        $subject = isset($input['subject']) ? trim($input['subject']) : null;
+        $message = isset($input['message']) ? trim($input['message']) : '';
+
+        log_message('debug', "[insert_contact] Incoming Data: Name: $name, Email: $email, Subject: $subject");
+
+        // Basic validation
+        if (empty($name) || empty($email) || empty($message)) {
+            return $this->_bad_request('Name, email, and message are required.');
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return $this->_bad_request('Invalid email format.');
+        }
+
+        // Insert into contacts table
+        $data = [
+            'name'       => $name,
+            'email'      => $email,
+            'phone'      => $phone,
+            'subject'    => $subject,
+            'message'    => $message,
+            'created_at' => date('Y-m-d H:i:s'),
+            'updated_at' => date('Y-m-d H:i:s')
+        ];
+
+        if ($this->db->insert('contacts', $data)) {
+            $contact_id = $this->db->insert_id();
+
+            // Optionally: Notify admin by email (if needed)
+            /*
+            $this->load->library('sendmail_lib');
+            $admin_email = 'support@example.com';
+            $this->sendmail_lib->send(
+                $admin_email,
+                'New Contact Form Submission',
+                "<p><strong>Name:</strong> $name</p><p><strong>Email:</strong> $email</p><p><strong>Message:</strong><br>$message</p>",
+                'noreply@yourdomain.com',
+                'Contact System'
+            );
+            */
+
+            return $this->output->set_content_type('application/json')->set_output(json_encode([
+                'response' => [
+                    'status'  => 'ok',
+                    'message' => 'Contact message submitted successfully.',
+                    'data'    => ['contact_id' => $contact_id],
+                    'permission' => 'write'
+                ]
+            ]));
+        } else {
+            log_message('error', '[insert_contact] ❌ DB insert failed');
+            return $this->_server_error('Failed to submit contact message.');
+        }
+    }
+
+    // ✅ 400 - Bad Request
+private function _bad_request($message, $status_code = 'bad_request')
+{
+    log_message('error', '❌ ' . $message);
+    return $this->output
+        ->set_content_type('application/json')
+        ->set_status_header(400)
+        ->set_output(json_encode([
+            'status'  => $status_code,
+            'message' => $message
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+}
+
+    // ✅ 409 - Conflict
+    private function _conflict($message, $status_code = 'conflict')
     {
         log_message('error', '❗ ' . $message);
-        return $this->output->set_content_type('application/json')->set_status_header(409)
-            ->set_output(json_encode(['status' => 'error', 'message' => $message]));
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(409)
+            ->set_output(json_encode([
+                'status'  => $status_code,
+                'message' => $message
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
     }
 
-    // Helper - ✅ Returns a JSON response for server errors
-    private function _server_error($message)
+    // ✅ 500 - Server Error
+    private function _server_error($message = 'Internal Server Error', $status_code = 'server_error')
     {
         log_message('error', '❌ ' . $message);
-        return $this->output->set_content_type('application/json')->set_status_header(500)
-            ->set_output(json_encode(['status' => 'error', 'message' => $message]));
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(500)
+            ->set_output(json_encode([
+                'status'  => $status_code,
+                'message' => $message
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
     }
 
-    // Helper - ✅ Uploads a file and returns the filename or false on failure
+    // ✅ 401 - Unauthorized
+    private function _unauthorized($message = 'Unauthorized', $status_code = 'unauthorized')
+    {
+        log_message('error', '🔒 ' . $message);
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(401)
+            ->set_output(json_encode([
+                'status'  => $status_code,
+                'message' => $message
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+    }
+
+    // ✅ 403 - Forbidden
+    private function _forbidden($message = 'Forbidden', $status_code = 'forbidden')
+    {
+        log_message('error', '🚫 ' . $message);
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(403)
+            ->set_output(json_encode([
+                'status'  => $status_code,
+                'message' => $message
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+    }
+
+    // ✅ 404 - Not Found
+    private function _not_found($message = 'Resource not found', $status_code = 'not_found')
+    {
+        log_message('error', '❓ ' . $message);
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(404)
+            ->set_output(json_encode([
+                'status'  => $status_code,
+                'message' => $message
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+    }
+
+    // ✅ 200 - OK
+    private function _success($data = [], $message = 'Success')
+    {
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(200)
+            ->set_output(json_encode([
+                'status'  => 'success',
+                'message' => $message,
+                'data'    => $data
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+    }
+
+    // ✅ 201 - Created
+    private function _created($data = [], $message = 'Resource created successfully')
+    {
+        return $this->output
+            ->set_content_type('application/json')
+            ->set_status_header(201)
+            ->set_output(json_encode([
+                'status'  => 'success',
+                'message' => $message,
+                'data'    => $data
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+    }
+
+    // ✅ Upload handler (unchanged, just uses updated _bad_request)
     private function _upload_file($field_name, $upload_path)
     {
         $config = [
@@ -2169,107 +3180,587 @@ class Apiv2 extends CI_Controller {
             return $this->upload->data()['file_name'];
         } else {
             $error = strip_tags($this->upload->display_errors());
-            $this->_bad_request('File upload failed: ' . $error);
+            $this->_bad_request('File upload failed: ' . $error, 'file_upload_failed');
             return false;
         }
-    }
-
-    /**
-     * 200 OK
-     */
-    // Helper - ✅ Returns a JSON response for successful operations
-    private function _success($data = [], $message = 'Success')
-    {
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_status_header(200)
-            ->set_output(json_encode([
-                'status'  => 'success',
-                'message' => $message,
-                'data'    => $data
-            ]));
-    }
-
-    /**
-     * 201 Created
-     */
-    // Helper - ✅ Returns a JSON response for successful resource creation
-    private function _created($data = [], $message = 'Resource created successfully')
-    {
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_status_header(201)
-            ->set_output(json_encode([
-                'status'  => 'success',
-                'message' => $message,
-                'data'    => $data
-            ]));
-    }
-
-    /**
-     * 401 Unauthorized
-     */
-
-     // Helper - ✅ Returns a JSON response for unauthorized access
-    private function _unauthorized($message = 'Unauthorized')
-    {
-        log_message('error', '🔒 ' . $message);
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_status_header(401)
-            ->set_output(json_encode([
-                'status'  => 'error',
-                'message' => $message
-            ]));
-    }
-
-    /**
-     * 403 Forbidden
-     */
-    // Helper - ✅ Returns a JSON response for forbidden access
-    private function _forbidden($message = 'Forbidden')
-    {
-        log_message('error', '🚫 ' . $message);
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_status_header(403)
-            ->set_output(json_encode([
-                'status'  => 'error',
-                'message' => $message
-            ]));
-    }
-
-    /**
-     * 404 Not Found
-     */
-    // Helper - ✅ Returns a JSON response for not found resources
-    private function _not_found($message = 'Resource not found')
-    {
-        log_message('error', '❓ ' . $message);
-        return $this->output
-            ->set_content_type('application/json')
-            ->set_status_header(404)
-            ->set_output(json_encode([
-                'status'  => 'error',
-                'message' => $message
-            ]));
     }
 
     /**
      * 422 Unprocessable Entity (Validation errors)
      */
 
-    // Helper - ✅ Returns a JSON response for validation errors
-    private function _validation_error($errors = [], $message = 'Validation failed')
+    // ✅ 422 - Validation Error
+    private function _validation_error($errors = [], $message = 'Validation failed', $status_code = 'validation_error')
     {
         log_message('error', '🧪 Validation failed: ' . json_encode($errors));
         return $this->output
             ->set_content_type('application/json')
             ->set_status_header(422)
             ->set_output(json_encode([
-                'status'  => 'error',
+                'status'  => $status_code,
                 'message' => $message,
                 'errors'  => $errors
-            ]));
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
     }
+
+    /**
+     * Get internal payment methods
+     * 
+     * @param int|null $customer_id
+     * @return array
+     */
+
+    public function get_internal_payment_methods($customer_id = null)
+    {
+        try {
+            if (!$customer_id) {
+                log_message('error', '❌ Missing customer_id in get_internal_payment_methods');
+                return [];
+            }
+
+            // ✅ Fetch payment methods from acc_coa
+            $data = $this->db->select('HeadName, HeadCode')
+                ->from('acc_coa')
+                ->group_start()
+                    ->where('PHeadName', 'Cash')
+                    ->or_where('PHeadName', 'Cash at Bank')
+                ->group_end()
+                ->get()
+                ->result();
+
+            // ✅ Build list
+            $list = [
+                [
+                    'HeadCode' => '0',
+                    'HeadName' => 'Credit Sale'
+                ]
+            ];
+
+            foreach ($data as $value) {
+                $list[] = [
+                    'HeadCode' => $value->HeadCode,
+                    'HeadName' => $value->HeadName
+                ];
+            }
+
+            return $list;
+
+        } catch (Exception $e) {
+            log_message('error', '❌ get_internal_payment_methods error: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+
+    /**
+     * Get internal customer commission by email
+     * 
+     * @param string $email
+     * @return array|null
+     */
+
+    public function get_internal_customer_commission($email)
+    {
+        try {
+            if (empty($email)) {
+                log_message('error', '❌ Missing email in get_internal_customer_commission');
+                return null;
+            }
+
+            $this->load->model('Api_model');
+            $customer = $this->get_internal_customer_by_email($email);
+
+            if (!$customer || !isset($customer->customer_id)) {
+                log_message('error', '❌ No customer found for email: ' . $email);
+                return null;
+            }
+
+            $commission = $this->db->select('commision_value, comission_type')
+                ->from('customer_comission')
+                ->where('customer_id', $customer->customer_id)
+                ->where('status', 1)
+                ->order_by('id', 'DESC')
+                ->limit(1)
+                ->get()
+                ->row();
+
+            // Ensure safe access with fallback defaults
+            return [
+                'customer_id'     => $customer->customer_id,
+                'customer_name'   => $customer->customer_name ?? '',
+                'customer_email'  => $customer->customer_email ?? '',
+                'customer_mobile' => $customer->customer_mobile ?? '',
+                'commision_value' => isset($commission->commision_value) ? (float)$commission->commision_value : 0,
+                'comission_type'  => $commission->comission_type ?? 'fixed'
+            ];
+
+        } catch (Exception $e) {
+            log_message('error', '❌ get_internal_customer_commission error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Get all pending carts by customer ID
+     *
+     * @param int $customer_id
+     * @return array
+     */
+    public function carts_by_customer_id($customer_id)
+    {
+        try {
+            if (empty($customer_id)) {
+                log_message('error', '❌ Missing customer_id in carts_by_customer_id');
+                return [];
+            }
+
+            $this->load->database();
+
+            $carts = $this->db->select('
+                    cart.id as cart_id,
+                    cart.customer_id,
+                    cart.product_id,
+                    cart.batch_id,
+                    cart.warehouse_id,
+                    cart.quantity,
+                    cart.price,
+                    cart.discount,
+                    cart.note,
+                    cart.status,
+                    cart.created_at,
+                    cart.updated_at,
+                    product_information.product_name
+                ')
+                ->from('cart')
+                ->join('product_information', 'product_information.product_id = cart.product_id', 'left')
+                ->where('cart.customer_id', $customer_id)
+                ->where('cart.status', 'pending')
+                ->order_by('cart.created_at', 'DESC')
+                ->get()
+                ->result_array();
+
+            log_message('debug', '🛒 carts_by_customer_id result: ' . print_r($carts, true));
+
+            return $carts;
+
+        } catch (Exception $e) {
+            log_message('error', '❌ carts_by_customer_id error: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get cart items by cart_id
+     * 
+     * @param int $cart_id
+     * @return array|null
+     */
+    public function get_cart_items_by_id($cart_id)
+    {
+        return $this->db->select('
+                cart.id as cart_id,
+                cart.customer_id,
+                cart.product_id,
+                cart.batch_id,
+                cart.warehouse_id,
+                cart.quantity,
+                cart.price,
+                cart.discount,
+                cart.note,
+                cart.status,
+                cart.created_at,
+                cart.updated_at,
+                product_information.product_name
+            ')
+            ->from('cart')
+            ->join('product_information', 'product_information.product_id = cart.product_id', 'left')
+            ->where('cart.id', $cart_id)
+            ->where('cart.status', 'pending') // Optional, if you want to ensure only active carts are fetched
+            ->get()
+            ->row_array();
+    }
+
+    /**
+     * Get internal customer by email
+     * 
+     * @param string $email
+     * @return array|null
+     */
+
+    public function get_internal_customer_by_email($email)
+    {
+        try {
+            if (empty($email)) {
+                log_message('error', '❌ Missing email in get_internal_customer_by_email');
+                return null;
+            }
+
+            $this->load->model('Api_model');
+            $customer = $this->Api_model->get_customer_by_email($email);
+
+            if (!$customer || !isset($customer->customer_id)) {
+                log_message('error', '❌ No customer found for email: ' . $email);
+                return null;
+            }
+
+            return [
+                'customer_id'     => $customer->customer_id,
+                'customer_name'   => $customer->customer_name ?? '',
+                'customer_email'  => $customer->customer_email ?? '',
+                'customer_mobile' => $customer->customer_mobile ?? ''
+            ];
+
+        } catch (Exception $e) {
+            log_message('error', '❌ get_internal_customer_by_email error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Get internal customer by ID
+     * 
+     * @param int $customer_id
+     * @return array|null
+     */
+
+    public function get_internal_customer_by_id($customer_id)
+    {
+        try {
+            if (empty($customer_id)) {
+                log_message('error', '❌ Missing customer_id in get_internal_customer_by_id');
+                return null;
+            }
+
+            $this->load->model('Api_model');
+            $customer = $this->Api_model->get_customer_by_id($customer_id);
+
+            if (!$customer || !isset($customer->customer_id)) {
+                log_message('error', '❌ No customer found for ID: ' . $customer_id);
+                return null;
+            }
+
+            return [
+                'customer_id'     => $customer->customer_id,
+                'customer_name'   => $customer->customer_name ?? '',
+                'customer_email'  => $customer->customer_email ?? '',
+                'customer_mobile' => $customer->customer_mobile ?? ''
+            ];
+
+        } catch (Exception $e) {
+            log_message('error', '❌ get_internal_customer_by_id error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+
+    public function internal_insert_invoice($input = null)
+    {
+        header('Content-Type: application/json');
+        log_message('debug', '🧾 Internal insert_invoice called');
+
+        // ✅ Parse input
+        if (empty($input)) {
+            $input = json_decode(file_get_contents("php://input"), true);
+            log_message('debug', '📥 Raw request body from php://input: ' . print_r($input, true));
+        } else {
+            log_message('debug', '📥 Raw request body from function argument: ' . print_r($input, true));
+        }
+
+        if (empty($input)) {
+            echo json_encode(['status' => 'error', 'message' => 'Invalid JSON input']);
+            return;
+        }
+
+        $customer_id = $input['customer_id'] ?? null;
+        if (!$customer_id) {
+            echo json_encode(['status' => 'error', 'message' => 'Missing customer_id in request body']);
+            return;
+        }
+
+        $createby = $input['createby'] ?? $customer_id;
+        $invoice_by = $input['invoice_by'] ?? 2;
+
+        $this->load->library(['session', 'occational', 'smsgateway', 'Sendmail_lib']);
+        $this->load->model('invoice/Invoice_model', 'invoice_model');
+        $this->load->model('account/Accounts_model', 'accounts_model');
+
+        $this->session->set_userdata('id', $createby);
+
+        $finyear = financial_year();
+        if ($finyear <= 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Please Create Financial Year First']);
+            return;
+        }
+
+        $invoice_id = $this->invoice_generator();
+        log_message('debug', "🧾 Generated invoice_id = $invoice_id");
+
+        $details = $input['detailsinfo'] ?? [];
+        $grand_total = 0;
+        $total_discount = floatval($input['total_discount'] ?? 0);
+
+        foreach ($details as $item) {
+            $qty = floatval($item['product_quantity']);
+            $rate = floatval($item['product_rate']);
+            $grand_total += $qty * $rate;
+        }
+
+        $paid_amount = floatval($input['paid_amount']);
+        $due_amount = max(0, $grand_total - $paid_amount - $total_discount);
+
+        $_POST = [
+            'invoice_id'           => $invoice_id,
+            'invoice'              => $invoice_id,
+            'customer_id'          => $customer_id,
+            'createby'             => $createby,
+            'invoice_by'           => $invoice_by,
+            'paid_amount'          => $paid_amount,
+            'due_amount'           => $due_amount,
+            'total_discount'       => $total_discount,
+            'total_tax'            => $input['total_tax'] ?? 0,
+            'invoice_date'         => $input['invoice_date'] ?? date('Y-m-d'),
+            'inva_details'         => $input['inva_details'] ?? 'API Invoice',
+            'payment_type'         => $input['payment_type'],
+            'delivery_note'        => 0,
+            'status'               => $input['status'] ?? 1,
+            'invoice_discount'     => 0,
+            'total_vat_amnt'       => 0,
+            'previous'             => 0,
+            'shipping_cost'        => 0,
+            'is_credit'            => ($input['payment_type'] == 0) ? 1 : 0,
+            'multipaytype'         => [$input['payment_type']],
+            'pamount_by_method'    => [$paid_amount],
+            'product_id'           => [],
+            'product_quantity'     => [],
+            'product_rate'         => [],
+            'serial_no'            => [],
+            'total_price'          => [],
+            'discount'             => [],
+            'discountvalue'        => [],
+            'vatvalue'             => [],
+            'vatpercent'           => [],
+            'desc'                 => [],
+            'available_quantity'   => [],
+            'grand_total_price'    => $grand_total
+        ];
+
+        foreach ($details as $item) {
+            $qty = floatval($item['product_quantity']);
+            $rate = floatval($item['product_rate']);
+            $total = $qty * $rate;
+
+            $_POST['product_id'][]         = $item['product_id'];
+            $_POST['product_quantity'][]   = $qty;
+            $_POST['product_rate'][]       = $rate;
+            $_POST['serial_no'][]          = $item['serial_no'] ?? '';
+            $_POST['total_price'][]        = $total;
+            $_POST['discount'][]           = 0;
+            $_POST['discountvalue'][]      = 0;
+            $_POST['vatvalue'][]           = 0;
+            $_POST['vatpercent'][]         = 0;
+            $_POST['desc'][]               = '';
+            $_POST['available_quantity'][] = $qty + 100;
+        }
+
+        $inserted_invoice_id = $this->invoice_model->invoice_entry($invoice_id);
+        log_message('debug', "✅ Invoice inserted, ID: $inserted_invoice_id");
+
+        $setting_data = $this->db->select('is_autoapprove_v')->from('web_setting')->where('setting_id', 1)->get()->row();
+        if ($setting_data && $setting_data->is_autoapprove_v == 1) {
+            $this->autoapprove($inserted_invoice_id);
+            log_message('debug', "✅ Auto-approved voucher for $inserted_invoice_id");
+        }
+
+        $cusinfo = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row();
+        $customer_name = $cusinfo->customer_name ?? 'Unknown';
+        $customer_email = $cusinfo->customer_email ?? '';
+        $customer_mobile = $cusinfo->customer_mobile ?? '';
+
+        $config_data = $this->db->get('sms_settings')->row();
+        if ($config_data && $config_data->isinvoice == 1 && !empty($customer_mobile)) {
+            $message = 'Mr.' . $customer_name . ', You have purchased ' . number_format($grand_total, 2) . ' and paid ' . $paid_amount;
+            $this->smsgateway->send([
+                'apiProvider' => 'nexmo',
+                'username'    => $config_data->api_key,
+                'password'    => $config_data->api_secret,
+                'from'        => $config_data->from,
+                'to'          => $customer_mobile,
+                'message'     => $message
+            ]);
+            log_message('debug', "✅ SMS sent to customer {$customer_mobile}");
+        }
+
+        $smtp = $this->db->get('email_config')->row_array();
+        $admin_subject = "🧾 New Invoice Created - {$invoice_id}";
+        $admin_message = "<h4>New Invoice Notification</h4>
+            <p><strong>Invoice ID:</strong> {$invoice_id}</p>
+            <p><strong>Customer:</strong> {$customer_name}</p>
+            <p><strong>Email:</strong> {$customer_email}</p>
+            <p><strong>Total Amount:</strong> " . number_format($grand_total, 2) . "</p>
+            <p><strong>Time:</strong> " . date('Y-m-d H:i:s') . "</p>";
+
+        $admins = $this->db->select('username')->from('user_login')->where(['user_type' => 1, 'status' => 1])->get();
+        foreach ($admins->result() as $admin) {
+            if (filter_var($admin->username, FILTER_VALIDATE_EMAIL)) {
+                $this->sendmail_lib->send(
+                    $admin->username,
+                    $admin_subject,
+                    $admin_message,
+                    $smtp['smtp_user'],
+                    'DeshiShad ERP System'
+                );
+            }
+        }
+
+        if (!empty($customer_email)) {
+            $customer_subject = "🧾 Your Invoice [{$invoice_id}] Has Been Created";
+            $customer_message = "<h3>Dear {$customer_name},</h3>
+                <p>Thank you for your purchase. Your invoice has been created successfully.</p>
+                <p><strong>Invoice ID:</strong> {$invoice_id}</p>
+                <p><strong>Total:</strong> " . number_format($grand_total, 2) . "</p>
+                <p>If you have any questions, please contact support.</p>";
+
+            $this->sendmail_lib->send(
+                $customer_email,
+                $customer_subject,
+                $customer_message,
+                $smtp['smtp_user'],
+                'DeshiShad Sales'
+            );
+        }
+
+        echo json_encode([
+            'status'     => 'success',
+            'invoice_id' => $invoice_id,
+            'message'    => 'Invoice created successfully via internal_insert_invoice()'
+        ]);
+    }
+
+    private function internal_insert_invoice_payment(array $input)
+    {
+        $this->db->trans_begin();
+
+        try {
+            // ✅ Handle payment_ref_doc upload
+            $payment_ref_doc_path = '';
+            if (!empty($_FILES['payment_ref_doc']['name'])) {
+                $upload_dir = './uploads/payment_refs/';
+                if (!is_dir($upload_dir)) {
+                    mkdir($upload_dir, 0755, true);
+                }
+
+                $this->load->library('upload');
+
+                $original_name = pathinfo($_FILES['payment_ref_doc']['name'], PATHINFO_FILENAME);
+                $ext = pathinfo($_FILES['payment_ref_doc']['name'], PATHINFO_EXTENSION);
+                $unique_name = $original_name . '_' . time() . '_' . uniqid() . '.' . $ext;
+
+                $_FILES['payment_ref_doc']['name'] = $unique_name;
+
+                $config['upload_path']   = $upload_dir;
+                $config['allowed_types'] = 'pdf|jpg|jpeg|png';
+                $config['file_name']     = $unique_name;
+                $config['max_size']      = 2048;
+
+                $this->upload->initialize($config);
+
+                if ($this->upload->do_upload('payment_ref_doc')) {
+                    $payment_ref_doc_path = 'uploads/payment_refs/' . $unique_name;
+                } else {
+                    log_message('error', '❌ Upload error: ' . $this->upload->display_errors());
+                    return ['status' => 'error', 'message' => 'File upload failed: ' . strip_tags($this->upload->display_errors())];
+                }
+            } else {
+                // fallback if file not uploaded this time
+                $payment_ref_doc_path = $input['payment_ref_doc'] ?? '';
+            }
+
+            // Step 1: Insert invoice_payment (main)
+            $invoice_data = [
+                'invoice_date'     => $input['invoice_date'] ?? date('Y-m-d'),
+                'createby'         => $input['createby'],
+                'customer_id'      => $input['customer_id'],
+                'paid_amount'      => $input['paid_amount'],
+                'due_amount'       => $input['due_amount'] ?? 0,
+                'total_discount'   => $input['total_discount'] ?? 0,
+                'total_tax'        => $input['total_tax'] ?? 0,
+                'total_amount'     => 0, // Temporary, will update later
+                'payment_type'     => $input['payment_type'] ?? 1,
+                'payment_ref_doc'  => $payment_ref_doc_path,
+                'payment_ref'      => $input['payment_ref'] ?? '',
+                'transaction_ref'  => $input['transaction_ref'],
+                'status'           => $input['status'] ?? 2,
+                'created_at'       => date('Y-m-d H:i:s'),
+            ];
+
+            $this->db->insert('invoice_payment', $invoice_data);
+            $invoice_id = $this->db->insert_id();
+            log_message('debug', "✅ Invoice payment inserted with ID: $invoice_id");
+
+            // Step 2: Insert invoice_payment_details
+            $total_value = 0;
+            foreach ($input['detailsinfo'] as $item) {
+                $qty = (float) $item['product_quantity'];
+                $rate = (float) $item['product_rate'];
+                $discount_percent = (float) ($item['discount'] ?? 0);
+                $product_id = $item['product_id'];
+                $serial_no = $item['serial_no'] ?? '';
+
+                // ✅ Fetch warehouse_id from cart table
+                $cart_row = $this->db->select('warehouse_id')
+                    ->from('cart')
+                    ->where('product_id', $product_id)
+                    ->where('status', 'pending')
+                    ->where('customer_id', $input['customer_id'])
+                    ->order_by('id', 'desc')
+                    ->limit(1)
+                    ->get()
+                    ->row();
+
+                $warehouse_id = $cart_row->warehouse_id ?? null;
+
+                $line_total = $qty * $rate;
+                $discount_amount = ($discount_percent / 100) * $line_total;
+                $final_value = $line_total - $discount_amount;
+
+                $total_value += $final_value;
+
+                $details_data = [
+                    'invoice_id'       => $invoice_id,
+                    'product_id'       => $product_id,
+                    'product_quantity' => $qty,
+                    'product_rate'     => $rate,
+                    'discount'         => $discount_percent,
+                    'total_value'      => $final_value,
+                    'serial_no'        => $serial_no,
+                    'warehouse_id'     => $warehouse_id,
+                    'created_at'       => date('Y-m-d H:i:s')
+                ];
+
+                $this->db->insert('invoice_payment_details', $details_data);
+            }
+
+            // Step 3: Update invoice_payment.total_amount with actual sum
+            $this->db->where('id', $invoice_id)->update('invoice_payment', ['total_amount' => $total_value]);
+
+            // Step 4: Commit or rollback
+            if ($this->db->trans_status() === FALSE) {
+                $this->db->trans_rollback();
+                log_message('error', '❌ Transaction failed. Rolling back.');
+                return ['status' => 'error', 'message' => 'Invoice payment failed'];
+            }
+
+            $this->db->trans_commit();
+            return [
+                'status'     => 'success',
+                'invoice_id' => $invoice_id,
+                'message'    => 'Invoice payment inserted successfully'
+            ];
+        } catch (Exception $e) {
+            $this->db->trans_rollback();
+            log_message('error', '❌ Exception in invoice insert: ' . $e->getMessage());
+            return ['status' => 'error', 'message' => 'Something went wrong'];
+        }
+    }
+
 }
