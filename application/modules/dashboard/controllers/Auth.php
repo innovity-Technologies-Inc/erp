@@ -20,7 +20,7 @@ class Auth extends MX_Controller {
  	}
 
 	public function index()
-	{  
+	{
 	if ($this->session->userdata('isLogIn'))
 		redirect('home');
 		$data['title']    = display('login'); 
@@ -117,7 +117,8 @@ class Auth extends MX_Controller {
 					redirect('home');
                 }else{
                     if($permission['new_invoice']['create'] == 1 || $permission['gui_pos']['create']==1){
-                       redirect('gui_pos'); 
+                    //    redirect('gui_pos'); 
+                    redirect('home');
                    }else{
                     redirect('home');
                    }

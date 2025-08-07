@@ -1875,7 +1875,8 @@ class Apiv2 extends CI_Controller {
             'sales_permit_number'  => $this->input->post('sales_permit_number'),
             'status'               => 3,
             'create_date'          => date('Y-m-d H:i:s'),
-            'create_by'            => $user->uid
+            'create_by'            => $user->uid,
+            'channel'              => $user->uid
         ];
 
         if ($this->Api_model->customer_create($data)) {

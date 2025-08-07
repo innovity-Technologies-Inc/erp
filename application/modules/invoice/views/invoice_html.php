@@ -62,19 +62,31 @@
                                 </abbr>
                                 <?php echo $invoice_no?>
                             </div>
-                            <div class="m-b-15">
-                                <abbr class="font-bold"><?php echo display('billing_date') ?></abbr>
-                                <?php echo date("d-M-Y",strtotime($final_date));?>
-                                <br>
+                            <?php
+                                $CI =& get_instance();
+                                $CI->load->model('dashboard/Setting_model', 'setting_model');
+                                $setting = $CI->setting_model->read();
+                                // $timezone = $setting->timezone ?? 'America/New_York';
 
-                                <?php $create_at = $this->db->select('CreateDate')
-                                            ->from('acc_vaucher')
-                                            ->where('referenceNo',$invoice_no)
-                                            ->get()
-                                            ->row();?>
-                                <abbr class="font-bold"><?php echo display('invoice_time') ?>:</abbr>
-                                <?php echo date("H:i:s",strtotime($create_at->CreateDate));?>
-                            </div>
+                                // Fetch CreateDate from DB
+                                $create_at = $CI->db->select('CreateDate')
+                                    ->from('acc_vaucher')
+                                    ->where('referenceNo', $invoice_no)
+                                    ->get()
+                                    ->row();
+
+                                // ✅ Extract time directly to avoid timezone mismatch
+                                $invoice_time = explode(' ', $create_at->CreateDate)[1];
+                                echo "<abbr class='font-bold'>".display('invoice_time').": </abbr>" . $invoice_time;
+                                ?>
+                                <div class="m-b-15">
+                                    <abbr class="font-bold"><?php echo display('billing_date') ?></abbr>
+                                    <?php echo date("d-M-Y", strtotime($final_date)); ?>
+                                    <br>
+
+                                    <abbr class="font-bold"><?php echo display('invoice_time') ?>:</abbr>
+                                    <?php echo $invoice_time; ?>
+                                </div>
 
                             <span class="label label-success-outline m-r-15"><?php echo display('billing_to') ?></span>
 

@@ -99,7 +99,6 @@
 
 <!-- DataTable Script -->
 <script>
-
 let table;
 
 $(document).ready(function () {
@@ -152,21 +151,42 @@ $(document).ready(function () {
 
     $('#statusForm').on('submit', function (e) {
         e.preventDefault();
+
+        // 🔄 Add loading overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'tempLoadingOverlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = 0;
+        overlay.style.left = 0;
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(255,255,255,0.6)';
+        overlay.style.zIndex = '9999';
+        overlay.innerHTML = `
+            <div style="position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); font-size: 20px;">
+                <i class="fa fa-spinner fa-spin"></i> Updating...
+            </div>`;
+        document.body.appendChild(overlay);
+
         $.ajax({
             url: "<?php echo base_url('invoice/update_status'); ?>",
             type: "POST",
             data: $(this).serialize(),
             dataType: "json",
             success: function (res) {
+                document.getElementById('tempLoadingOverlay')?.remove(); // ✅ Remove overlay
                 if (res.success) {
                     $('#statusModal').modal('hide');
                     table.ajax.reload(null, false);
                 } else {
                     alert('Failed to update status.');
                 }
+            },
+            error: function () {
+                document.getElementById('tempLoadingOverlay')?.remove(); // ❌ On error
+                alert('Something went wrong.');
             }
         });
     });
 });
-
 </script>

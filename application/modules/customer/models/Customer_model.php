@@ -174,13 +174,13 @@ class Customer_model extends CI_Model {
         $columnSortOrder = $postData['order'][0]['dir'];
         $searchValue = $postData['search']['value'];
 
-        // 🔢 Count total records (unfiltered)
+        // 🔢 Total record count
         $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
         $this->db->from('customer_information a');
         $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
         $totalRecords = $this->db->get()->row()->allcount ?? 0;
 
-        // 🔍 Count total filtered records (for pagination)
+        // 🔍 Filtered record count
         $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
         $this->db->from('customer_information a');
         $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
@@ -194,7 +194,7 @@ class Customer_model extends CI_Model {
         }
         $totalFilteredRecords = $this->db->get()->row()->allcount ?? 0;
 
-        // 📦 Fetch paginated data with creator name
+        // 📦 Actual data fetch with channel info
         $this->db->select("
             a.customer_id, 
             a.customer_name, 
@@ -203,10 +203,9 @@ class Customer_model extends CI_Model {
             a.email_address AS vat_no, 
             a.sales_permit_number, 
             a.sales_permit, 
-            a.create_by,
             a.create_date,
-            a.status, 
-            CONCAT(u.first_name, ' ', u.last_name) AS creator_name,
+            a.status,
+            ap.usertype AS channel,
             (
                 COALESCE((SELECT SUM(Debit - Credit) FROM acc_transaction WHERE subCode = s.id AND subType = 3 AND IsAppove = 1), 0) 
                 + 
@@ -216,7 +215,7 @@ class Customer_model extends CI_Model {
         $this->db->from('customer_information a');
         $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
         $this->db->join('acc_subcode s', 'a.customer_id = s.referenceNo AND s.subTypeId = 3', 'left');
-        $this->db->join('users u', 'u.user_id = a.create_by', 'left');
+        $this->db->join('api_users ap', 'a.channel = ap.id', 'left'); // 🔁 new join for channel
 
         if (!empty($searchValue)) {
             $this->db->group_start();
@@ -257,8 +256,8 @@ class Customer_model extends CI_Model {
                 'sales_permit_number' => $record->sales_permit_number,
                 'sales_permit'        => !empty($record->sales_permit) ? '<a href="' . base_url('uploads/sales_permits/' . $record->sales_permit) . '" target="_blank">View File</a>' : 'N/A',
                 'balance'             => number_format((float) $record->balance, 2),
-                'create_by'           => $record->creator_name ?? 'System',
-                'create_date'         => date('Y-m-d', strtotime($record->create_date)),
+                'channel'             => $record->channel ?? 'System', // 🔁 replaces create_by
+                'create_date'         => date('Y-m-d H:i:s', strtotime($record->create_date)), // 🔁 full datetime
                 'status'              => $record->status,
                 'button'              => $button,
             ];
