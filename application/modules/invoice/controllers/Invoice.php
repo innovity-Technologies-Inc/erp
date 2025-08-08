@@ -72,58 +72,101 @@ class Invoice extends MX_Controller {
 
 
     public function update_status()
-{
-    $id = $this->input->post('invoice_payment_id');
-    $new_status = $this->input->post('new_status');
+    {
+        $id = $this->input->post('invoice_payment_id');
+        $new_status = $this->input->post('new_status');
 
-    if (!empty($id) && in_array($new_status, ['0', '1', '2'])) {
-        // Fetch transaction_ref before updating
-        $this->db->select('transaction_ref');
-        $this->db->from('invoice_payment');
-        $this->db->where('id', $id);
-        $record = $this->db->get()->row();
-
-        if ($record && !empty($record->transaction_ref)) {
-            $ref_id = $record->transaction_ref;
-
-            // Update local DB status
-            $this->db->where('id', $id);
-            $updated = $this->db->update('invoice_payment', ['status' => $new_status]);
-
-            if ($updated) {
-                // Call external API after local update
-                $merchant_api_base_url = $this->config->item('merchant_api_base_url');
-                $api_url = "{$merchant_api_base_url}/paymentUpdate";
-                $query_params = http_build_query([
-                    'ref_id' => $ref_id,
-                    'status' => $new_status
-                ]);
-
-                $ch = curl_init();
-                curl_setopt($ch, CURLOPT_URL, $api_url . '?' . $query_params);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-                $api_response = curl_exec($ch);
-                $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
-
-                // Optionally: log API response here
-
-                echo json_encode([
-                    'success' => true,
-                    'message' => 'Status updated successfully',
-                    'api_response_code' => $http_code
-                ]);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Local update failed']);
-            }
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Transaction reference not found']);
+        if (empty($id) || !in_array($new_status, ['0', '1', '2'])) {
+            echo json_encode(['success' => false, 'message' => 'Invalid input']);
+            return;
         }
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Invalid input']);
+
+        // Fetch transaction_ref before updating
+        $record = $this->db->select('transaction_ref')->from('invoice_payment')->where('id', $id)->get()->row();
+
+        if (!$record || empty($record->transaction_ref)) {
+            echo json_encode(['success' => false, 'message' => 'Transaction reference not found']);
+            return;
+        }
+
+        $ref_id = $record->transaction_ref;
+
+        // Update local DB status
+        $this->db->where('id', $id);
+        $updated = $this->db->update('invoice_payment', ['status' => $new_status]);
+
+        if (!$updated) {
+            echo json_encode(['success' => false, 'message' => 'Local update failed']);
+            return;
+        }
+
+        // ✅ If status is approved (1), create invoice
+        $invoice_created = null;
+        if ($new_status == '1') {
+            $payment_data = $this->db->where('id', $id)->get('invoice_payment')->row_array();
+            $payment_details = $this->db->where('invoice_id', $id)->get('invoice_payment_details')->result_array();
+
+            if ($payment_data && !empty($payment_details)) {
+                $detailsinfo = [];
+
+                foreach ($payment_details as $row) {
+                    $detailsinfo[] = [
+                        'product_id'       => $row['product_id'],
+                        'product_quantity' => $row['product_quantity'],
+                        'product_rate'     => $row['product_rate'],
+                        'discount'         => $row['discount'],
+                        'serial_no'        => $row['serial_no'],
+                        'warehouse_id'     => $row['warehouse_id'] // ✅ Add warehouse_id to details
+                    ];
+                }
+
+                $invoice_payload = [
+                    'customer_id'     => $payment_data['customer_id'],
+                    'createby'        => $payment_data['createby'],
+                    'paid_amount'     => $payment_data['paid_amount'],
+                    'due_amount'      => $payment_data['due_amount'],
+                    'total_discount'  => $payment_data['total_discount'],
+                    'total_tax'       => $payment_data['total_tax'],
+                    'total_amount'    => $payment_data['total_amount'],
+                    'invoice_date'    => $payment_data['invoice_date'],
+                    'inva_details'    => 'Auto-generated on approval',
+                    'payment_type'    => $payment_data['payment_type'],
+                    'invoice_by'      => 2,
+                    'delivery_note'   => $payment_data['payment_ref'],
+                    'status'          => 1,
+                    'invoice_payment_id' => $id,
+                    'detailsinfo'     => $detailsinfo // ✅ Pass details with warehouse_id
+                ];
+
+                ob_start();
+                $this->internal_insert_invoice($invoice_payload);
+                $invoice_created = ob_get_clean();
+            }
+        }
+
+        // 🔁 Call external API
+        $merchant_api_base_url = $this->config->item('merchant_api_base_url');
+        $api_url = "{$merchant_api_base_url}/paymentUpdate";
+        $query_params = http_build_query([
+            'ref_id' => $ref_id,
+            'status' => $new_status
+        ]);
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $api_url . '?' . $query_params);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $api_response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Status updated successfully',
+            'api_response_code' => $http_code,
+            'invoice_created' => json_decode($invoice_created, true)
+        ]);
     }
-}
 
 
     public function invoice_payment_list_data() {
@@ -249,6 +292,8 @@ class Invoice extends MX_Controller {
         $descript = $isserial = $isunit = 0;
         $is_discount = $is_dis_val = $vat_amnt_per = $vat_amnt = 0;
 
+        $warehouse_ids = [];
+
         if (!empty($invoice_detail)) {
             $i = 0;
             foreach ($invoice_detail as $k => $v) {
@@ -271,6 +316,10 @@ class Invoice extends MX_Controller {
                 if (!empty($v['discount'])) $is_dis_val++;
                 if (!empty($v['vat_amnt_per'])) $vat_amnt_per++;
                 if (!empty($v['vat_amnt'])) $vat_amnt++;
+
+                // ✅ Include warehouse_id
+                $invoice_detail[$k]['warehouse_id'] = $v['warehouse_id'] ?? null;
+                $warehouse_ids[] = $v['warehouse_id'] ?? null;
             }
         }
 
@@ -308,20 +357,20 @@ class Invoice extends MX_Controller {
             'contact'             => $invoice_detail[0]['contact'],
             'invoice_details'     => $invoice_detail[0]['invoice_details'],
             'subTotal_quantity'   => $subTotal_quantity,
-            'subTotal_amount_cal' => $subTotal_price_before_discount, // before discount
-            'subTotal_ammount'    => number_format($subTotal_price_after_discount, 2, '.', ','), // after discount
+            'subTotal_amount_cal' => $subTotal_price_before_discount,
+            'subTotal_ammount'    => number_format($subTotal_price_after_discount, 2, '.', ','),
             'total_discount_cal'  => $total_discount_val,
             'total_discount'      => number_format($total_discount_val, 2, '.', ','),
             'total_vat'           => number_format($clean_vat, 2, '.', ','),
             'total_tax'           => number_format($clean_tax, 2, '.', ','),
             'grand_total'         => number_format($grand_total, 2, '.', ','),
-            'paid_amount'         => number_format($real_paid_amount, 2, '.', ','),  // 🟢 corrected
-            'due_amount'          => number_format($real_due_amount, 2, '.', ','),   // 🟢 corrected
+            'paid_amount'         => number_format($real_paid_amount, 2, '.', ','),
+            'due_amount'          => number_format($real_due_amount, 2, '.', ','),
             'previous'            => number_format($invoice_detail[0]['prevous_due'], 2, '.', ','),
             'shipping_cost'       => number_format($clean_shipping, 2, '.', ','),
             'invoice_all_data'    => $invoice_detail,
             'am_inword'           => $grand_total,
-            'is_discount'         => $total_discount_val - $invoice_detail[0]['invoice_discount'],
+            'is_discount_diff'    => number_format($total_discount_val - (float)$invoice_detail[0]['invoice_discount'], 2, '.', ','),
             'users_name'          => $users->first_name . ' ' . $users->last_name,
             'tax_regno'           => $txregname,
             'is_desc'             => $descript,
@@ -331,10 +380,102 @@ class Invoice extends MX_Controller {
             'is_discount'         => $is_discount,
             'is_serial'           => $isserial,
             'is_unit'             => $isunit,
+            'warehouse_ids'       => $warehouse_ids, // ✅ added array of warehouse_ids
         );
 
         $data['module'] = "invoice";
         $data['page'] = "invoice_html";
+        echo modules::run('template/layout', $data);
+    }
+
+    public function paysenz_invoice_payment_details($invoice_payment_id = null)
+    {
+        // 🔍 Fetch main invoice_payment record
+        $invoice_payment = $this->db->get_where('invoice_payment', ['id' => $invoice_payment_id])->row_array();
+
+        if (empty($invoice_payment)) {
+            show_404(); // or handle error appropriately
+        }
+
+        // 📦 Fetch invoice_payment_details with warehouse name
+        $payment_details = $this->db->select('d.*, p.product_name, p.product_model, w.name AS warehouse_name')
+            ->from('invoice_payment_details d')
+            ->join('product_information p', 'p.product_id = d.product_id', 'left')
+            ->join('warehouse w', 'w.id = d.warehouse_id', 'left')
+            ->where('d.invoice_id', $invoice_payment_id)
+            ->get()
+            ->result_array();
+
+        // Totals
+        $subTotal_quantity = 0;
+        $subTotal_price_before_discount = 0.00;
+        $subTotal_price_after_discount = 0.00;
+        $total_discount_val = 0.00;
+        $warehouse_ids = [];
+
+        foreach ($payment_details as $k => $item) {
+            $payment_details[$k]['sl'] = $k + 1;
+
+            $line_total_before_discount = $item['product_quantity'] * $item['product_rate'];
+            $line_total_after_discount = $item['total_value'];
+
+            $subTotal_quantity += $item['product_quantity'];
+            $subTotal_price_before_discount += $line_total_before_discount;
+            $subTotal_price_after_discount += $line_total_after_discount;
+            $total_discount_val += ($line_total_before_discount - $line_total_after_discount);
+
+            $warehouse_ids[] = $item['warehouse_id'];
+        }
+
+        // Load customer
+        $customer = $this->db->get_where('customer_information', ['customer_id' => $invoice_payment['customer_id']])->row_array();
+
+        // Load user info
+        $user = $this->invoice_model->user_invoice_data($invoice_payment['createby']);
+
+        // 🔧 Include print configuration flags (adjust as needed)
+        $data = array(
+            'title'               => 'Invoice Payment Details',
+            'invoice_id'          => $invoice_payment['id'],
+            'invoice_date'        => $invoice_payment['invoice_date'],
+            'customer_name'       => $customer['customer_name'] ?? '',
+            'customer_address'    => $customer['address'] ?? '',
+            'customer_mobile'     => $customer['mobile'] ?? '',
+            'customer_email'      => $customer['email'] ?? '',
+            'subTotal_quantity'   => $subTotal_quantity,
+            'subTotal_amount_cal' => $subTotal_price_before_discount,
+            'subTotal_ammount'    => number_format($subTotal_price_after_discount, 2, '.', ','),
+            'total_discount_cal'  => $total_discount_val,
+            'total_discount'      => number_format($total_discount_val, 2, '.', ','),
+            'total_tax'           => number_format((float)$invoice_payment['total_tax'], 2, '.', ','),
+            'grand_total'         => number_format((float)$invoice_payment['total_amount'], 2, '.', ','),
+            'paid_amount'         => number_format((float)$invoice_payment['paid_amount'], 2, '.', ','),
+            'due_amount'          => number_format((float)$invoice_payment['due_amount'], 2, '.', ','),
+            'shipping_cost'       => number_format(0.00, 2, '.', ','),
+            'invoice_all_data'    => $payment_details,
+            'am_inword'           => $invoice_payment['total_amount'],
+            'users_name'          => $user->first_name . ' ' . $user->last_name,
+            'warehouse_ids'       => $warehouse_ids,
+            'payment_type'        => $invoice_payment['payment_type'],
+            'payment_ref_doc'     => $invoice_payment['payment_ref_doc'],
+            'payment_ref'         => $invoice_payment['payment_ref'],
+            'transaction_ref'     => $invoice_payment['transaction_ref'],
+
+            // 🔧 Add these flags if your view expects them to control column visibility
+            'is_unit'       => 0,
+            'is_desc'       => 0,
+            'is_serial'     => 0,
+            'is_discount'   => 0,
+            'is_dis_val'    => 0,
+            'discount_type' => 0, // Set appropriately: 1=%, 2=value, 3=fixed
+            'vat_amnt_per'  => 0,
+            'vat_amnt'      => 0,
+            'position'      => 0,
+            'currency'      => 'USD' // Replace with your system default
+        );
+
+        $data['module'] = "invoice";
+        $data['page'] = "invoice_payment_html";
         echo modules::run('template/layout', $data);
     }
 
@@ -2195,6 +2336,236 @@ public function paysenz_customer_autocomplete() {
         }
 
         redirect("terms_list");
+    }
+
+    public function internal_insert_invoice($input = null)
+    {
+        header('Content-Type: application/json');
+        log_message('debug', '🧾 internal_insert_invoice started');
+
+        if (empty($input)) {
+            $input = json_decode(file_get_contents("php://input"), true);
+            log_message('debug', '📥 Decoded input from php://input: ' . print_r($input, true));
+        } else {
+            log_message('debug', '📥 Using input from argument: ' . print_r($input, true));
+        }
+
+        if (empty($input)) {
+            log_message('error', '❌ Input missing after decoding');
+            echo json_encode(['status' => 'error', 'message' => 'Invalid JSON input']);
+            return;
+        }
+
+        $customer_id = $input['customer_id'] ?? null;
+        if (!$customer_id) {
+            log_message('error', '❌ customer_id missing in input');
+            echo json_encode(['status' => 'error', 'message' => 'Missing customer_id in request body']);
+            return;
+        }
+
+        $createby = $input['createby'] ?? $customer_id;
+        $invoice_by = $input['invoice_by'] ?? 2;
+        $invoice_payment_id = $input['invoice_payment_id'] ?? null;
+
+        $this->load->library(['session', 'occational', 'smsgateway', 'Sendmail_lib']);
+        $this->load->model('invoice/Invoice_model', 'invoice_model');
+        $this->load->model('account/Accounts_model', 'accounts_model');
+
+        $this->session->set_userdata('id', $createby);
+        log_message('debug', "🔐 Session user set as: $createby");
+
+        $finyear = financial_year();
+        log_message('debug', "📅 Financial year: $finyear");
+        if ($finyear <= 0) {
+            log_message('error', '❌ Missing financial year');
+            echo json_encode(['status' => 'error', 'message' => 'Please Create Financial Year First']);
+            return;
+        }
+
+        $invoice_id = $this->invoice_generator();
+        log_message('debug', "🧾 Generated invoice_id = $invoice_id");
+
+        if (!$invoice_payment_id) {
+            log_message('error', '❌ Missing invoice_payment_id');
+            echo json_encode(['status' => 'error', 'message' => 'Missing invoice_payment_id']);
+            return;
+        }
+
+        $details = $this->db->select('product_id, product_quantity, product_rate, discount, total_value, serial_no, warehouse_id')
+            ->from('invoice_payment_details')
+            ->where('invoice_id', $invoice_payment_id)
+            ->get()
+            ->result_array();
+        log_message('debug', '📦 Loaded invoice_payment_details: ' . json_encode($details));
+
+        $grand_total = 0;
+        $total_discount = 0;
+
+        $_POST = [
+            'invoice_id' => $invoice_id,
+            'invoice' => $invoice_id,
+            'customer_id' => $customer_id,
+            'createby' => $createby,
+            'invoice_by' => $invoice_by,
+            'paid_amount' => floatval($input['paid_amount'] ?? 0),
+            'due_amount' => 0,
+            'total_discount' => 0,
+            'total_tax' => $input['total_tax'] ?? 0,
+            'invoice_date' => $input['invoice_date'] ?? date('Y-m-d'),
+            'inva_details' => $input['inva_details'] ?? 'API Invoice',
+            'payment_type' => $input['payment_type'],
+            'delivery_note' => $input['delivery_note'] ?? '',
+            'status' => $input['status'] ?? 1,
+            'invoice_discount' => 0,
+            'total_vat_amnt' => 0,
+            'previous' => 0,
+            'shipping_cost' => 0,
+            'is_credit' => ($input['payment_type'] == 0) ? 1 : 0,
+            'multipaytype' => [$input['payment_type']],
+            'pamount_by_method' => [floatval($input['paid_amount'] ?? 0)],
+            'product_id' => [],
+            'product_quantity' => [],
+            'product_rate' => [],
+            'serial_no' => [],
+            'total_price' => [],
+            'discount' => [],
+            'discountvalue' => [],
+            'vatvalue' => [],
+            'vatpercent' => [],
+            'desc' => [],
+            'available_quantity' => [],
+            'warehouse_id' => [],
+        ];
+
+        foreach ($details as $item) {
+            $qty = floatval($item['product_quantity']);
+            $rate = floatval($item['product_rate']);
+            $discount_per = floatval($item['discount']);
+            $serial_no = $item['serial_no'] ?? '';
+            $warehouse_id = $item['warehouse_id'] ?? null;
+
+            $total = $qty * $rate;
+            $discount_val = ($discount_per / 100) * $total;
+            $final_price = $total - $discount_val;
+
+            $grand_total += $final_price;
+            $total_discount += $discount_val;
+
+            $_POST['product_id'][] = $item['product_id'];
+            $_POST['product_quantity'][] = $qty;
+            $_POST['product_rate'][] = $rate;
+            $_POST['serial_no'][] = $serial_no;
+            $_POST['total_price'][] = $final_price;
+            $_POST['discount'][] = $discount_per;
+            $_POST['discountvalue'][] = $discount_val;
+            $_POST['vatvalue'][] = 0;
+            $_POST['vatpercent'][] = 0;
+            $_POST['desc'][] = '';
+            $_POST['available_quantity'][] = $qty + 100;
+            $_POST['warehouse_id'][] = $warehouse_id;
+
+            log_message('debug', "🧮 Item processed: product_id={$item['product_id']}, qty=$qty, rate=$rate, discount_per=$discount_per, discount=$discount_val, final_price=$final_price, warehouse_id=$warehouse_id");
+        }
+
+        $_POST['grand_total_price'] = $grand_total;
+        $_POST['total_discount'] = $total_discount;
+        $_POST['due_amount'] = max(0, $grand_total - $_POST['paid_amount']);
+
+        log_message('debug', '📝 Final invoice POST data before invoice_entry(): ' . json_encode($_POST));
+
+        $inserted_invoice_id = $this->invoice_model->invoice_entry($invoice_id);
+        log_message('debug', "✅ Invoice inserted with ID: $inserted_invoice_id");
+        $this->db->where('invoice_id', $invoice_id)->update('invoice', ['invoice_by' => $invoice_by]);
+        log_message('debug', "🔁 invoice_by updated to $invoice_by for invoice_id: $invoice_id");
+
+        $setting_data = $this->db->select('is_autoapprove_v')->from('web_setting')->where('setting_id', 1)->get()->row();
+        if ($setting_data && $setting_data->is_autoapprove_v == 1) {
+            $this->autoapprove($inserted_invoice_id);
+            log_message('debug', "✅ Auto-approved voucher for invoice ID $inserted_invoice_id");
+        }
+
+        $cusinfo = $this->db->get_where('customer_information', ['customer_id' => $customer_id])->row();
+        $customer_name = $cusinfo->customer_name ?? 'Unknown';
+        $customer_email = $cusinfo->customer_email ?? '';
+        $customer_mobile = $cusinfo->customer_mobile ?? '';
+        log_message('debug', "📧 Customer info: name=$customer_name, email=$customer_email, mobile=$customer_mobile");
+
+        $config_data = $this->db->get('sms_settings')->row();
+        if ($config_data && $config_data->isinvoice == 1 && !empty($customer_mobile)) {
+            $message = 'Mr.' . $customer_name . ', You have purchased ' . number_format($grand_total, 2) . ' and paid ' . $_POST['paid_amount'];
+            $this->smsgateway->send([
+                'apiProvider' => 'nexmo',
+                'username'    => $config_data->api_key,
+                'password'    => $config_data->api_secret,
+                'from'        => $config_data->from,
+                'to'          => $customer_mobile,
+                'message'     => $message
+            ]);
+            log_message('debug', "📲 SMS sent to $customer_mobile");
+        }
+
+        $smtp = $this->db->get('email_config')->row_array();
+        $admin_subject = "🧾 New Invoice Created - {$invoice_id}";
+        $admin_message = "<h4>New Invoice Notification</h4>
+            <p><strong>Invoice ID:</strong> {$invoice_id}</p>
+            <p><strong>Customer:</strong> {$customer_name}</p>
+            <p><strong>Email:</strong> {$customer_email}</p>
+            <p><strong>Total Amount:</strong> " . number_format($grand_total, 2) . "</p>
+            <p><strong>Time:</strong> " . date('Y-m-d H:i:s') . "</p>";
+
+        $admins = $this->db->select('username')->from('user_login')->where(['user_type' => 1, 'status' => 1])->get();
+        foreach ($admins->result() as $admin) {
+            if (filter_var($admin->username, FILTER_VALIDATE_EMAIL)) {
+                $this->sendmail_lib->send(
+                    $admin->username,
+                    $admin_subject,
+                    $admin_message,
+                    $smtp['smtp_user'],
+                    'DeshiShad ERP System'
+                );
+                log_message('debug', "📧 Sent admin invoice email to {$admin->username}");
+            }
+        }
+
+        if (!empty($customer_email)) {
+            $customer_subject = "🧾 Your Invoice [{$invoice_id}] Has Been Created";
+            $customer_message = "<h3>Dear {$customer_name},</h3>
+                <p>Thank you for your purchase. Your invoice has been created successfully.</p>
+                <p><strong>Invoice ID:</strong> {$invoice_id}</p>
+                <p><strong>Total:</strong> " . number_format($grand_total, 2) . "</p>
+                <p>If you have any questions, please contact support.</p>";
+
+            $this->sendmail_lib->send(
+                $customer_email,
+                $customer_subject,
+                $customer_message,
+                $smtp['smtp_user'],
+                'DeshiShad Sales'
+            );
+            log_message('debug', "📨 Sent invoice email to customer: {$customer_email}");
+        }
+
+        echo json_encode([
+            'status'     => 'success',
+            'invoice_id' => $invoice_id,
+            'message'    => 'Invoice created successfully via internal_insert_invoice()'
+        ]);
+        log_message('debug', '✅ internal_insert_invoice completed');
+    }
+
+
+    public function invoice_generator() {
+        $this->db->select_max('invoice', 'invoice_no');
+        $query = $this->db->get('invoice');
+        $result = $query->result_array();
+        $invoice_no = $result[0]['invoice_no'];
+
+        if ($invoice_no != '') {
+            $invoice_no = $invoice_no + 1;
+        } else {
+            $invoice_no = 1000;
+        }
+        return $invoice_no;
     }
 }
 

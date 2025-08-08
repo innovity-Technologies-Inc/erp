@@ -20,7 +20,7 @@
                 <th><?php echo display('sp_no') ?></th>
                 <th><?php echo display('sp_file') ?></th>
                 <th><?php echo display('balance') ?></th>
-                <th><?php echo display('created_by') ?></th>
+                <th><?php echo display('channel') ?></th>
                 <th><?php echo display('created_date') ?></th>
                 <th><?php echo display('status') ?></th>
                 <th width="50px;"><?php echo display('action') ?></th>

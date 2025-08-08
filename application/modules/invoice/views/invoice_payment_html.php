@@ -55,38 +55,26 @@
                         </div>
 
                         <div class="col-xs-4 text-left ">
-                            <h2 class="m-t-0"><?php echo display('invoice') ?></h2>
+                            <h2 class="m-t-0"><?php echo display('invoice_draft') ?></h2>
                             <div>
                                 <abbr class="font-bold">
-                                    <?php echo display('invoice_no') ?>: <span dir="ltr"></span>
+                                    <?php echo display('invoice_draft_no') ?>: <span dir="ltr"></span>
                                 </abbr>
-                                <?php echo $invoice_no?>
+                                <?php echo $invoice_id?>
                             </div>
-                            <?php
-                                $CI =& get_instance();
-                                $CI->load->model('dashboard/Setting_model', 'setting_model');
-                                $setting = $CI->setting_model->read();
-                                // $timezone = $setting->timezone ?? 'America/New_York';
+                            <div class="m-b-15">
+                                <abbr class="font-bold"><?php echo display('billing_date') ?></abbr>
+                                <?php echo date("d-M-Y",strtotime($invoice_date));?>
+                                <br>
 
-                                // Fetch CreateDate from DB
-                                $create_at = $CI->db->select('CreateDate')
-                                    ->from('acc_vaucher')
-                                    ->where('referenceNo', $invoice_no)
-                                    ->get()
-                                    ->row();
-
-                                // ✅ Extract time directly to avoid timezone mismatch
-                                $invoice_time = explode(' ', $create_at->CreateDate)[1];
-                                echo "<abbr class='font-bold'>".display('invoice_time').": </abbr>" . $invoice_time;
-                                ?>
-                                <div class="m-b-15">
-                                    <abbr class="font-bold"><?php echo display('billing_date') ?></abbr>
-                                    <?php echo date("d-M-Y", strtotime($final_date)); ?>
-                                    <br>
-
-                                    <abbr class="font-bold"><?php echo display('invoice_time') ?>:</abbr>
-                                    <?php echo $invoice_time; ?>
-                                </div>
+                                <?php $create_at = $this->db->select('CreateDate')
+                                            ->from('acc_vaucher')
+                                            ->where('referenceNo',$invoice_no)
+                                            ->get()
+                                            ->row();?>
+                                <abbr class="font-bold"><?php echo display('create_time') ?>:</abbr>
+                                <?php echo date("H:i:s",strtotime($create_at->CreateDate));?>
+                            </div>
 
                             <span class="label label-success-outline m-r-15"><?php echo display('billing_to') ?></span>
 
@@ -125,139 +113,41 @@
                         <table class="table table-striped print-font-size">
                         <thead>
                             <tr>
-                                <th width="8%" class="text-center"><?php echo display('sl') ?></th>
-                                <th width="22%" class="text-center"><?php echo display('product_name') ?></th>
+                                <th class="text-center"><?php echo display('sl'); ?></th>
+                                <th class="text-center"><?php echo display('product_name'); ?></th>
                                 <th class="text-center"><?php echo display('warehouse'); ?></th>
-                                <?php if($is_unit != 0): ?>
-                                    <th class="text-center"><?php echo display('unit'); ?></th>
-                                <?php endif; ?>
-
-                                <?php if($is_desc != 0): ?>
-                                    <th class="text-center"><?php echo display('item_description'); ?></th>
-                                <?php endif; ?>
-
-                                <?php if($is_serial != 0): ?>
-                                    <th class="text-center"><?php echo display('serial_no'); ?></th>
-                                <?php endif; ?>
-
-                                <th class="text-right"><?php echo display('quantity') ?></th>
-
-                                <?php if ($discount_type == 1 && $is_discount > 0): ?>
-                                    <th class="text-right"><?php echo display('discount_percentage').'%' ?></th>
-                                <?php elseif (($discount_type == 2 || $discount_type == 3) && $is_dis_val > 0): ?>
-                                    <th class="text-right"><?php echo ($discount_type == 2) ? display('discount') : display('fixed_dis'); ?></th>
-                                <?php endif; ?>
-
-                                <?php if ($vat_amnt_per > 0): ?>
-                                    <th class="text-right"><?php echo display('vat').' %'; ?></th>
-                                <?php endif; ?>
-
-                                <?php if ($vat_amnt > 0): ?>
-                                    <th class="text-right"><?php echo display('vat_val'); ?></th>
-                                <?php endif; ?>
-
-                                <th class="text-right"><?php echo display('rate') ?></th>
-                                <th class="text-right"><?php echo display('ammount') ?></th>
+                                <th class="text-center"><?php echo display('quantity'); ?></th>
+                                <th class="text-center"><?php echo display('rate'); ?></th>
+                                <th class="text-center"><?php echo display('discount'); ?></th>
+                                <th class="text-center"><?php echo display('amount'); ?></th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php 
-                                $itemprice = 0;
-
-                                // Dynamically calculate colspan for the Grand Total label column
-                                $colspan_base = 2; // SL and Product Name
-                                $colspan_base += ($is_unit != 0) ? 1 : 0;
-                                $colspan_base += ($is_desc != 0) ? 1 : 0;
-                                $colspan_base += ($is_serial != 0) ? 1 : 0;
-
-                                foreach($invoice_all_data as $details){ ?>
+                            <?php foreach ($invoice_all_data as $details) { ?>
                                 <tr>
-                                    <td class="text-center"><?php echo $details['sl']?></td>
+                                    <td class="text-center"><?php echo $details['sl']; ?></td>
                                     <td class="text-center"><?php echo $details['product_name']; ?></td>
                                     <td class="text-center"><?php echo $details['warehouse_name']; ?></td>
-                                    <?php if($is_unit != 0): ?>
-                                        <td class="text-center"><?php echo $details['unit']; ?></td>
-                                    <?php endif; ?>
-
-                                    <?php if ($is_desc != 0): ?>
-                                        <td class="text-center"><?php echo $details['description']; ?></td>
-                                    <?php endif; ?>
-
-                                    <?php if ($is_serial != 0): ?>
-                                        <td class="text-center"><?php echo $details['serial_no']; ?></td>
-                                    <?php endif; ?>
-
-                                    <td class="text-right"><?php echo $details['quantity']; ?></td>
-
-                                    <?php if ($discount_type == 1 && $is_discount > 0): ?>
-                                        <td class="text-right"><?php echo $details['discount_per']; ?></td>
-                                    <?php elseif (($discount_type == 2 || $discount_type == 3) && $is_dis_val > 0): ?>
-                                        <td class="text-right"><?php echo $details['discount']; ?></td>
-                                    <?php endif; ?>
-
-                                    <?php if ($vat_amnt_per > 0): ?>
-                                        <td class="text-right"><?php echo $details['vat_amnt_per']; ?></td>
-                                    <?php endif; ?>
-
-                                    <?php if ($vat_amnt > 0): ?>
-                                        <td class="text-right"><?php echo $details['vat_amnt']; ?></td>
-                                    <?php endif; ?>
-
-                                    <td class="text-right"><?php echo $details['rate']; ?></td>
-                                    <td class="text-right"><?php echo $details['total_price']; ?></td>
+                                    <td class="text-right"><?php echo $details['product_quantity']; ?></td>
+                                    <td class="text-right"><?php echo $details['product_rate']; ?></td>
+                                    <td class="text-right"><?php echo isset($details['discount']) ? $details['discount'] : '0.00'; ?></td>
+                                    <td class="text-right"><?php echo $details['total_value']; ?></td>
                                 </tr>
                             <?php } ?>
 
-                            <?php
-                                // Columns before quantity (SL, Product name, Warehouse, Unit, Desc, Serial)
-                                $colspan_base = 3; // SL, Product name, Warehouse
-                                $colspan_base += ($is_unit != 0) ? 1 : 0;
-                                $colspan_base += ($is_desc != 0) ? 1 : 0;
-                                $colspan_base += ($is_serial != 0) ? 1 : 0;
-
-                                // Additional columns after quantity
-                                $additional_cols = 1; // quantity itself
-
-                                // Determine if a discount column will be shown
-                                $has_discount_column = false;
-                                if ($discount_type == 1 && $is_discount > 0) $has_discount_column = true;
-                                if (($discount_type == 2 || $discount_type == 3) && $is_dis_val > 0) $has_discount_column = true;
-                                if ($has_discount_column) $additional_cols++;
-
-                                if ($vat_amnt_per > 0) $additional_cols++;
-                                if ($vat_amnt > 0) $additional_cols++;
-
-                                // "rate" and "total_price" columns = 2
-                                $total_columns = $colspan_base + $additional_cols + 2;
-
-                                // Left colspan = all columns before quantity + quantity cell
-                                $left_colspan = $colspan_base;
-                                $right_colspan = $total_columns - $left_colspan - 1; // -1 for quantity cell
-                            ?>
                             <tr>
-                                <td class="text-left" colspan="<?php echo $left_colspan; ?>"><b><?php echo display('total') ?>:</b></td>
-                                <td align="right"><b><?php echo number_format($subTotal_quantity, 2) ?></b></td>
-
-                                <?php if ($has_discount_column): ?>
-                                    <td></td>
-                                <?php endif; ?>
-
-                                <?php if ($vat_amnt_per > 0): ?>
-                                    <td></td>
-                                <?php endif; ?>
-
-                                <?php if ($vat_amnt > 0): ?>
-                                    <td></td>
-                                <?php endif; ?>
-
-                                <td colspan="2" align="right">
-                                    <?php
-                                        $sub_total_clean = (float) str_replace(',', '', $subTotal_ammount);
-                                    ?>
-                                    <b><?php echo ($position == 0)
-                                        ? $currency . ' ' . number_format($sub_total_clean, 2)
-                                        : number_format($sub_total_clean, 2) . ' ' . $currency;
-                                    ?></b>
+                                <td class="text-left" colspan="3"><b><?php echo display('total'); ?>:</b></td>
+                                <td class="text-right"><b><?php echo number_format($subTotal_quantity, 2); ?></b></td>
+                                <td colspan="2" class="text-right"><b><?php echo display('sub_total'); ?>:</b></td>
+                                <td class="text-right">
+                                    <b>
+                                        <?php
+                                            $sub_total_clean = (float) str_replace(',', '', $subTotal_ammount);
+                                            echo ($position == 0)
+                                                ? $currency . ' ' . number_format($sub_total_clean, 2)
+                                                : number_format($sub_total_clean, 2) . ' ' . $currency;
+                                        ?>
+                                    </b>
                                 </td>
                             </tr>
                             </tbody>

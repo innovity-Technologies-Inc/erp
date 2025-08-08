@@ -174,13 +174,13 @@ class Customer_model extends CI_Model {
         $columnSortOrder = $postData['order'][0]['dir'];
         $searchValue = $postData['search']['value'];
 
-        // 🔢 Count total records (unfiltered)
+        // 🔢 Total record count
         $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
         $this->db->from('customer_information a');
         $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
         $totalRecords = $this->db->get()->row()->allcount ?? 0;
 
-        // 🔍 Count total filtered records (for pagination)
+        // 🔍 Filtered record count
         $this->db->select('COUNT(DISTINCT a.customer_id) AS allcount');
         $this->db->from('customer_information a');
         $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
@@ -194,7 +194,7 @@ class Customer_model extends CI_Model {
         }
         $totalFilteredRecords = $this->db->get()->row()->allcount ?? 0;
 
-        // 📦 Fetch paginated data with creator name
+        // 📦 Actual data fetch with channel info
         $this->db->select("
             a.customer_id, 
             a.customer_name, 
@@ -203,10 +203,9 @@ class Customer_model extends CI_Model {
             a.email_address AS vat_no, 
             a.sales_permit_number, 
             a.sales_permit, 
-            a.create_by,
             a.create_date,
-            a.status, 
-            CONCAT(u.first_name, ' ', u.last_name) AS creator_name,
+            a.status,
+            ap.usertype AS channel,
             (
                 COALESCE((SELECT SUM(Debit - Credit) FROM acc_transaction WHERE subCode = s.id AND subType = 3 AND IsAppove = 1), 0) 
                 + 
@@ -216,7 +215,7 @@ class Customer_model extends CI_Model {
         $this->db->from('customer_information a');
         $this->db->join('acc_coa b', 'a.customer_id = b.customer_id', 'left');
         $this->db->join('acc_subcode s', 'a.customer_id = s.referenceNo AND s.subTypeId = 3', 'left');
-        $this->db->join('users u', 'u.user_id = a.create_by', 'left');
+        $this->db->join('api_users ap', 'a.channel = ap.id', 'left'); // 🔁 new join for channel
 
         if (!empty($searchValue)) {
             $this->db->group_start();
@@ -257,8 +256,8 @@ class Customer_model extends CI_Model {
                 'sales_permit_number' => $record->sales_permit_number,
                 'sales_permit'        => !empty($record->sales_permit) ? '<a href="' . base_url('uploads/sales_permits/' . $record->sales_permit) . '" target="_blank">View File</a>' : 'N/A',
                 'balance'             => number_format((float) $record->balance, 2),
-                'create_by'           => $record->creator_name ?? 'System',
-                'create_date'         => date('Y-m-d', strtotime($record->create_date)),
+                'channel'             => $record->channel ?? 'System', // 🔁 replaces create_by
+                'create_date'         => date('Y-m-d H:i:s', strtotime($record->create_date)), // 🔁 full datetime
                 'status'              => $record->status,
                 'button'              => $button,
             ];
@@ -596,6 +595,9 @@ public function getCreditCustomerList($postData=null){
     public function update($data = array())
     {
         log_message('debug', '[CustomerUpdate] Starting customer update process');
+        
+        // Log full POST API request payload
+        log_message('debug', '[CustomerUpdate] Full POST data: ' . json_encode($this->input->post(null, true)));
 
         if (!array_key_exists('status', $data)) {
             $data['status'] = $this->input->post('status', TRUE);
@@ -654,63 +656,16 @@ public function getCreditCustomerList($postData=null){
         $this->db->where('referenceNo', $customer_id)->where('subTypeId', 3)->update('acc_subcode', ['name' => $data['customer_name']]);
         log_message('debug', "[CustomerUpdate] Updated acc_subcode. SQL: " . $this->db->last_query());
 
-        // Handle password update
+        // 🔐 Handle password update via central function
         $password_option = $this->input->post('password_option', true);
         $password_value  = $this->input->post('password', true);
+        
+        log_message('debug', "[CustomerUpdate] Received password_option: {$password_option}");
+        log_message('debug', "[CustomerUpdate] Received plaintext password: {$password_value}");
 
         if (in_array($password_option, ['set', 'reset']) && !empty($password_value)) {
-            $hashed_password = password_hash($password_value, PASSWORD_BCRYPT);
-            log_message('debug', "[CustomerUpdate] password_option={$password_option}, password_value={$password_value}");
-
-            if ($existing_auth) {
-                $this->db->where('customer_id', $customer_id)->update('customer_auth', [
-                    'password'   => $hashed_password,
-                    'updated_at' => date('Y-m-d H:i:s')
-                ]);
-                log_message('debug', "[CustomerUpdate] Executed password update. SQL: " . $this->db->last_query());
-            } else {
-                $username_exists = $this->db->get_where('customer_auth', ['username' => $existing_customer['customer_email']])->num_rows();
-                if ($username_exists > 0) {
-                    log_message('error', "[CustomerUpdate] Cannot insert into customer_auth - duplicate username: {$existing_customer['customer_email']}");
-                } else {
-                    $this->db->insert('customer_auth', [
-                        'customer_id' => $customer_id,
-                        'username'    => $existing_customer['customer_email'],
-                        'password'    => $hashed_password,
-                        'status'      => $data['status'],
-                        'created_at'  => date('Y-m-d H:i:s'),
-                        'updated_at'  => date('Y-m-d H:i:s')
-                    ]);
-                    log_message('debug', "[CustomerUpdate] Inserted new auth with password. SQL: " . $this->db->last_query());
-                }
-            }
-
-            // Send email notifications
-            $smtp = $this->db->get('email_config')->row_array();
-            if ($smtp) {
-                $this->load->library('Sendmail_lib');
-
-                $this->sendmail_lib->send(
-                    $existing_customer['customer_email'],
-                    'Your DeshiShad Password Has Been Updated',
-                    "<h3>Dear {$existing_customer['customer_name']},</h3><p>Your account password has been updated.</p><p><strong>New Password:</strong> {$password_value}</p>",
-                    $smtp['smtp_user'],
-                    'DeshiShad Security Team'
-                );
-
-                $admins = $this->db->select('username')->from('user_login')->where(['user_type' => 1, 'status' => 1])->get();
-                foreach ($admins->result() as $admin) {
-                    if (filter_var($admin->username, FILTER_VALIDATE_EMAIL)) {
-                        $this->sendmail_lib->send(
-                            $admin->username,
-                            'Customer Password Changed',
-                            "<h4>Password Change Alert</h4><p>The password for customer <strong>{$existing_customer['customer_name']}</strong> (ID: {$customer_id}) has been changed.</p>",
-                            $smtp['smtp_user'],
-                            'DeshiShad Alert System'
-                        );
-                    }
-                }
-            }
+            $result = $this->handle_password_update($customer_id, $existing_customer['customer_email'], $password_value);
+            log_message('debug', '[CustomerUpdate] handle_password_update() result: ' . json_encode($result));
         }
 
         // Commission update
@@ -983,6 +938,74 @@ public function generator($lenth)
             }
 
             return $emails;
+    }
+
+
+    public function handle_password_update($customer_id, $customer_email, $password_plaintext)
+    {
+        log_message('debug', "[handle_password_update] Initiating password update for customer_id={$customer_id}, email={$customer_email}, password={$password_plaintext}");
+
+        // 🔐 Step 1: Hash the password
+        $hashed_password = password_hash($password_plaintext, PASSWORD_BCRYPT);
+
+        // 🔍 Step 2: Check if auth record exists
+        $auth_row = $this->db->get_where('customer_auth', ['customer_id' => $customer_id])->row_array();
+
+        if ($auth_row) {
+            // ✏️ Update existing auth record
+            $this->db->where('customer_id', $customer_id)->update('customer_auth', [
+                'password'   => $hashed_password,
+                'updated_at' => date('Y-m-d H:i:s')
+            ]);
+            log_message('debug', "[handle_password_update] Auth password updated. SQL: " . $this->db->last_query());
+        } else {
+            // ➕ Insert new auth record
+            $this->db->insert('customer_auth', [
+                'customer_id' => $customer_id,
+                'username'    => $customer_email,
+                'password'    => $hashed_password,
+                'status'      => 3,
+                'created_at'  => date('Y-m-d H:i:s'),
+                'updated_at'  => date('Y-m-d H:i:s')
+            ]);
+            log_message('debug', "[handle_password_update] New auth inserted. SQL: " . $this->db->last_query());
+        }
+
+        // 🌐 Step 3: Call external API
+        $merchant_api_base_url = $this->config->item('merchant_api_base_url');
+        $encoded_email = urlencode($customer_email);
+        $encoded_password = urlencode($password_plaintext);
+
+        // 🚫 Prevent double slash in URL
+        $api_url = rtrim($merchant_api_base_url, '/') . '/passwordUpdate-erp?email=' . $encoded_email . '&password=' . $encoded_password;
+
+        // ✅ Log the actual full external URL
+        log_message('debug', "[handle_password_update] External API FULL URL: {$api_url}");
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $api_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+        $api_response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
+        curl_close($ch);
+
+        if (!empty($curl_error)) {
+            log_message('error', "[handle_password_update] cURL error while calling API: {$curl_error}");
+        }
+
+        log_message('debug', "[handle_password_update] External API response HTTP Code: {$http_code}");
+        log_message('debug', "[handle_password_update] External API response Body: {$api_response}");
+
+        // 🔚 Return structured response
+        return [
+            'local_db'    => 'success',
+            'api_status'  => $http_code,
+            'api_message' => $api_response,
+            'api_error'   => $curl_error
+        ];
     }
 
 }

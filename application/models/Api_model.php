@@ -35,6 +35,14 @@
                 ->get()
                 ->row(); // ✅ Returns object
         }
+
+        public function get_customer_by_id($id) {
+            return $this->db->select('*')
+                ->from('customer_information')
+                ->where('LOWER(TRIM(customer_id))', strtolower(trim($id)))
+                ->get()
+                ->row(); // ✅ Returns object
+        }
         
         public function user_entry($data) {
             $users = array(

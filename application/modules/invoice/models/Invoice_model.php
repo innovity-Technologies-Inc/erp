@@ -106,55 +106,57 @@ class Invoice_model extends CI_Model {
         return $this->db->count_all("invoice");
     }
 
-    public function getInvoiceList($postData = null) {
+    public function getInvoiceList($postData = null)
+    {
         $response = array();
         $usertype = $this->session->userdata('user_type');
         $user_id = $this->session->userdata('user_id');
         $fromdate = $this->input->post('fromdate', TRUE);
         $todate = $this->input->post('todate', TRUE);
-    
+
         $datbetween = "";
         if (!empty($fromdate) && !empty($todate)) {
             $datbetween = "(a.date BETWEEN '$fromdate' AND '$todate')";
         }
-    
+
         ## Read values
-        $draw            = isset($postData['draw']) ? $postData['draw'] : 1;
-        $start           = isset($postData['start']) ? $postData['start'] : 0;
-        $rowperpage      = isset($postData['length']) ? $postData['length'] : 10;
-        $columnIndex     = isset($postData['order'][0]['column']) ? $postData['order'][0]['column'] : 0;
-        $columnName      = isset($postData['columns'][$columnIndex]['data']) ? $postData['columns'][$columnIndex]['data'] : 'a.date';
-        $columnSortOrder = isset($postData['order'][0]['dir']) ? $postData['order'][0]['dir'] : 'desc';
-        $searchValue     = isset($postData['search']['value']) ? $postData['search']['value'] : '';
-    
+        $draw            = $postData['draw'] ?? 1;
+        $start           = $postData['start'] ?? 0;
+        $rowperpage      = $postData['length'] ?? 10;
+        $columnIndex     = $postData['order'][0]['column'] ?? 0;
+        $columnName      = $postData['columns'][$columnIndex]['data'] ?? 'a.date';
+        $columnSortOrder = $postData['order'][0]['dir'] ?? 'desc';
+        $searchValue     = $postData['search']['value'] ?? '';
+
         ## Column map
         $columnMap = [
             'invoice'       => 'a.invoice',
-            'salesman'      => 'u.first_name',
+            'salesman'      => 'salesman_name',
             'customer_name' => 'b.customer_name',
             'delivery_note' => 'a.delivery_note',
             'final_date'    => 'a.date',
             'total_amount'  => 'a.total_amount',
         ];
-    
-        $orderColumn = isset($columnMap[$columnName]) ? $columnMap[$columnName] : 'a.date';
-    
+        $orderColumn = $columnMap[$columnName] ?? 'a.date';
+
         ## Search filter
         $searchQuery = "";
         if (!empty($searchValue)) {
             $searchQuery = " (b.customer_name LIKE '%{$searchValue}%' OR 
-                              a.invoice LIKE '%{$searchValue}%' OR 
-                              a.date LIKE '%{$searchValue}%' OR 
-                              a.invoice_id LIKE '%{$searchValue}%' OR 
-                              u.first_name LIKE '%{$searchValue}%' OR 
-                              u.last_name LIKE '%{$searchValue}%')";
+                            a.invoice LIKE '%{$searchValue}%' OR 
+                            a.date LIKE '%{$searchValue}%' OR 
+                            a.invoice_id LIKE '%{$searchValue}%' OR 
+                            u.first_name LIKE '%{$searchValue}%' OR 
+                            u.last_name LIKE '%{$searchValue}%' OR 
+                            ci.customer_name LIKE '%{$searchValue}%')";
         }
-    
-        ## Count total records
-        $this->db->select('COUNT(*) AS allcount');
+
+        ## Count
+        $this->db->select('COUNT(DISTINCT a.invoice_id) AS allcount');
         $this->db->from('invoice a');
         $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left');
         $this->db->join('users u', 'u.user_id = a.sales_by', 'left');
+        $this->db->join('customer_information ci', 'ci.customer_id = a.sales_by', 'left');
         if ($usertype == 2) {
             $this->db->where('a.sales_by', $user_id);
         }
@@ -165,12 +167,24 @@ class Invoice_model extends CI_Model {
             $this->db->where($searchQuery);
         }
         $totalRecords = $this->db->get()->row()->allcount;
-    
-        ## Fetch filtered data
-        $this->db->select("a.*, b.customer_name, u.first_name, u.last_name");
+
+        ## Get timezone
+        $CI =& get_instance();
+        $CI->load->model('dashboard/Setting_model', 'setting_model');
+        $timezone = $CI->setting_model->read()->timezone ?? 'UTC';
+
+        ## Fetch data
+        $this->db->select("a.*, b.customer_name,
+            (SELECT MIN(CreateDate) FROM acc_vaucher av WHERE av.referenceNo = a.invoice_id) AS CreateDate,
+            CASE 
+                WHEN a.invoice_by = 1 THEN CONCAT(u.first_name, ' ', u.last_name)
+                WHEN a.invoice_by = 2 THEN ci.customer_name
+                ELSE 'N/A'
+            END AS salesman_name");
         $this->db->from('invoice a');
         $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left');
         $this->db->join('users u', 'u.user_id = a.sales_by', 'left');
+        $this->db->join('customer_information ci', 'ci.customer_id = a.sales_by', 'left');
         if ($usertype == 2) {
             $this->db->where('a.sales_by', $user_id);
         }
@@ -180,11 +194,12 @@ class Invoice_model extends CI_Model {
         if (!empty($searchQuery)) {
             $this->db->where($searchQuery);
         }
+        $this->db->group_by('a.invoice_id');
         $this->db->order_by($orderColumn, $columnSortOrder);
         $this->db->limit($rowperpage, $start);
         $records = $this->db->get()->result();
-    
-        ## Delivery status mapping
+
+        ## Delivery mapping
         $deliveryStatusMap = [
             '0' => 'Pending',
             '1' => 'Confirmed',
@@ -193,77 +208,188 @@ class Invoice_model extends CI_Model {
             '4' => 'Delivered',
             '5' => 'Cancelled'
         ];
-    
-        ## Data response
-        $data = array();
+
+        $data = [];
         $sl = $start + 1;
         $base_url = base_url();
-    
+
         foreach ($records as $record) {
+            // Timezone adjust
+            $invoice_time = '00:00:00';
+            if (!empty($record->CreateDate)) {
+                try {
+                    $dt = new DateTime($record->CreateDate, new DateTimeZone('UTC'));
+                    $dt->setTimezone(new DateTimeZone($timezone));
+                    $invoice_time = $dt->format("H:i:s");
+                } catch (Exception $e) {}
+            }
+
             $button = '';
             $button .= ' <button type="button" class="btn btn-info btn-sm open-delivery-modal" data-id="'.$record->invoice_id.'" data-status="'.$record->delivery_note.'" title="Update Delivery"><i class="fa fa-truck"></i></button>';
             $button .= '<a href="'.$base_url.'invoice_details/'.$record->invoice_id.'" class="btn btn-success btn-sm" data-toggle="tooltip" title="'.display('invoice').'"><i class="fa fa-window-restore"></i></a>';
             $button .= ' <a href="'.$base_url.'invoice_pad_print/'.$record->invoice_id.'" class="btn btn-primary btn-sm" data-toggle="tooltip" title="'.display('pad_print').'"><i class="fa fa-fax"></i></a>';
             $button .= ' <a href="'.$base_url.'pos_print/'.$record->invoice_id.'" class="btn btn-warning btn-sm" data-toggle="tooltip" title="'.display('pos_invoice').'"><i class="fa fa-fax"></i></a>';
-    
+
             if ($this->permission1->method('manage_invoice','update')->access()) {
-                $approve = $this->db->select('status,referenceNo')
-                            ->from('acc_vaucher')
-                            ->where('referenceNo', $record->invoice_id)
-                            ->where('status', 1)
-                            ->get()->num_rows();
+                $approve = $this->db->select('status')->from('acc_vaucher')
+                    ->where('referenceNo', $record->invoice_id)
+                    ->where('status', 1)
+                    ->get()->num_rows();
                 if ($approve == 0 && $record->ret_adjust_amnt == '') {
                     $button .= ' <a href="'.$base_url.'invoice_edit/'.$record->invoice_id.'" class="btn btn-info btn-sm" data-toggle="tooltip" title="'.display('update').'"><i class="fa fa-pencil"></i></a>';
                 }
             }
-    
-            $delivery_note_label = isset($deliveryStatusMap[$record->delivery_note]) ? $deliveryStatusMap[$record->delivery_note] : 'N/A';
-    
-            $details = '<a href="'.$base_url.'invoice_details/'.$record->invoice_id.'">'.$record->invoice.'</a>';
-    
+
             $data[] = array(
                 'sl'             => $sl++,
-                'invoice'        => $details,
-                'salesman'       => $record->first_name . ' ' . $record->last_name,
+                'invoice'        => '<a href="'.$base_url.'invoice_details/'.$record->invoice_id.'">'.$record->invoice.'</a>',
+                'salesman'       => $record->salesman_name,
                 'customer_name'  => $record->customer_name,
-                'delivery_note'  => $delivery_note_label,
+                'delivery_note'  => $deliveryStatusMap[$record->delivery_note] ?? 'N/A',
                 'final_date'     => date("d-M-Y", strtotime($record->date)),
                 'total_amount'   => number_format($record->total_amount, 2),
+                'invoice_time'   => $invoice_time,
                 'button'         => $button
             );
         }
-    
-        ## Final response
-        return array(
+
+        return [
             "draw" => intval($draw),
             "iTotalRecords" => $totalRecords,
             "iTotalDisplayRecords" => $totalRecords,
             "aaData" => $data
-        );
+        ];
+    }
+
+    // for API (Specially)
+    public function get_customer_invoice_list($postData = null)
+    {
+        $customer_id = $postData['customer_id'] ?? null;
+        $fromdate = $postData['fromdate'] ?? null;
+        $todate = $postData['todate'] ?? null;
+
+        $this->db->select('id, invoice_id, date, total_amount, paid_amount, due_amount, delivery_note');
+        $this->db->from('invoice');
+        $this->db->where('customer_id', $customer_id);
+
+        if (!empty($fromdate) && !empty($todate)) {
+            $this->db->where('date >=', $fromdate);
+            $this->db->where('date <=', $todate);
+        }
+
+        $this->db->order_by('date', 'desc');
+        $query = $this->db->get();
+        $invoices = $query->result();
+
+        $deliveryStatusMap = [
+            '0' => 'Pending',
+            '1' => 'Confirmed',
+            '2' => 'Picked Up',
+            '3' => 'On The Way',
+            '4' => 'Delivered',
+            '5' => 'Cancelled'
+        ];
+
+        $result = [];
+
+        foreach ($invoices as $inv) {
+            // Sum discount from invoice_details table
+            $detail = $this->db->select('SUM(discount) as total_discount')
+                ->from('invoice_details')
+                ->where('invoice_id', $inv->id)
+                ->get()
+                ->row();
+
+            $row = [
+                'invoice_id'     => $inv->invoice_id,
+                'delivery_note'  => $deliveryStatusMap[$inv->delivery_note] ?? $inv->delivery_note ?? 'N/A',
+                'final_date'     => date("d-M-Y", strtotime($inv->date)),
+                'total_amount'   => number_format((float)$inv->total_amount, 2),
+                'paid_amount'    => number_format((float)$inv->paid_amount, 2),
+            ];
+
+            if (!empty($detail->total_discount)) {
+                $row['discount'] = number_format((float)$detail->total_discount, 2);
+            }
+
+            if (!empty($inv->due_amount)) {
+                $row['due_amount'] = number_format((float)$inv->due_amount, 2);
+            }
+
+            $result[] = $row;
+        }
+
+        return $result;
+    }
+
+    public function invoice_details_by_invoice_id($invoice_id_pk)
+    {
+        $this->db->select('
+            d.id,
+            d.ret_invoice_id,
+            d.product_id,
+            p.product_name,
+            d.serial_no,
+            d.description,
+            d.quantity,
+            d.rate,
+            d.total_price,
+            d.discount,
+            d.discount_per,
+            d.status
+        ');
+        $this->db->from('invoice_details d');
+        $this->db->join('product_information p', 'd.product_id = p.product_id', 'left');
+        $this->db->where('d.invoice_id', $invoice_id_pk);
+
+        $query = $this->db->get();
+        $rows = $query->result();
+
+        $result = [];
+
+        foreach ($rows as $row) {
+            $result[] = [
+                'id'             => (int) $row->id,
+                'ret_invoice_id' => $row->ret_invoice_id,
+                'product_id'     => $row->product_id,
+                'product_name'   => $row->product_name,
+                'serial_no'      => $row->serial_no,
+                'description'    => $row->description,
+                'quantity'       => (float) $row->quantity,
+                'rate'           => (float) $row->rate,
+                'total_price'    => number_format((float) $row->total_price, 2),
+                'discount'       => number_format((float) $row->discount, 2),
+                'discount_per'   => number_format((float) $row->discount_per, 2),
+                'status'         => (int) $row->status
+            ];
+        }
+
+        return $result;
     }
 
     public function count_invoice_payment() {
         return $this->db->count_all("invoice_payment");
     }
 
-    public function getInvoicePaymentList($postData = null) {
+    public function getInvoicePaymentList($postData = null) 
+    {
         $response = array();
         $usertype = $this->session->userdata('user_type');
         $user_id  = $this->session->userdata('user_id');
         $fromdate = $this->input->post('fromdate', TRUE);
         $todate   = $this->input->post('todate', TRUE);
-    
+
         $dateBetween = (!empty($fromdate) && !empty($todate)) ? "(ip.invoice_date BETWEEN '$fromdate' AND '$todate')" : "";
-    
+
         $draw       = $postData['draw'] ?? 1;
         $start      = $postData['start'] ?? 0;
         $rowPerPage = $postData['length'] ?? 10;
-    
+
         $columnIndex     = $postData['order'][0]['column'] ?? 0;
         $columnName      = $postData['columns'][$columnIndex]['data'] ?? 'invoice_date';
         $columnSortOrder = $postData['order'][0]['dir'] ?? 'desc';
         $searchValue     = $postData['search']['value'] ?? '';
-    
+
         $columnMap = [
             'invoice_date'  => 'ip.invoice_date',
             'customer_name' => 'ci.customer_name',
@@ -273,85 +399,74 @@ class Invoice_model extends CI_Model {
             'due_amount'    => 'ip.due_amount'
         ];
         $orderColumn = $columnMap[$columnName] ?? 'ip.invoice_date';
-    
+
         $searchQuery = "";
         if (!empty($searchValue)) {
             $searchQuery = "(ci.customer_name LIKE '%$searchValue%' 
                             OR ip.transaction_ref LIKE '%$searchValue%' 
                             OR ip.invoice_date LIKE '%$searchValue%')";
         }
-    
+
         // Count total records
         $this->db->select("COUNT(*) as allcount");
         $this->db->from("invoice_payment ip");
         $this->db->join("customer_information ci", "ci.customer_id = ip.customer_id", "left");
         $this->db->join("users u", "u.user_id = ip.createby", "left");
-    
-        if ($usertype == 2) {
-            $this->db->where("ip.createby", $user_id);
-        }
-        if (!empty($dateBetween)) {
-            $this->db->where($dateBetween);
-        }
-        if (!empty($searchQuery)) {
-            $this->db->where($searchQuery);
-        }
-    
+        if ($usertype == 2) $this->db->where("ip.createby", $user_id);
+        if (!empty($dateBetween)) $this->db->where($dateBetween);
+        if (!empty($searchQuery)) $this->db->where($searchQuery);
         $totalRecords = $this->db->get()->row()->allcount;
-    
-        // Fetch filtered records
-        $this->db->select("ip.*, ci.customer_name, u.first_name, u.last_name");
+
+        // Fetch filtered records with warehouse names
+        $this->db->select("ip.*, ci.customer_name, u.first_name, u.last_name,
+            (
+                SELECT GROUP_CONCAT(DISTINCT w.name SEPARATOR ', ')
+                FROM invoice_payment_details d
+                LEFT JOIN warehouse w ON w.id = d.warehouse_id
+                WHERE d.invoice_id = ip.id
+            ) AS warehouse_name");
         $this->db->from("invoice_payment ip");
         $this->db->join("customer_information ci", "ci.customer_id = ip.customer_id", "left");
         $this->db->join("users u", "u.user_id = ip.createby", "left");
-    
-        if ($usertype == 2) {
-            $this->db->where("ip.createby", $user_id);
-        }
-        if (!empty($dateBetween)) {
-            $this->db->where($dateBetween);
-        }
-        if (!empty($searchQuery)) {
-            $this->db->where($searchQuery);
-        }
-    
+        if ($usertype == 2) $this->db->where("ip.createby", $user_id);
+        if (!empty($dateBetween)) $this->db->where($dateBetween);
+        if (!empty($searchQuery)) $this->db->where($searchQuery);
         $this->db->order_by($orderColumn, $columnSortOrder);
         $this->db->limit($rowPerPage, $start);
         $records = $this->db->get()->result();
-    
+
         // Format response data
         $data = array();
         $sl = $start + 1;
         $totalAmount = $totalPaid = $totalDue = 0;
-    
+
         foreach ($records as $record) {
             $salesman = (!empty($record->first_name) || !empty($record->last_name))
                         ? $record->first_name . ' ' . $record->last_name : 'N/A';
-        
-            // Detect file type
+
             $filePath = $record->payment_ref_doc;
             $fileUrl  = base_url($filePath);
             $fileExt  = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
             $fileName = basename($filePath);
-        
+
             if (!empty($filePath)) {
                 if (in_array($fileExt, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
                     $imageTag = "<a href='$fileUrl' target='_blank' download='$fileName'>
                                     <img src='$fileUrl' width='50' height='50' style='object-fit:cover;' />
-                                 </a>";
+                                </a>";
                 } elseif ($fileExt === 'pdf') {
                     $imageTag = "<a href='$fileUrl' target='_blank' download='$fileName'>
                                     <i class='fa fa-file-pdf-o fa-2x text-danger'></i>
-                                 </a>";
+                                </a>";
                 } else {
                     $imageTag = "<a href='$fileUrl' target='_blank' download='$fileName'>
                                     <i class='fa fa-download'></i> Download
-                                 </a>";
+                                </a>";
                 }
             } else {
                 $imageTag = '<span class="text-muted">No File</span>';
             }
-        
+
             switch ($record->status) {
                 case 1:
                     $statusText = '<span class="label label-success">Approved</span>';
@@ -366,33 +481,35 @@ class Invoice_model extends CI_Model {
                     $statusText = '<span class="label label-default">N/A</span>';
                     break;
             }
-        
+
             $button = '<button type="button" class="btn btn-warning btn-sm change-status" 
                 data-id="' . $record->id . '" 
                 data-status="' . $record->status . '">
                 <i class="fa fa-pencil"></i> Change Status
             </button>';
-        
+
             $data[] = array(
                 'sl'              => $sl++,
                 'date'            => date("d-M-Y", strtotime($record->invoice_date)),
                 'payment_ref'     => $record->payment_ref ?? 'N/A',
                 'payment_ref_doc' => $imageTag,
-                'transaction_ref' => $record->transaction_ref ?? 'N/A',
+                'transaction_ref' => '<a href="' . base_url("invoice_payment_details/" . $record->id) . '" class="btn btn-primary btn-sm" target="_blank">'
+                                    . ($record->transaction_ref ?? 'N/A') . '</a>',
                 'salesman'        => $salesman,
                 'customer_name'   => $record->customer_name ?? 'N/A',
+                'warehouse_name'  => $record->warehouse_name ?? 'N/A',  // ✅ final output
                 'total_amount'    => number_format($record->total_amount, 2),
                 'paid_amount'     => number_format($record->paid_amount, 2),
                 'due_amount'      => number_format($record->due_amount, 2),
                 'status'          => $statusText,
                 'button'          => $button
             );
-        
+
             $totalAmount += $record->total_amount;
             $totalPaid   += $record->paid_amount;
             $totalDue    += $record->due_amount;
         }
-    
+
         return array(
             "draw" => intval($draw),
             "iTotalRecords" => $totalRecords,
@@ -496,44 +613,51 @@ public function pmethod_dropdown_new(){
         file_put_contents($log_path, "\n===== [START INVOICE ENTRY] $incremented_id ===== " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
         file_put_contents($log_path, "[POST DATA] " . json_encode($_POST) . "\n", FILE_APPEND);
 
+        $tablecolumn = $this->db->list_fields('tax_collection');
+        $num_column = count($tablecolumn)-4;
 
-            $tablecolumn         = $this->db->list_fields('tax_collection');
-            $num_column          = count($tablecolumn)-4;
-            
-            $createby            = $this->session->userdata('id');
-            $createdate          = date('Y-m-d H:i:s');
-            $product_id          = $this->input->post('product_id');
-            $currency_details    = $this->db->select('*')->from('web_setting')->get()->result_array();
-            $quantity            = $this->input->post('product_quantity',TRUE);
-            $invoice_no_generated= $this->input->post('invoic_no');
-            $changeamount        = $this->input->post('change',TRUE);
-            $multipayamount      = $this->input->post('pamount_by_method',TRUE);
-            $multipaytype        = $this->input->post('multipaytype',TRUE);
-            $paidamount          = $this->input->post('paid_amount',TRUE);
-            $invoice_no          = $incremented_id;
-            
-            file_put_contents($log_path, "[INFO] Basic data initialized\n", FILE_APPEND);
+        $createby = $this->session->userdata('id');
+        $createdate = date('Y-m-d H:i:s');
+        $product_id = $this->input->post('product_id');
+        $currency_details = $this->db->select('*')->from('web_setting')->get()->result_array();
+        $quantity = array_map(function($q) {
+            return (float) str_replace(',', '', $q);
+        }, $this->input->post('product_quantity', TRUE));
+        $rate = array_map(function($r) {
+            return (float) str_replace(',', '', $r);
+        }, $this->input->post('product_rate', TRUE));
+        $discount_per = array_map(function($d) {
+            return (float) str_replace(',', '', $d);
+        }, $this->input->post('discount', TRUE));
+        $invoice_no_generated = $this->input->post('invoic_no');
+        $changeamount = $this->input->post('change',TRUE);
+        $multipayamount = $this->input->post('pamount_by_method',TRUE);
+        $multipaytype = $this->input->post('multipaytype',TRUE);
+        $paidamount = $this->input->post('paid_amount',TRUE);
+        $warehouse_ids = $this->input->post('warehouse_id', TRUE);
+        $invoice_no = $incremented_id;
 
-            $bank_id = $this->input->post('bank_id',TRUE);
-            if(!empty($bank_id)){
-                $bankname = $this->db->select('bank_name')->from('bank_add')->where('bank_id',$bank_id)->get()->row()->bank_name;
-            
-                $bankcoaid = $this->db->select('HeadCode')->from('acc_coa')->where('HeadName',$bankname)->get()->row()->HeadCode;
-                file_put_contents($log_path, "[BANK INFO] ID: $bank_id, Name: $bankname, COAID: $bankcoaid\n", FILE_APPEND);
-            }else{
-                $bankcoaid='';
+        file_put_contents($log_path, "[INFO] Basic data initialized\n", FILE_APPEND);
+
+        $bank_id = $this->input->post('bank_id',TRUE);
+        if (!empty($bank_id)) {
+            $bankname = $this->db->select('bank_name')->from('bank_add')->where('bank_id',$bank_id)->get()->row()->bank_name;
+            $bankcoaid = $this->db->select('HeadCode')->from('acc_coa')->where('HeadName',$bankname)->get()->row()->HeadCode;
+            file_put_contents($log_path, "[BANK INFO] ID: $bank_id, Name: $bankname, COAID: $bankcoaid\n", FILE_APPEND);
+        } else {
+            $bankcoaid='';
+        }
+
+        $available_quantity = $this->input->post('available_quantity',TRUE);
+        foreach ($available_quantity as $k => $v) {
+            if ($v < $quantity[$k]) {
+                file_put_contents($log_path, "[ERROR] Product ID {$product_id[$k]} - Requested: {$quantity[$k]}, Available: $v\n", FILE_APPEND);
+                $this->session->set_userdata(array('error_message' => display('you_can_not_buy_greater_than_available_qnty')));
+                redirect('Cinvoice');
             }
-            $available_quantity = $this->input->post('available_quantity',TRUE);
-            $result = array();
-            foreach ($available_quantity as $k => $v) {
-                if ($v < $quantity[$k]) {
-                    file_put_contents($log_path, "[ERROR] Product ID {$product_id[$k]} - Requested: {$quantity[$k]}, Available: $v\n", FILE_APPEND);
-                    $this->session->set_userdata(array('error_message' => display('you_can_not_buy_greater_than_available_qnty')));
-                    redirect('Cinvoice');
-                }
-            }
+        }
 
-            $customer_id = $this->input->post('customer_id',TRUE);
+        $customer_id = $this->input->post('customer_id',TRUE);
         
             //Full or partial Payment record.
             $paid_amount    = $this->input->post('paid_amount',TRUE);
@@ -573,45 +697,12 @@ public function pmethod_dropdown_new(){
                 $is_dynamic = 1;
                 $paid_tax = $this->input->post('total_tax',TRUE);
             }
-
-            // Recalculate grand total price
-
-                $p_id          = $this->input->post('product_id', TRUE);
-                $quantity      = $this->input->post('product_quantity', TRUE);
-                $discount_per  = $this->input->post('discount', TRUE);
-                $recalculated_grand_total = 0;
-            // 🔒 Recalculate grand total securely from validated product data
-                        $recalculated_grand_total = 0;
-                        for ($i = 0, $n = count($p_id); $i < $n; $i++) {
-                            $original_rate = $this->get_product_price($p_id[$i]);
-                            $qty           = $quantity[$i];
-                            $disper        = $discount_per[$i];
-                            $expected_price = round(($original_rate * $qty) - ($original_rate * $qty * $disper / 100), 2);
-                            $recalculated_grand_total += $expected_price;
-                        }
-
-                        // Optional: add validated VAT, tax, and shipping (from trusted backend-calculated values only)
-                        $clean_vat     = (float) str_replace(',', '', $this->input->post('total_vat_amnt', TRUE));
-                        $clean_tax     = (float) str_replace(',', '', $this->input->post('total_tax', TRUE));
-                        $clean_shipping= (float) str_replace(',', '', $this->input->post('shipping_cost', TRUE));
-
-                        // 🧮 Final validated grand total
-                        $grand_total = $recalculated_grand_total + $clean_vat + $clean_tax + $clean_shipping;
-
-                        file_put_contents($log_path, "[VALIDATION] Grand total recalculated securely: $grand_total\n", FILE_APPEND);
-
-                        // (Optional) check if manipulation attempted
-                        $submitted_grand = (float) str_replace(',', '', $this->input->post('grand_total_price', TRUE));
-                        if (abs($submitted_grand - $grand_total) > 0.01) {
-                            file_put_contents($log_path, "[WARNING] Submitted grand total $submitted_grand was overridden with secure value $grand_total\n", FILE_APPEND);
-                        }
-
-            //Data inserting into invoice table 
+            //Data inserting into invoice table
             $datainv = array(
                 'invoice_id'      => $invoice_no,
                 'customer_id'     => $customer_id,
                 'date'            => (!empty($this->input->post('invoice_date',TRUE))?$this->input->post('invoice_date',TRUE):date('Y-m-d')),
-                'total_amount'    => $grand_total,
+                'total_amount'    => $this->input->post('grand_total_price',TRUE),
                 'total_tax'       => $this->input->post('total_tax',TRUE),
                 'invoice'         => $incremented_id,
                 'invoice_details' => (!empty($this->input->post('inva_details',TRUE))?$this->input->post('inva_details',TRUE):'Thank you for shopping with us'),
@@ -642,10 +733,9 @@ public function pmethod_dropdown_new(){
             $purchase_ave = [];
             $i=0;
             foreach ($prinfo as $avg) {
-                $purchase_ave [] =  $avg->product_rate*$quantity[$i];
-
-                file_put_contents($log_path, "[PRODUCT AVG] ID: {$avg->product_id}, Qty: {$quantity[$i]}, Rate: {$avg->product_rate}", FILE_APPEND);
-
+                $qty = isset($quantity[$i]) ? (float)$quantity[$i] : 0;
+                $purchase_ave[] = $avg->product_rate * $qty;
+                file_put_contents($log_path, "[PRODUCT AVG] ID: {$avg->product_id}, Qty: $qty, Rate: {$avg->product_rate}\n", FILE_APPEND);
                 $i++;
             }
             $sumval   = array_sum($purchase_ave);
@@ -708,7 +798,8 @@ public function pmethod_dropdown_new(){
             $customerinfo = $this->db->select('*')->from('customer_information')->where('customer_id',$customer_id)->get()->row();
             $rate                = $this->input->post('product_rate',TRUE);
             $p_id                = $this->input->post('product_id',TRUE);
-            $quantity            = $this->input->post('product_quantity',TRUE);
+            $total_amount        = $this->input->post('total_price',TRUE);
+            $discount_rate       = $this->input->post('discountvalue',TRUE);
             $discount_per        = $this->input->post('discount',TRUE);
             $vat_amnt            = $this->input->post('vatvalue',TRUE);
             $vat_amnt_pcnt       = $this->input->post('vatpercent',TRUE);
@@ -716,89 +807,76 @@ public function pmethod_dropdown_new(){
             $invoice_description = $this->input->post('desc',TRUE);
             $serial_n            = $this->input->post('serial_no',TRUE);
 
-        file_put_contents($log_path, "\n===== [PRODUCT DETAILS START] ===== " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
+            file_put_contents($log_path, "\n===== [PRODUCT DETAILS START] ===== " . date('Y-m-d H:i:s') . "\n", FILE_APPEND);
 
-        for ($i = 0, $n = count($p_id); $i < $n; $i++) {
-            $product_quantity = $quantity[$i];
-            $product_rate     = $rate[$i];
-            $product_id       = $p_id[$i];
-            $serial_no        = (!empty($serial_n[$i])?$serial_n[$i]:null);
-            $disper           = $discount_per[$i];
-            $discount_value   = round(($product_quantity * $product_rate * $disper) / 100, 2);
-            $total_price      = round(($product_quantity * $product_rate) - $discount_value, 2);
+            for ($i = 0, $n = count($p_id); $i < $n; $i++) {
+                $product_quantity = $quantity[$i];
+                $product_rate     = $rate[$i];
+                $product_id       = $p_id[$i];
+                $serial_no        = (!empty($serial_n[$i])?$serial_n[$i]:null);
+                $total_price      = $total_amount[$i];
+                $supplier_rate    = $this->supplier_price($product_id);
+                $disper           = $discount_per[$i];
+                $discount         = $discount_rate[$i];
+                $vatper           = (is_array($vat_amnt_pcnt) && isset($vat_amnt_pcnt[$i])) ? $vat_amnt_pcnt[$i] : 0;
+                $vatanmt          = (is_array($vat_amnt) && isset($vat_amnt[$i])) ? $vat_amnt[$i] : 0;
+                $tax              = ($tax_amount?$tax_amount[$i]:0);
+                $description      = (!empty($invoice_description)?$invoice_description[$i]:null);
+            
+                $data1 = array(
+                    'invoice_details_id' => $this->generator(15),
+                    'invoice_id'         => $inv_insert_id,
+                    'product_id'         => $product_id,
+                    'serial_no'          => '',
+                    'batch_id'           => $serial_no,
+                    'quantity'           => $product_quantity,
+                    'rate'               => $product_rate,
+                    'discount'           => $discount,
+                    'description'        => $description,
+                    'discount_per'       => $disper,
+                    'vat_amnt'           => $vatanmt,
+                    'vat_amnt_per'       => $vatper,
+                    'tax'                => $tax,
+                    'paid_amount'        => $paidamount,
+                    'due_amount'         => $this->input->post('due_amount',TRUE),
+                    'supplier_rate'      => $supplier_rate,
+                    'total_price'        => $total_price,
+                    'status'             => 1
+                );
 
-            // ✅ NEW VALIDATION BLOCK — place it right here
-            $original_rate = $this->get_product_price($product_id);
-            $expected_price = round(($original_rate * $product_quantity) - ($original_rate * $product_quantity * $disper / 100), 2);
+                $product_price = array( 'price' => $product_rate);
 
-            if (abs($total_price - $expected_price) > 0.01) {
-                file_put_contents($log_path, "[VALIDATION WARNING] Product $product_id: Price Mismatch. Expected: $expected_price, Submitted: $total_price\n", FILE_APPEND);
+                file_put_contents($log_path, "[PRODUCT $i] Insert Data: " . json_encode($data1) . "\n", FILE_APPEND);
 
-                // 🛡 Use secure values instead
-                $product_rate = $original_rate;
-                $total_price = $expected_price;
+                if (!empty($quantity)) {
+                    $this->db->insert('invoice_details', $data1);
+                    $this->db->where('product_id', $product_id)->update('product_information', $product_price);
+
+                    file_put_contents($log_path, "[PRODUCT $i] DB Inserted and Updated price to: {$product_price['price']} for Product ID: $product_id\n", FILE_APPEND);
+                }
             }
 
-            $supplier_rate    = $this->supplier_price($product_id);
-            $vatper           = (is_array($vat_amnt_pcnt) && isset($vat_amnt_pcnt[$i])) ? $vat_amnt_pcnt[$i] : 0;
-            $vatanmt          = (is_array($vat_amnt) && isset($vat_amnt[$i])) ? $vat_amnt[$i] : 0;
-            $tax              = ($tax_amount?$tax_amount[$i]:0);
-            $description      = (!empty($invoice_description)?$invoice_description[$i]:null);
-
-            $data1 = array(
-                'invoice_details_id' => $this->generator(15),
-                'invoice_id'         => $inv_insert_id,
-                'product_id'         => $product_id,
-                'serial_no'          => '',
-                'batch_id'           => $serial_no,
-                'quantity'           => $product_quantity,
-                'rate'               => $product_rate,
-                'discount'           => $discount_value,
-                'description'        => $description,
-                'discount_per'       => $disper,
-                'vat_amnt'           => $vatanmt,
-                'vat_amnt_per'       => $vatper,
-                'tax'                => $tax,
-                'paid_amount'        => $paidamount,
-                'due_amount'         => $this->input->post('due_amount',TRUE),
-                'supplier_rate'      => $supplier_rate,
-                'total_price'        => $total_price,
-                'status'             => 1
-            );
-
-            $product_price = array( 'price' => $product_rate);
-
-            file_put_contents($log_path, "[PRODUCT $i] Insert Data: " . json_encode($data1) . "\n", FILE_APPEND);
-
-            if (!empty($quantity)) {
-                $this->db->insert('invoice_details', $data1);
-                $this->db->where('product_id', $product_id)->update('product_information', $product_price);
-
-                file_put_contents($log_path, "[PRODUCT $i] DB Inserted and Updated price to: {$product_price['price']} for Product ID: $product_id\n", FILE_APPEND);
+            file_put_contents($log_path, "===== [PRODUCT DETAILS END] =====\n", FILE_APPEND);
+            
+            if (!empty($cusinfo)) {
+            $message = 'Mr.'.$customerinfo->customer_name.',
+            '.'You have purchase  '.$this->input->post('grand_total_price',TRUE).' '. $currency_details[0]['currency'].' You have paid .'.$this->input->post('paid_amount',TRUE).' '. $currency_details[0]['currency'];
             }
+            
+            $config_data = $this->db->select('*')->from('sms_settings')->get()->row();
+            if($config_data->isinvoice == 1){
+            $smsapi =   $this->smsgateway->send([
+                    'apiProvider' => 'nexmo',
+                    'username'    => $config_data->api_key,
+                    'password'    => $config_data->api_secret,
+                    'from'        => $config_data->from,
+                    'to'          => $customerinfo->customer_mobile,
+                    'message'     => $message
+                ]);
+            }
+            file_put_contents($log_path, "===== [END INVOICE ENTRY] $invoice_no =====\n", FILE_APPEND);
+            return  $invoice_no;
         }
-
-        file_put_contents($log_path, "===== [PRODUCT DETAILS END] =====\n", FILE_APPEND);
-        
-        if (!empty($cusinfo)) {
-        $message = 'Mr.'.$customerinfo->customer_name.',
-        '.'You have purchase  '.$this->input->post('grand_total_price',TRUE).' '. $currency_details[0]['currency'].' You have paid .'.$this->input->post('paid_amount',TRUE).' '. $currency_details[0]['currency'];
-        }
-        
-        $config_data = $this->db->select('*')->from('sms_settings')->get()->row();
-        if($config_data->isinvoice == 1){
-           $smsapi =   $this->smsgateway->send([
-                'apiProvider' => 'nexmo',
-                'username'    => $config_data->api_key,
-                'password'    => $config_data->api_secret,
-                'from'        => $config_data->from,
-                'to'          => $customerinfo->customer_mobile,
-                'message'     => $message
-            ]);
-        }
-        file_put_contents($log_path, "===== [END INVOICE ENTRY] $invoice_no =====\n", FILE_APPEND);
-        return  $invoice_no;
-    }
 
 
     // insert sales debitvoucher
@@ -1360,30 +1438,35 @@ public function pmethod_dropdown_new(){
 
 
         public function retrieve_invoice_html_data($invoice_id) {
-        $this->db->select('a.total_tax,
-                        a.*,
-                        b.*,
-                        c.*,
-                        d.product_id,
-                        d.product_name,
-                        d.product_details,
-                        d.unit,
-                        d.product_model,
-                        a.paid_amount as paid_amount,
-                        a.due_amount as due_amount'
-                    );
-        $this->db->from('invoice a');
-        $this->db->join('invoice_details c', 'c.invoice_id = a.id');
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
-        $this->db->join('product_information d', 'd.product_id = c.product_id');
-        $this->db->where('a.invoice_id', $invoice_id);
-        $this->db->where('c.quantity >', 0);
-        $query = $this->db->get();
-        if ($query->num_rows() > 0) {
-            return $query->result_array();
+            $this->db->select('
+                a.total_tax,
+                a.*,
+                b.*,
+                c.*,
+                d.product_id,
+                d.product_name,
+                d.product_details,
+                d.unit,
+                d.product_model,
+                c.warehouse_id,
+                w.name as warehouse_name,
+                a.paid_amount as paid_amount,
+                a.due_amount as due_amount'
+            );
+            $this->db->from('invoice a');
+            $this->db->join('invoice_details c', 'c.invoice_id = a.id');
+            $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
+            $this->db->join('product_information d', 'd.product_id = c.product_id');
+            $this->db->join('warehouse w', 'w.id = c.warehouse_id', 'left'); // 👈 Join warehouse
+            $this->db->where('a.invoice_id', $invoice_id);
+            $this->db->where('c.quantity >', 0);
+
+            $query = $this->db->get();
+            if ($query->num_rows() > 0) {
+                return $query->result_array();
+            }
+            return false;
         }
-        return false;
-    }
 
     public function retrieve_invoice_html_data_for_pdf($invoice_id)
     {

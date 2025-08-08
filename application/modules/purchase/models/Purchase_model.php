@@ -66,23 +66,27 @@ public function pmethod_dropdown_new(){
    }
 }
 
-     public function product_search_item($supplier_id, $product_name) {
-      $query=$this->db->select('*')
+     public function product_search_item($supplier_id, $product_name)
+        {
+            $query = $this->db->select('b.product_id, b.product_name, b.product_model')
                 ->from('supplier_product a')
-                ->join('product_information b','a.product_id = b.product_id')
-                ->where('a.supplier_id',$supplier_id)
-                ->like('b.product_model', $product_name, 'both')
-                ->or_where('a.supplier_id',$supplier_id)
-                ->like('b.product_name', $product_name, 'both')
+                ->join('product_information b', 'a.product_id = b.product_id')
+                ->group_start() // 🧠 Correct grouping of LIKE clauses
+                    ->like('b.product_name', $product_name, 'both')
+                    ->or_like('b.product_model', $product_name, 'both')
+                ->group_end()
+                ->where('a.supplier_id', $supplier_id) // ✅ Applied after LIKE group
                 ->group_by('a.product_id')
-                ->order_by('b.product_name','asc')
+                ->order_by('b.product_name', 'asc')
                 ->limit(15)
                 ->get();
-        if ($query->num_rows() > 0) {
-            return $query->result_array();  
+
+            if ($query->num_rows() > 0) {
+                return $query->result_array();
+            }
+
+            return false;
         }
-        return false;
-    }
 
         public function retrieve_purchase_editdata($purchase_id) {
         $this->db->select('a.*,

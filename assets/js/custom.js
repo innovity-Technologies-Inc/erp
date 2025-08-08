@@ -1017,88 +1017,93 @@ function customer_form(){
 }
 
 
-  $(document).ready(function () {
-  var CSRF_TOKEN = $('#CSRF_TOKEN').val();
-  var base_url = $('#base_url').val();
+    $(document).ready(function () {
+    var CSRF_TOKEN = $('#CSRF_TOKEN').val();
+    var base_url = $('#base_url').val();
 
-  var mydatatable = $('#CustomerList').DataTable({
-    responsive: true,
-    aaSorting: [[1, "asc"]],
-    columnDefs: [
-      { bSortable: false, aTargets: [0, 2, 3, 4, 5, 6, 7, 9] } // Status (index 8) is now sortable
-    ],
-    processing: true,
-    serverSide: true,
-    lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
-    serverMethod: 'post',
-    ajax: {
-      url: base_url + 'customer/customer/paysenz_CheckCustomerList',
-      data: function (data) {
-        data.csrf_test_name = CSRF_TOKEN;
-        data.customer_id = $('#customer_id').val();
-        data.customfiled = $("select[name='customsearch[]']").val();
-        console.log("DEBUG: Sending AJAX Request ->", data);
-      },
-      dataSrc: function (json) {
-        console.log("DEBUG: Server Response ->", json);
-        return json.aaData || [];
-      }
-    },
-    columns: [
-      {
-        data: null,
-        render: function (data, type, row, meta) {
-          return meta.row + meta.settings._iDisplayStart + 1;
+    var mydatatable = $('#CustomerList').DataTable({
+      responsive: true,
+      aaSorting: [[1, "asc"]],
+      columnDefs: [
+        { bSortable: false, aTargets: [0, 2, 3, 4, 5, 6, 7, 9] } // index 9 = create_date, status (10) is sortable
+      ],
+      processing: true,
+      serverSide: true,
+      lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
+      serverMethod: 'post',
+      ajax: {
+        url: base_url + 'customer/customer/paysenz_CheckCustomerList',
+        data: function (data) {
+          data.csrf_test_name = CSRF_TOKEN;
+          data.customer_id = $('#customer_id').val();
+          data.customfiled = $("select[name='customsearch[]']").val();
+          console.log("DEBUG: Sending AJAX Request ->", data);
+        },
+        dataSrc: function (json) {
+          console.log("DEBUG: Server Response ->", json);
+          return json.aaData || [];
         }
       },
-      { data: 'customer_name' },
-      { data: 'mobile' },
-      { data: 'email' },
-      { data: 'vat_no' },
-      { data: 'sales_permit_number' },
-      {
-        data: 'sales_permit',
-        render: function (data) {
-          return data ? data : '<span class="text-muted">N/A</span>';
-        }
-      },
-      {
-        data: 'balance',
-        className: "balance",
-        render: function (data) {
-          return parseFloat(data).toFixed(2);
-        }
-      },
-      { data: 'create_by' },
-      { data: 'create_date' },
-      {
-        data: 'status',
-        render: function (data) {
-          if (data == 1) {
-            return '<span class="badge badge-success" style="cursor: pointer;" title="Click for more details">Active</span>';
-          } else if (data == 2) {
-            return '<span class="badge badge-danger" style="cursor: pointer;" title="Click for more details">Deleted</span>';
-          } else {
-            return '<span class="badge badge-secondary" style="cursor: pointer;" title="Click for more details">Inactive</span>';
+      columns: [
+        {
+          data: null,
+          render: function (data, type, row, meta) {
+            return meta.row + meta.settings._iDisplayStart + 1;
+          }
+        },
+        { data: 'customer_name' },
+        { data: 'mobile' },
+        { data: 'email' },
+        { data: 'vat_no' },
+        { data: 'sales_permit_number' },
+        {
+          data: 'sales_permit',
+          render: function (data) {
+            return data ? data : '<span class="text-muted">N/A</span>';
+          }
+        },
+        {
+          data: 'balance',
+          className: "balance",
+          render: function (data) {
+            return parseFloat(data).toFixed(2);
+          }
+        },
+        { data: 'channel' }, // ✅ updated from 'create_by'
+        { 
+          data: 'create_date',
+          render: function (data) {
+            return data ? data : '<span class="text-muted">N/A</span>';
+          }
+        },
+        {
+          data: 'status',
+          render: function (data) {
+            if (data == 1) {
+              return '<span class="badge badge-success" style="cursor: pointer;" title="Click for more details">Active</span>';
+            } else if (data == 2) {
+              return '<span class="badge badge-danger" style="cursor: pointer;" title="Click for more details">Deleted</span>';
+            } else {
+              return '<span class="badge badge-secondary" style="cursor: pointer;" title="Click for more details">Inactive</span>';
+            }
+          }
+        },
+        {
+          data: 'button',
+          render: function (data) {
+            console.log("DEBUG: Action Buttons Data ->", data);
+            return data ? data : '<span class="text-muted">No Actions</span>';
           }
         }
-      },
-      {
-        data: 'button',
-        render: function (data) {
-          console.log("DEBUG: Action Buttons Data ->", data);
-          return data ? data : '<span class="text-muted">No Actions</span>';
-        }
-      }
-    ]
-  });
+      ]
+    });
 
-  // Reload on filter change
-  $("#customer_id, #customsearch").on('change', function () {
-    console.log("DEBUG: Reloading DataTable...");
-    mydatatable.ajax.reload();
+    // 🔁 Reload on filter change
+    $("#customer_id, #customsearch").on('change', function () {
+      console.log("DEBUG: Reloading DataTable...");
+      mydatatable.ajax.reload();
+    });
   });
-});
 
 
 
