@@ -2039,14 +2039,14 @@ class Apiv2 extends CI_Controller {
                 return $this->_bad_request('Invalid JSON input: ' . json_last_error_msg());
             }
 
-            // ✅ Required fields validation
-            if (empty($input['username']) || empty($input['password']) || empty($input['fcm_token'])) {
-                return $this->_bad_request('Username, password, and fcm_token are required.');
+            // ✅ Required fields validation (fcm_token is now optional)
+            if (empty($input['username']) || empty($input['password'])) {
+                return $this->_bad_request('Username and password are required.');
             }
 
             $username   = trim($input['username']);
             $password   = trim($input['password']);
-            $fcm_token  = trim($input['fcm_token']);
+            $fcm_token  = !empty($input['fcm_token']) ? trim($input['fcm_token']) : null;
 
             // ✅ Lookup in customer_auth
             $auth_user = $this->db->select('id, customer_id, password, status')
@@ -2074,22 +2074,24 @@ class Apiv2 extends CI_Controller {
             ];
             $second_layer_token = JWT::encode($payload, $this->jwt_key, $this->jwt_algo);
 
-            // ✅ Store FCM token
-            $this->db->where('id', $auth_user->id)->update('customer_auth', [
-                'fcm_token'  => $fcm_token,
-                'updated_at' => date('Y-m-d H:i:s')
-            ]);
-            if ($this->db->affected_rows() === 0) {
-                log_message('warning', '⚠️ FCM token update had no effect for user ID: ' . $auth_user->id);
-            }
+            // ✅ Store FCM token if provided
+            if ($fcm_token) {
+                $this->db->where('id', $auth_user->id)->update('customer_auth', [
+                    'fcm_token'  => $fcm_token,
+                    'updated_at' => date('Y-m-d H:i:s')
+                ]);
+                if ($this->db->affected_rows() === 0) {
+                    log_message('warning', '⚠️ FCM token update had no effect for user ID: ' . $auth_user->id);
+                }
 
-            // ✅ Send push notification
-            $this->load->library('Fcm_lib');
-            $this->fcm_lib->sendNotification(
-                $fcm_token,
-                'Welcome!',
-                'You have successfully logged in to the 2nd layer.'
-            );
+                // ✅ Send push notification only if fcm_token is provided
+                $this->load->library('Fcm_lib');
+                $this->fcm_lib->sendNotification(
+                    $fcm_token,
+                    'Welcome!',
+                    'You have successfully logged in to the 2nd layer.'
+                );
+            }
 
             // ✅ Response
             return $this->_success([
