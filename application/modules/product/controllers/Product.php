@@ -275,7 +275,6 @@ class Product extends MX_Controller {
     {
         $data['title'] = display('add_product');
 
-        #-------------------------------#
         $this->form_validation->set_rules('product_name', display('product_name'), 'required|max_length[200]');
         $this->form_validation->set_rules('model', display('model'), 'max_length[200]');
         $this->form_validation->set_rules('category_id', display('category'), 'required|max_length[20]');
@@ -286,13 +285,8 @@ class Product extends MX_Controller {
         $s_id = $this->input->post('supplier_id', TRUE);
         $product_model = $this->input->post('model', TRUE);
 
-        # Fetch tax settings
-        $taxfield = $this->db->select('tax_name,default_value')
-                            ->from('tax_settings')
-                            ->get()
-                            ->result_array();
+        $taxfield = $this->db->select('tax_name,default_value')->from('tax_settings')->get()->result_array();
 
-        #-------------------------------#
         $data['product'] = (object)$postData = [
             'product_id'     => (!empty($id) ? $id : $product_id),
             'product_name'   => $this->input->post('product_name', TRUE),
@@ -307,7 +301,6 @@ class Product extends MX_Controller {
             'status'         => 1,
         ];
 
-        # Handle dynamic tax columns
         $tablecolumn = $this->db->list_fields('tax_collection');
         $num_column = count($tablecolumn) - 4;
         if ($num_column > 0) {
@@ -320,20 +313,13 @@ class Product extends MX_Controller {
             }
         }
 
-        #-------------------------------#
         if ($this->form_validation->run() === true) {
-
-            // ✅ Image validation only during POST/form submission
+            // ✅ Optional image handling with fallback to default
             $image = $this->process_product_image('image', './my-assets/image/product/');
-            if (!$image && empty($this->input->post('old_image', TRUE))) {
-                $this->session->set_flashdata('exception', 'Invalid image. Please upload JPG, PNG, or SVG.');
-                redirect($_SERVER['HTTP_REFERER']);
-            }
+            $image = (!empty($image)) ? $image : $this->input->post('old_image', TRUE);
+            $postData['image'] = (!empty($image)) ? $image : 'my-assets/image/product.png';
 
-            $image = (!empty($image) ? $image : $this->input->post('old_image', TRUE));
-            $postData['image'] = (!empty($image) ? $image : 'my-assets/image/product.png');
-
-            if (empty($id)) {  # Insert new product
+            if (empty($id)) {  // Insert
                 if ($this->product_model->create_product($postData)) {
                     for ($i = 0, $n = count($s_id); $i < $n; $i++) {
                         $supp_id = $s_id[$i];
@@ -350,7 +336,7 @@ class Product extends MX_Controller {
                     $this->session->set_flashdata('exception', display('please_try_again'));
                 }
                 redirect("product_list");
-            } else {  # Update existing product
+            } else {  // Update
                 if ($this->product_model->update_product($postData)) {
                     $this->db->where('product_id', $id)->delete("supplier_product");
                     for ($i = 0, $n = count($s_id); $i < $n; $i++) {
@@ -374,13 +360,10 @@ class Product extends MX_Controller {
             if (!empty($id)) {
                 $data['title'] = display('edit_product');
                 $data['product'] = $this->product_model->single_product_data($id);
-
-                // Fetch parent/sub/child category ids
                 $category_ids = $this->product_model->get_category_hierarchy($data['product']->category_id);
                 $data = array_merge($data, $category_ids);
             }
 
-            # ✅ Fetch Parent & Child Categories
             $data['parent_categories'] = $this->product_model->get_parent_categories();
             $data['sub_categories'] = $this->product_model->get_sub_categories();
             $data['child_categories'] = $this->product_model->get_child_categories();
