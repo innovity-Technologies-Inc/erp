@@ -562,7 +562,9 @@ class Apiv2 extends CI_Controller {
                     if (!empty($v['image'])) {
                         $products[$k]['image'] = base_url(str_replace('./', '', $v['image']));
                     }
-
+                    else{
+                         $products[$k]['image']=null;
+                    }
                     // ✅ Add Category Name
                     $products[$k]['category_name'] = $category_map[$v['category_id']] ?? '';
 
