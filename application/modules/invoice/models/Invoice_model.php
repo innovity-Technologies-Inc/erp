@@ -850,7 +850,7 @@ public function pmethod_dropdown_new(){
 
                 if (!empty($quantity)) {
                     $this->db->insert('invoice_details', $data1);
-                    $this->db->where('product_id', $product_id)->update('product_information', $product_price);
+                   // $this->db->where('product_id', $product_id)->update('product_information', $product_price);
 
                     file_put_contents($log_path, "[PRODUCT $i] DB Inserted and Updated price to: {$product_price['price']} for Product ID: $product_id\n", FILE_APPEND);
                 }
@@ -1245,7 +1245,7 @@ public function pmethod_dropdown_new(){
             );
             $this->db->insert('invoice_details', $data1);
 
-            $this->db->where('product_id', $product_id)->update('product_information', $product_price);
+          //  $this->db->where('product_id', $product_id)->update('product_information', $product_price);
             
 
            
