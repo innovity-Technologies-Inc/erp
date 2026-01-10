@@ -50,7 +50,6 @@ application/config/database.php
 # ========================
 #  Ignore Generated & Uploaded Files
 # ========================
-vendor/*
 # assets/*
 my-assets/image/*
 uploads/*
