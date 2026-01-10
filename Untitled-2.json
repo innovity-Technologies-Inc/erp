@@ -1,0 +1,78 @@
+{
+    "response":
+                {
+                    "status":"ok",
+                    "customers":
+                                [
+                                    {
+                                        "customer_id":"1",
+                                        "customer_name":"PaySenz Merchant1",
+                                        "customer_address":"",
+                                        "address2":"",
+                                        "customer_mobile":"",
+                                        "customer_email":"paysenz.merchant1@gmail.com",
+                                        "email_address":"",
+                                        "contact":"",
+                                        "phone":"",
+                                        "fax":"",
+                                        "city":"",
+                                        "state":"",
+                                        "zip":"",
+                                        "country":"",
+                                        "status":"1",
+                                        "create_date":"2025-02-22 14:39:44",
+                                        "create_by":"1"},
+                                    {
+                                        "customer_id":"2",
+                                        "customer_name":null,
+                                        "customer_address":null,
+                                        "address2":"",
+                                        "customer_mobile":null,
+                                        "customer_email":null,
+                                        "email_address":null,
+                                        "contact":null,
+                                        "phone":null,
+                                        "fax":null,
+                                        "city":null,
+                                        "state":null,
+                                        "zip":null,
+                                        "country":null,
+                                        "status":"1",
+                                        "create_date":"2025-02-26 18:45:20",
+                                        "create_by":null
+                                    }
+                                ],
+                                "total_val":2,
+                                "csrf_test_name":null,
+                                "permission":"read"
+                }
+}
+
+
+{
+    "response":
+    {
+        "status":"ok",
+        "customers":
+        {
+            "customer_id":"2",
+            "customer_name":null,
+            "customer_address":null,
+            "address2":"",
+            "customer_mobile":null,
+            "customer_email":null,
+            "email_address":null,
+            "contact":null,
+            "phone":null,
+            "fax":null,
+            "city":null,
+            "state":null,
+            "zip":null,
+            "country":null,
+            "status":"1",
+            "create_date":"2025-02-26 18:45:20",
+            "create_by":null
+        },
+        "permission":"write"
+    }
+}

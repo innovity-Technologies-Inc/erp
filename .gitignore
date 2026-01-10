@@ -1,0 +1,58 @@
+# ========================
+#  Ignore macOS System Files
+# ========================
+.DS_Store
+**/.DS_Store
+**/._*
+
+# ========================
+#  Ignore Logs, Cache & Temporary Files
+# ========================
+application/logs/
+application/logs/*.log
+application/logs/log-*.php
+application/cache/
+application/cache/temp/
+storage/logs/
+storage/framework/cache/
+storage/framework/sessions/
+storage/framework/views/
+*.log
+*.tmp
+*.cache
+
+# ========================
+#  Ignore User-Specific and Editor Files
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ========================
+#  Ignore Compiled Files and Dependencies
+# ========================
+vendor/
+node_modules/
+composer.lock
+package-lock.json
+yarn.lock
+
+# ========================
+#  Ignore Database Backups & Config
+# ========================
+application/config/database.php
+*.sql
+*.sqlite
+*.bak
+*.db
+
+# ========================
+#  Ignore Generated & Uploaded Files
+# ========================
+vendor/*
+# assets/*
+my-assets/image/*
+uploads/*
+application/libraries/firebase-service-account.json
+application/config/database.php
