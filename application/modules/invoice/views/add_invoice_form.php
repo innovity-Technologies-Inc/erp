@@ -15,51 +15,51 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                 <div class="panel-title">
                     <span><?php echo display('new_invoice') ?></span>
                     <span class="padding-lefttitle">
-                        <?php if($this->permission1->method('manage_invoice','read')->access()){ ?>
-                        <a href="<?php echo base_url('invoice_list') ?>" class="btn btn-info m-b-5 m-r-2"><i
-                                class="ti-align-justify"> </i> <?php echo display('manage_invoice') ?> </a>
-                        <?php }?>
-                        
+                        <?php if ($this->permission1->method('manage_invoice', 'read')->access()) { ?>
+                            <a href="<?php echo base_url('invoice_list') ?>" class="btn btn-info m-b-5 m-r-2"><i
+                                    class="ti-align-justify"> </i> <?php echo display('manage_invoice') ?> </a>
+                        <?php } ?>
+
                 </div>
             </div>
 
             <div class="panel-body">
-                <?php echo form_open_multipart('invoice/invoice/paysenz_manual_sales_insert',array('class' => 'form-vertical', 'id' => 'insert_sale','name' => 'insert_sale'))?>
+                <?php echo form_open_multipart('invoice/invoice/paysenz_manual_sales_insert', array('class' => 'form-vertical', 'id' => 'insert_sale', 'name' => 'insert_sale')) ?>
                 <div class="row">
 
                     <div class="col-sm-6" id="payment_from_1">
-    <div class="form-group row">
-        <label for="customer_name" class="col-sm-3 col-form-label">
-            <?php echo display('customer_name'); ?> <i class="text-danger">*</i>
-        </label>
-        <div class="col-sm-6">
-            <input type="text" size="100" name="customer_name" class="form-control"
-                placeholder='<?php echo display('customer_name') ?>' id="customer_name"
-                tabindex="1" onkeyup="customer_autocomplete()"
-                value="<?php echo $customer_name ?>" />
+                        <div class="form-group row">
+                            <label for="customer_name" class="col-sm-3 col-form-label">
+                                <?php echo display('customer_name'); ?> <i class="text-danger">*</i>
+                            </label>
+                            <div class="col-sm-6">
+                                <input type="text" size="100" name="customer_name" class="form-control"
+                                    placeholder='<?php echo display('customer_name') ?>' id="customer_name"
+                                    tabindex="1" onkeyup="customer_autocomplete()"
+                                    value="<?php echo $customer_name ?>" />
 
-            <input id="autocomplete_customer_id" class="customer_hidden_value abc" type="hidden"
-                name="customer_id" value="<?php echo $customer_id ?>">
-        </div>
-        <?php if($this->permission1->method('add_customer','create')->access()){ ?>
-        <div class=" col-sm-3">
-            <a href="#" class="client-add-btn btn btn-success" aria-hidden="true"
-                data-toggle="modal" data-target="#cust_info"><i class="ti-plus m-r-2"></i></a>
-        </div>
-        <?php } ?>
-    </div>
-    
-    <div class="form-group row">
-        <label for="phone" class="col-sm-3 col-form-label">
-            <?php echo display('phone'); ?> <i class="text-danger">*</i>
-        </label>
-        <div class="col-sm-6">
-            <input type="text" size="100" name="phone" class="form-control"
-                placeholder='<?php echo display('phone') ?>' id="customer_phone"
-                value="<?php echo isset($customer_phone) ? $customer_phone : '' ?>" readonly />
-        </div>
-    </div>
-</div>
+                                <input id="autocomplete_customer_id" class="customer_hidden_value abc" type="hidden"
+                                    name="customer_id" value="<?php echo $customer_id ?>">
+                            </div>
+                            <?php if ($this->permission1->method('add_customer', 'create')->access()) { ?>
+                                <div class=" col-sm-3">
+                                    <a href="#" class="client-add-btn btn btn-success" aria-hidden="true"
+                                        data-toggle="modal" data-target="#cust_info"><i class="ti-plus m-r-2"></i></a>
+                                </div>
+                            <?php } ?>
+                        </div>
+
+                        <div class="form-group row">
+                            <label for="phone" class="col-sm-3 col-form-label">
+                                <?php echo display('phone'); ?> <i class="text-danger">*</i>
+                            </label>
+                            <div class="col-sm-6">
+                                <input type="text" size="100" name="phone" class="form-control"
+                                    placeholder='<?php echo display('phone') ?>' id="customer_phone"
+                                    value="<?php echo isset($customer_phone) ? $customer_phone : '' ?>" readonly />
+                            </div>
+                        </div>
+                    </div>
 
                 </div>
 
@@ -70,27 +70,27 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                     class="text-danger">*</i></label>
                             <div class="col-sm-6">
                                 <?php
-                               
-                                        $date = date('Y-m-d');
-                                        ?>
+
+                                $date = date('Y-m-d');
+                                ?>
                                 <input class="datepicker form-control" type="text" size="50" name="invoice_date"
                                     id="date" required value="<?php echo html_escape($date); ?>" tabindex="4" />
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="col-sm-6" id="bank_div">
                         <div class="form-group row">
                             <label for="bank" class="col-sm-3 col-form-label"><?php
-                                    echo display('bank');
-                                    ?> <i class="text-danger">*</i></label>
+                                                                                echo display('bank');
+                                                                                ?> <i class="text-danger">*</i></label>
                             <div class="col-sm-6">
                                 <select name="bank_id" class="form-control bankpayment" id="bank_id">
                                     <option value="">Select Location</option>
-                                    <?php foreach($bank_list as $bank){?>
-                                    <option value="<?php echo html_escape($bank['bank_id'])?>">
-                                        <?php echo html_escape($bank['bank_name']);?></option>
-                                    <?php }?>
+                                    <?php foreach ($bank_list as $bank) { ?>
+                                        <option value="<?php echo html_escape($bank['bank_id']) ?>">
+                                            <?php echo html_escape($bank['bank_name']); ?></option>
+                                    <?php } ?>
                                 </select>
 
                             </div>
@@ -105,9 +105,10 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                             <tr>
                                 <th class="text-center product_field"><?php echo display('item_information') ?> <i
                                         class="text-danger">*</i></th>
-                                <th class="text-center"><?php echo display('item_description')?></th>
-                                <th class="text-center"><?php echo display('batch_no')?><i class="text-danger">*</i>
+                                <th class="text-center"><?php echo display('item_description') ?></th>
+                                <th class="text-center"><?php echo display('batch_no') ?><i class="text-danger">*</i>
                                 </th>
+                                <th class="text-center"><?php echo display('warehouse'); ?></th>
                                 <th class="text-center"><?php echo display('available_qnty') ?></th>
                                 <th class="text-center"><?php echo display('unit') ?></th>
                                 <th class="text-center"><?php echo display('quantity') ?> <i class="text-danger">*</i>
@@ -115,12 +116,12 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                 <th class="text-center"><?php echo display('rate') ?> <i class="text-danger">*</i></th>
 
                                 <?php if ($discount_type == 1) { ?>
-                                <th class="text-center invoice_fields"><?php echo display('discount_percentage') ?> %
-                                </th>
+                                    <th class="text-center invoice_fields"><?php echo display('discount_percentage') ?> %
+                                    </th>
                                 <?php } elseif ($discount_type == 2) { ?>
-                                <th class="text-center invoice_fields"><?php echo display('discount') ?> </th>
+                                    <th class="text-center invoice_fields"><?php echo display('discount') ?> </th>
                                 <?php } elseif ($discount_type == 3) { ?>
-                                <th class="text-center invoice_fields"><?php echo display('fixed_dis') ?> </th>
+                                    <th class="text-center invoice_fields"><?php echo display('fixed_dis') ?> </th>
                                 <?php } ?>
                                 <th class="text-center invoice_fields"><?php echo display('dis_val') ?> </th>
 
@@ -151,6 +152,17 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                     </select>
                                 </td>
                                 <td>
+                                    <select class="form-control basic-single" id="warehouse_1" name="warehouse_id[]" tabindex="8">
+                                        <option value="">Select Warehouse</option>
+                                        <?php
+                                        $warehouses = $this->db->select('id, name')->from('warehouse')->where('status', 1)->get()->result();
+                                        foreach ($warehouses as $warehouse) {
+                                            echo '<option value="' . $warehouse->id . '">' . $warehouse->name . '</option>';
+                                        }
+                                        ?>
+                                    </select>
+                                </td>
+                                <td>
                                     <input type="text" name="available_quantity[]"
                                         class="form-control text-right available_quantity_1" value="0" readonly="" />
                                 </td>
@@ -176,7 +188,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                     <input type="text" name="discount[]" onkeyup="paysenz_invoice_quantity_calculate(1);"
                                         onchange="paysenz_invoice_quantity_calculate(1);" id="discount_1"
                                         class="form-control text-right" min="0" tabindex="10" placeholder="0.00" />
-                                    <input type="hidden" value="<?php echo $discount_type?>" name="discount_type"
+                                    <input type="hidden" value="<?php echo $discount_type ?>" name="discount_type"
                                         id="discount_type_1">
 
                                 </td>
@@ -187,7 +199,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                 </td>
 
                                 <!-- VAT  -->
-                                
+
                                 <!-- VAT end -->
 
                                 <td class="invoice_fields">
@@ -246,7 +258,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                 </td>
                             </tr> -->
                             <input type="hidden" id="total_vat_amnt" class="form-control text-right"
-                                        name="total_vat_amnt" value="0.00" readonly="readonly" />
+                                name="total_vat_amnt" value="0.00" readonly="readonly" />
                             <tr>
                             <tr>
                                 <td class="text-right" colspan="9"><b><?php echo display('shipping_cost') ?>:</b></td>
@@ -307,7 +319,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                         </tfoot>
                     </table>
                     <input type="hidden" name="finyear" value="<?php echo financial_year(); ?>">
-                    <p hidden id="old-amount"><?php echo 0;?></p>
+                    <p hidden id="old-amount"><?php echo 0; ?></p>
                     <p hidden id="pay-amount"></p>
                     <p hidden id="change-amount"></p>
                     <div class="col-sm-6 table-bordered p-20">
@@ -315,16 +327,16 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                             <div class="row no-gutters">
                                 <div class="form-group col-md-6">
                                     <label for="payments"
-                                        class="col-form-label pb-2"><?php echo display('payment_type');?></label>
+                                        class="col-form-label pb-2"><?php echo display('payment_type'); ?></label>
 
-                                    <?php 
-                                    $card_type=1020101; 
-                                    echo form_dropdown('multipaytype[]',$all_pmethod,(!empty($card_type)?$card_type:null),' onchange = "check_creditsale()" class="card_typesl postform resizeselect form-control "') ?>
+                                    <?php
+                                    $card_type = 1020101;
+                                    echo form_dropdown('multipaytype[]', $all_pmethod, (!empty($card_type) ? $card_type : null), ' onchange = "check_creditsale()" class="card_typesl postform resizeselect form-control "') ?>
 
                                 </div>
                                 <div class="form-group col-md-6">
                                     <label for="4digit"
-                                        class="col-form-label pb-2"><?php echo display('paid_amount');?></label>
+                                        class="col-form-label pb-2"><?php echo display('paid_amount'); ?></label>
 
                                     <input type="text" id="pamount_by_method" class="form-control number pay "
                                         name="pamount_by_method[]" value="" onkeyup="changedueamount()"
@@ -342,7 +354,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                 <div class="col-sm-12 pr-0">
 
                                     <button type="button" id="add_new_payment_type"
-                                        class="btn btn-success w-md m-b-5"><?php echo display('new_p_method');?></button>
+                                        class="btn btn-success w-md m-b-5"><?php echo display('new_p_method'); ?></button>
                                 </div>
                             </div>
 
@@ -356,7 +368,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
 
                     </div>
                 </div>
-                <?php echo form_close()?>
+                <?php echo form_close() ?>
             </div>
 
         </div>
@@ -365,12 +377,12 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
 
 </div>
 <script>
-function printRawHtml(view) {
-    printJS({
-        printable: view,
-        type: 'raw-html',
+    function printRawHtml(view) {
+        printJS({
+            printable: view,
+            type: 'raw-html',
 
-    });
+        });
 
-}
+    }
 </script>
