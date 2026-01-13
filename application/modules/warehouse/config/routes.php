@@ -1,5 +1,5 @@
 <?php
-defined('BASEPATH') OR exit('No direct script access allowed');
+defined('BASEPATH') or exit('No direct script access allowed');
 
 
 $route['warehouse/manage_batch'] = 'warehouse/manage_batch';
@@ -7,6 +7,8 @@ $route['warehouse/stock_movement'] = 'warehouse/stock_movement';
 $route['warehouse/manage'] = 'warehouse/index';
 $route['warehouse/add'] = 'warehouse/Warehouse/add';
 $route['warehouse/insert'] = 'warehouse/Warehouse/insert';
+$route['warehouse/edit/(:num)'] = 'warehouse/Warehouse/edit/$1';
+$route['warehouse/update'] = 'warehouse/Warehouse/update';
 $route['warehouse/edit_batch/(:num)'] = 'warehouse/edit_batch/$1';
 $route['warehouse/update_batch'] = 'warehouse/update_batch';
 $route['warehouse/stock_movement_history'] = 'warehouse/stock_movement_history';
