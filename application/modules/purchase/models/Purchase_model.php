@@ -1,95 +1,100 @@
 <?php
-defined('BASEPATH') OR exit('No direct script access allowed');
- #------------------------------------    
-    # Author: PaySenz Ltd.
-    # Author link: https://www.paysenz.com/
-    # Dynamic style php file
-    # Developed by :Faiz Shiraji
-    #------------------------------------    
+defined('BASEPATH') or exit('No direct script access allowed');
+#------------------------------------    
+# Author: PaySenz Ltd.
+# Author link: https://www.paysenz.com/
+# Dynamic style php file
+# Developed by :Faiz Shiraji
+#------------------------------------    
 
-class Purchase_model extends CI_Model {
+class Purchase_model extends CI_Model
+{
 
     public function __construct()
     {
         parent::__construct();
-  
-        $this->load->model(array('account/Accounts_model')); 
-        
+
+        $this->load->model(array('account/Accounts_model'));
     }
 
- public function supplier_list(){
-    $maxid = $this->Accounts_model->getMaxFieldNumber('id','acc_vaucher','Vtype','DV','VNo');
-     $query = $this->db->select('*')
-                ->from('supplier_information')
-                ->where('status', '1')
-                ->get();
+    public function supplier_list()
+    {
+        $maxid = $this->Accounts_model->getMaxFieldNumber('id', 'acc_vaucher', 'Vtype', 'DV', 'VNo');
+        $query = $this->db->select('*')
+            ->from('supplier_information')
+            ->where('status', '1')
+            ->get();
         if ($query->num_rows() > 0) {
             return $query->result_array();
         }
         return false;
- }
+    }
 
- public function pmethod_dropdown(){
-    $data = $this->db->select('*')
+    public function pmethod_dropdown()
+    {
+        $data = $this->db->select('*')
             ->from('acc_coa')
-            ->where('PHeadName','Cash')
-            ->or_where('PHeadName','Cash at Bank')
+            ->where('PHeadName', 'Cash')
+            ->or_where('PHeadName', 'Cash at Bank')
             ->get()
-            ->result(); 
+            ->result();
 
-   $list[''] = 'Select Method';
-   if (!empty($data)) {
-    $list[0] = 'Credit Purchase';
-       foreach($data as $value)
-           $list[$value->HeadCode] = $value->HeadName;
-       return $list;
-   } else {
-       return false; 
-   }
-}
-public function pmethod_dropdown_new(){
-    $data = $this->db->select('*')
-            ->from('acc_coa')
-            ->where('PHeadName','Cash')
-            ->or_where('PHeadName','Cash at Bank')
-            ->get()
-            ->result(); 
-
-   $list[''] = 'Select Method';
-   if (!empty($data)) {
-    
-       foreach($data as $value)
-           $list[$value->HeadCode] = $value->HeadName;
-       return $list;
-   } else {
-       return false; 
-   }
-}
-
-     public function product_search_item($supplier_id, $product_name)
-        {
-            $query = $this->db->select('b.product_id, b.product_name, b.product_model')
-                ->from('supplier_product a')
-                ->join('product_information b', 'a.product_id = b.product_id')
-                ->group_start() // 🧠 Correct grouping of LIKE clauses
-                    ->like('b.product_name', $product_name, 'both')
-                    ->or_like('b.product_model', $product_name, 'both')
-                ->group_end()
-                ->where('a.supplier_id', $supplier_id) // ✅ Applied after LIKE group
-                ->group_by('a.product_id')
-                ->order_by('b.product_name', 'asc')
-                ->limit(15)
-                ->get();
-
-            if ($query->num_rows() > 0) {
-                return $query->result_array();
-            }
-
+        $list[''] = 'Select Method';
+        if (!empty($data)) {
+            $list[0] = 'Credit Purchase';
+            foreach ($data as $value)
+                $list[$value->HeadCode] = $value->HeadName;
+            return $list;
+        } else {
             return false;
         }
+    }
+    public function pmethod_dropdown_new()
+    {
+        $data = $this->db->select('*')
+            ->from('acc_coa')
+            ->where('PHeadName', 'Cash')
+            ->or_where('PHeadName', 'Cash at Bank')
+            ->get()
+            ->result();
 
-        public function retrieve_purchase_editdata($purchase_id) {
-        $this->db->select('a.*,
+        $list[''] = 'Select Method';
+        if (!empty($data)) {
+
+            foreach ($data as $value)
+                $list[$value->HeadCode] = $value->HeadName;
+            return $list;
+        } else {
+            return false;
+        }
+    }
+
+    public function product_search_item($supplier_id, $product_name)
+    {
+        $query = $this->db->select('b.product_id, b.product_name, b.product_model')
+            ->from('supplier_product a')
+            ->join('product_information b', 'a.product_id = b.product_id')
+            ->group_start() // 🧠 Correct grouping of LIKE clauses
+            ->like('b.product_name', $product_name, 'both')
+            ->or_like('b.product_model', $product_name, 'both')
+            ->group_end()
+            ->where('a.supplier_id', $supplier_id) // ✅ Applied after LIKE group
+            ->group_by('a.product_id')
+            ->order_by('b.product_name', 'asc')
+            ->limit(15)
+            ->get();
+
+        if ($query->num_rows() > 0) {
+            return $query->result_array();
+        }
+
+        return false;
+    }
+
+    public function retrieve_purchase_editdata($purchase_id)
+    {
+        $this->db->select(
+            'a.*,
                         b.*,
                         a.id as dbpurs_id,
                         c.product_id,
@@ -111,7 +116,8 @@ public function pmethod_dropdown_new(){
         return false;
     }
 
-        public function get_total_product($product_id, $supplier_id) {
+    public function get_total_product($product_id, $supplier_id)
+    {
         $this->db->select('SUM(a.quantity) as total_purchase,b.*');
         $this->db->from('product_purchase_details a');
         $this->db->join('supplier_product b', 'a.product_id=b.product_id');
@@ -145,7 +151,8 @@ public function pmethod_dropdown_new(){
         return $data2;
     }
 
-     public function count_purchase() {
+    public function count_purchase()
+    {
         $this->db->select('a.*,b.supplier_name');
         $this->db->from('product_purchase a');
         $this->db->join('supplier_information b', 'b.supplier_id = a.supplier_id');
@@ -159,17 +166,18 @@ public function pmethod_dropdown_new(){
         return false;
     }
 
-    public function getPurchaseList($postData=null) {
+    public function getPurchaseList($postData = null)
+    {
         $response = array();
         $fromdate = $this->input->post('fromdate');
         $todate   = $this->input->post('todate');
-        
+
         if (!empty($fromdate)) {
             $datbetween = "(a.purchase_date BETWEEN '$fromdate' AND '$todate')";
         } else {
             $datbetween = "";
         }
-    
+
         ## Read value
         $draw = $postData['draw'];
         $start = $postData['start'];
@@ -178,46 +186,46 @@ public function pmethod_dropdown_new(){
         $columnName = $postData['columns'][$columnIndex]['data']; // Column name
         $columnSortOrder = $postData['order'][0]['dir']; // asc or desc
         $searchValue = $postData['search']['value']; // Search value
-    
+
         ## Search Query
         $searchQuery = "";
         if ($searchValue != '') {
-            $searchQuery = " (b.supplier_name like '%".$searchValue."%' 
-                             or a.chalan_no like '%".$searchValue."%' 
-                             or a.purchase_id like '%".$searchValue."%' 
-                             or a.purchase_id like '%".$searchValue."%')";
+            $searchQuery = " (b.supplier_name like '%" . $searchValue . "%' 
+                             or a.chalan_no like '%" . $searchValue . "%' 
+                             or a.purchase_id like '%" . $searchValue . "%' 
+                             or a.purchase_id like '%" . $searchValue . "%')";
         }
-    
+
         ## Total number of records without filtering
         $this->db->select('count(*) as allcount');
         $this->db->from('product_purchase a');
         $this->db->join('supplier_information b', 'b.supplier_id = a.supplier_id', 'left');
-        
+
         if (!empty($fromdate) && !empty($todate)) {
             $this->db->where($datbetween);
         }
         if ($searchValue != '') {
             $this->db->where($searchQuery);
         }
-        
+
         $records = $this->db->get()->result();
         $totalRecords = $records[0]->allcount;
-    
+
         ## Total number of records with filtering
         $this->db->select('count(*) as allcount');
         $this->db->from('product_purchase a');
         $this->db->join('supplier_information b', 'b.supplier_id = a.supplier_id', 'left');
-        
+
         if (!empty($fromdate) && !empty($todate)) {
             $this->db->where($datbetween);
         }
         if ($searchValue != '') {
             $this->db->where($searchQuery);
         }
-    
+
         $records = $this->db->get()->result();
         $totalRecordwithFilter = $records[0]->allcount;
-    
+
         ## Fetch records with expiry_date from product_purchase_details
         $this->db->select('
             a.*, 
@@ -227,43 +235,43 @@ public function pmethod_dropdown_new(){
         $this->db->from('product_purchase a');
         $this->db->join('supplier_information b', 'b.supplier_id = a.supplier_id', 'left');
         $this->db->join('product_purchase_details c', 'c.purchase_id = a.purchase_id', 'left'); // ✅ Join with details table
-        
+
         if (!empty($fromdate) && !empty($todate)) {
             $this->db->where($datbetween);
         }
         if ($searchValue != '') {
             $this->db->where($searchQuery);
         }
-        
+
         $this->db->group_by('a.purchase_id'); // ✅ Group by purchase_id to avoid duplicates
         $this->db->order_by($columnName, $columnSortOrder);
         $this->db->limit($rowperpage, $start);
-        
+
         $records = $this->db->get()->result();
         $data = array();
-        $sl = 1;
-    
+        $sl = $start + 1;
+
         foreach ($records as $record) {
             $button = '';
             $base_url = base_url();
             $jsaction = "return confirm('Are You Sure ?')";
-    
-            $button .= '<a href="'.$base_url.'purchase_details/'.$record->purchase_id.'" class="btn btn-success btn-sm" data-toggle="tooltip" data-placement="left" title="'.display('purchase_details').'"><i class="fa fa-window-restore" aria-hidden="true"></i></a>';
-    
+
+            $button .= '<a href="' . $base_url . 'purchase_details/' . $record->purchase_id . '" class="btn btn-success btn-sm" data-toggle="tooltip" data-placement="left" title="' . display('purchase_details') . '"><i class="fa fa-window-restore" aria-hidden="true"></i></a>';
+
             if ($this->permission1->method('manage_purchase', 'update')->access()) {
                 $approve = $this->db->select('status, referenceNo')
                     ->from('acc_vaucher')
                     ->where('referenceNo', $record->purchase_id)
                     ->where('status', 1)
                     ->get()->num_rows();
-    
+
                 if ($approve == 0) {
-                    $button .= ' <a href="'.$base_url.'purchase_edit/'.$record->purchase_id.'" class="btn btn-info btn-sm" data-toggle="tooltip" data-placement="left" title="'. display('update').'"><i class="fa fa-pencil" aria-hidden="true"></i></a> ';
+                    $button .= ' <a href="' . $base_url . 'purchase_edit/' . $record->purchase_id . '" class="btn btn-info btn-sm" data-toggle="tooltip" data-placement="left" title="' . display('update') . '"><i class="fa fa-pencil" aria-hidden="true"></i></a> ';
                 }
             }
-    
-            $purchase_ids = '<a href="'.$base_url.'purchase_details/'.$record->purchase_id.'">'.$record->purchase_id.'</a>';
-    
+
+            $purchase_ids = '<a href="' . $base_url . 'purchase_details/' . $record->purchase_id . '">' . $record->purchase_id . '</a>';
+
             $data[] = array(
                 'sl'            => $sl,
                 'chalan_no'     => $record->chalan_no,
@@ -276,19 +284,20 @@ public function pmethod_dropdown_new(){
             );
             $sl++;
         }
-    
+
         ## Response
         $response = array(
             "draw"                => intval($draw),
             "iTotalRecords"       => $totalRecordwithFilter,
-            "iTotalDisplayRecords"=> $totalRecords,
+            "iTotalDisplayRecords" => $totalRecords,
             "aaData"              => $data
         );
-    
+
         return $response;
     }
 
-    public function purchase_details_data($purchase_id) {
+    public function purchase_details_data($purchase_id)
+    {
         $this->db->select('a.*,b.*,c.*,e.purchase_details,d.product_id,d.product_name,d.product_model');
         $this->db->from('product_purchase a');
         $this->db->join('supplier_information b', 'b.supplier_id = a.supplier_id');
@@ -305,11 +314,12 @@ public function pmethod_dropdown_new(){
     }
 
     /*invoice no generator*/
-    public function number_generator() {
+    public function number_generator()
+    {
         $this->db->select_max('purchase_id');
         $query = $this->db->get('product_purchase');
         $result = $query->row();
-    
+
         if ($result->purchase_id) {
             return $result->purchase_id + 1;
         } else {
@@ -317,46 +327,47 @@ public function pmethod_dropdown_new(){
         }
     }
 
-    public function insert_purchase() {
+    public function insert_purchase()
+    {
         // Generate the next purchase_id (last purchase_id + 1)
         $purchase_id = $this->number_generator();
-    
+
         // ✅ Prevent Duplicate Submission
         if ($this->session->flashdata('submitted_purchase') === $purchase_id) {
             $this->session->set_flashdata('error', 'Duplicate submission detected.');
             redirect('purchase/add');
         }
         $this->session->set_flashdata('submitted_purchase', $purchase_id);
-    
+
         // ✅ Ensure invoice_no is unique
         $existing_invoice = $this->db->get_where('product_purchase', ['purchase_id' => $purchase_id])->row();
         if ($existing_invoice) {
             $this->session->set_flashdata('error', 'Invoice number already exists. Try again.');
             redirect('purchase/add');
         }
-    
+
         $p_id            = $this->input->post('product_id', TRUE);
         $batch_no        = $this->input->post('batch_no', TRUE);
         $expiry_date     = $this->input->post('expiry_date', TRUE);
-        $product_quantity= $this->input->post('product_quantity', TRUE);
-    
+        $product_quantity = $this->input->post('product_quantity', TRUE);
+
         $supplier_id = $this->input->post('supplier_id', TRUE);
         $supinfo     = $this->db->select('*')->from('supplier_information')->where('supplier_id', $supplier_id)->get()->row();
         $sup_head    = $supinfo->supplier_id . '-' . $supinfo->supplier_name;
         $sup_coa     = $this->db->select('*')->from('acc_coa')->where('HeadName', $sup_head)->get()->row();
         $receive_by  = $this->session->userdata('id');
-        $receive_date= date('Y-m-d');
+        $receive_date = date('Y-m-d');
         $createdate  = date('Y-m-d H:i:s');
         $paid_amount = $this->input->post('paid_amount', TRUE);
         $due_amount  = $this->input->post('due_amount', TRUE);
         $discount    = $this->input->post('discount', TRUE);
         $bank_id     = $this->input->post('bank_id', TRUE);
-    
+
         $multipayamount = $this->input->post('pamount_by_method', TRUE);
         $multipaytype = $this->input->post('multipaytype', TRUE);
-        
+
         $multiamnt = array_sum($multipayamount);
-    
+
         if ($multiamnt == $paid_amount) {
             if (!empty($bank_id)) {
                 $bankname = $this->db->select('bank_name')->from('bank_add')->where('bank_id', $bank_id)->get()->row()->bank_name;
@@ -364,7 +375,7 @@ public function pmethod_dropdown_new(){
             } else {
                 $bankcoaid = '';
             }
-    
+
             // ✅ Ensure supplier & product ID match
             foreach ($p_id as $product_id) {
                 $value = $this->product_supplier_check($product_id, $supplier_id);
@@ -374,9 +385,9 @@ public function pmethod_dropdown_new(){
                     exit();
                 }
             }
-    
+
             $is_credit = ($multipaytype[0] == 0) ? 1 : '';
-    
+
             // ✅ Insert into product_purchase
             $data = array(
                 'purchase_id'        => $purchase_id,
@@ -395,16 +406,16 @@ public function pmethod_dropdown_new(){
                 'payment_type'       => 1,
                 'is_credit'          => $is_credit,
             );
-    
+
             $this->db->insert('product_purchase', $data);
             $purs_insert_id = $this->db->insert_id();
-    
+
             if (!$purs_insert_id) {
                 log_message('error', 'Insert failed: Product Purchase Table');
                 $this->session->set_flashdata('error', 'Purchase insertion failed.');
                 redirect('purchase/add');
             }
-    
+
             // ✅ Insert into product_purchase_details
             foreach ($p_id as $i => $product_id) {
                 $data1 = array(
@@ -422,9 +433,9 @@ public function pmethod_dropdown_new(){
                     'vat_amnt'           => $this->input->post('vatvalue', TRUE)[$i] ?? 0,
                     'status'             => 1
                 );
-        
+
                 $this->db->insert('product_purchase_details', $data1);
-    
+
                 // ✅ Insert into batch_master if not exists
                 $existing_batch = $this->db->get_where('batch_master', ['batch_id' => $batch_no[$i]])->row();
                 if (!$existing_batch) {
@@ -440,51 +451,52 @@ public function pmethod_dropdown_new(){
                     $this->db->insert('batch_master', $batch_data);
                 }
             }
-    
+
             // ✅ Ensure voucher entry exists but DO NOT auto-approve
             $setting_data = $this->db->select('is_autoapprove_v')
                 ->from('web_setting')
                 ->where('setting_id', 1)
                 ->get()
                 ->result_array();
-    
-            if ($setting_data[0]['is_autoapprove_v'] == 1) {    
+
+            if ($setting_data[0]['is_autoapprove_v'] == 1) {
                 $this->autoapprove($purchase_id); // ✅ Call autoapprove() but keep status = 0
             }
-    
+
             return 1;
         } else {
             return 2;
         }
     }
 
-    public function insert_purchasetest(){
-         
+    public function insert_purchasetest()
+    {
+
         $purchase_id = $this->number_generator();
-        $p_id        = array('0' =>'46285020');
+        $p_id        = array('0' => '46285020');
         $supplier_id = 1;
         // $supinfo     = $this->db->select('*')->from('supplier_information')->where('supplier_id',$supplier_id)->get()->row();
         // $sup_head    = $supinfo->supplier_id.'-'.$supinfo->supplier_name;
         // $sup_coa     = $this->db->select('*')->from('acc_coa')->where('HeadName',$sup_head)->get()->row();
         $receive_by = $this->session->userdata('id');
-        $receive_date= date('Y-m-d');
+        $receive_date = date('Y-m-d');
         $createdate  = date('Y-m-d H:i:s');
         $paid_amount = '750.00';
         $due_amount  = 0;
         $discount    = 0;
         $bank_id     = '';
 
-        $multipayamount = array('0' =>'750.00');
-        $multipaytype = array('0' =>'1020101 ');;
+        $multipayamount = array('0' => '750.00');
+        $multipaytype = array('0' => '1020101 ');;
 
-        
+
         $multiamnt = array_sum($multipayamount);
 
         // if ($multiamnt == $paid_amount) {
-        
+
         // if(!empty($bank_id)){
         //     $bankname = $this->db->select('bank_name')->from('bank_add')->where('bank_id',$bank_id)->get()->row()->bank_name;
-            
+
         //     $bankcoaid = $this->db->select('HeadCode')->from('acc_coa')->where('HeadName',$bankname)->get()->row()->HeadCode;
         // }else{
         //     $bankcoaid = '';
@@ -526,48 +538,47 @@ public function pmethod_dropdown_new(){
         );
 
         $this->db->insert('product_purchase', $data);
-        $purs_insert_id =  $this->db->insert_id();  
-    
+        $purs_insert_id =  $this->db->insert_id();
+
         $predefine_account  = $this->db->select('*')->from('acc_predefine_account')->get()->row();
         $Narration          = "Purchase Voucher";
         $Comment            = "Purchase Voucher for supplier";
         $COAID              = $predefine_account->purchaseCode;
-        
+
 
         // if($multipaytype && $multipayamount){
 
-            // if ($multipaytype[0] == 0) { 
+        // if ($multipaytype[0] == 0) { 
 
-            //     $amount_pay = $data['grand_total_amount'];
-            //     $amnt_type = 'Credit';
-            //     $reVID     = $predefine_account->supplierCode;
-            //     $subcode   = $this->db->select('*')->from('acc_subcode')->where('referenceNo', $supplier_id)->where('subTypeId', 4)->get()->row()->id;
-            //     $insrt_pay_amnt_vcher = $this->insert_purchase_debitvoucher($is_credit,$purchase_id,$COAID,$amnt_type,$amount_pay,$Narration,$Comment,$reVID,$subcode);
+        //     $amount_pay = $data['grand_total_amount'];
+        //     $amnt_type = 'Credit';
+        //     $reVID     = $predefine_account->supplierCode;
+        //     $subcode   = $this->db->select('*')->from('acc_subcode')->where('referenceNo', $supplier_id)->where('subTypeId', 4)->get()->row()->id;
+        //     $insrt_pay_amnt_vcher = $this->insert_purchase_debitvoucher($is_credit,$purchase_id,$COAID,$amnt_type,$amount_pay,$Narration,$Comment,$reVID,$subcode);
 
-            // }else {
-            // }
-            
+        // }else {
+        // }
+
         // }
         $amnt_type = 'Debit';
-        for ($i=0; $i < count($multipaytype); $i++) {
+        for ($i = 0; $i < count($multipaytype); $i++) {
 
             $reVID = $multipaytype[$i];
             $amount_pay = $multipayamount[$i];
 
-            $insrt_pay_amnt_vcher = $this->insert_purchase_debitvoucher($is_credit,$purchase_id,$COAID,$amnt_type,$amount_pay,$Narration,$Comment,$reVID);
-            
+            $insrt_pay_amnt_vcher = $this->insert_purchase_debitvoucher($is_credit, $purchase_id, $COAID, $amnt_type, $amount_pay, $Narration, $Comment, $reVID);
         }
-        
-        $rate         = array('0' =>'750.00');
-        $quantity     = array('0' =>'1');
-        $expiry_date  = array('0' =>date('Y-m-d'));
-        $batch_no     = array('0' =>'111');
-        $t_price      = array('0' =>'750.00');
-        $discountvalue= array('0' =>'0');
-        $vatpercent   = array('0' =>'0');
-        $vatvalue     =array('0' =>'0');
-        $discount_per = array('0' =>'0');
-        
+
+        $rate         = array('0' => '750.00');
+        $quantity     = array('0' => '1');
+        $expiry_date  = array('0' => date('Y-m-d'));
+        $batch_no     = array('0' => '111');
+        $t_price      = array('0' => '750.00');
+        $discountvalue = array('0' => '0');
+        $vatpercent   = array('0' => '0');
+        $vatvalue     = array('0' => '0');
+        $discount_per = array('0' => '0');
+
         for ($i = 0, $n = count($p_id); $i < $n; $i++) {
             $product_quantity = $quantity[$i];
             $product_rate     = $rate[$i];
@@ -600,32 +611,32 @@ public function pmethod_dropdown_new(){
 
             //     'supplier_price' => $product_rate
             // );
-            
+
             if (!empty($quantity)) {
                 $this->db->insert('product_purchase_details', $data1);
                 // $this->db->where('product_id', $product_id)->update('supplier_product', $product_price);
             }
-            
         }
 
         // $setting_data = $this->db->select('is_autoapprove_v')->from('web_setting')->where('setting_id', 1)->get()->result_array();
         // if ($setting_data[0]['is_autoapprove_v'] == 1) {	
-            
-            
+
+
         //     $new = $this->autoapprove($purchase_id);
         // }
 
         return 1;
 
-        
+
         // }else {
 
         //     return 2;
-            
+
         // }
     }
 
-    public function product_supplier_check($product_id, $supplier_id) {
+    public function product_supplier_check($product_id, $supplier_id)
+    {
         $this->db->select('*');
         $this->db->from('supplier_product');
         $this->db->where('product_id', $product_id);
@@ -638,13 +649,14 @@ public function pmethod_dropdown_new(){
     }
 
     // insert purchase debitvoucher
-    public function insert_purchase_debitvoucher($is_credit = null,$purchase_id = null,$dbtid = null,$amnt_type = null,$amnt = null,$Narration = null,$Comment = null,$reVID = null,$subcode = null){  
+    public function insert_purchase_debitvoucher($is_credit = null, $purchase_id = null, $dbtid = null, $amnt_type = null, $amnt = null, $Narration = null, $Comment = null, $reVID = null, $subcode = null)
+    {
 
-        
+
         // $fyear = financial_year();          
         $VDate = date('Y-m-d');
         // $CreateBy=$this->session->userdata('id');
-        $createdate=date('Y-m-d H:i:s');
+        $createdate = date('Y-m-d H:i:s');
         // if ($is_credit == 1) {
         //     $maxid = $this->Accounts_model->getMaxFieldNumber('id','acc_vaucher','Vtype','JV','VNo');             
         //     $vaucherNo = "JV-". ($maxid +1);
@@ -667,44 +679,45 @@ public function pmethod_dropdown_new(){
         //         'status'         =>  0,      
         //     );
 
-            
+
         // }else {
-            
+
         // }
-        $maxid = $this->Accounts_model->getMaxFieldNumber('id','acc_vaucher','Vtype','DV','VNo');             
-        $vaucherNo = "DV-". ($maxid +1);
+        $maxid = $this->Accounts_model->getMaxFieldNumber('id', 'acc_vaucher', 'Vtype', 'DV', 'VNo');
+        $vaucherNo = "DV-" . ($maxid + 1);
         $debitinsert = array(
             'fyear'          =>  1,
             'VNo'            =>  $vaucherNo,
             'Vtype'          =>  'DV',
             'referenceNo'    =>  $purchase_id,
             'VDate'          =>  $VDate,
-            'COAID'          =>  $dbtid,     
-            'Narration'      =>  $Narration,     
-            'ledgerComment'  =>  $Comment,   
-            'RevCodde'       =>  $reVID,    
-            'isApproved'     =>  0,                      
+            'COAID'          =>  $dbtid,
+            'Narration'      =>  $Narration,
+            'ledgerComment'  =>  $Comment,
+            'RevCodde'       =>  $reVID,
+            'isApproved'     =>  0,
             'CreateBy'       => 1,
-            'CreateDate'     => $createdate,      
-            'status'         => 0,      
+            'CreateDate'     => $createdate,
+            'status'         => 0,
         );
         $debitinsert['Debit']  = $amnt;
-        $debitinsert['Credit'] =  0.00;    
+        $debitinsert['Credit'] =  0.00;
         // if($amnt_type == 'Debit'){
-            
+
         // }else{
 
         //     $debitinsert['Debit']  = 0.00;
         //     $debitinsert['Credit'] =  $amnt; 
         // }
-        
 
-        $this->db->insert('acc_vaucher',$debitinsert);
-       
-	    return true;
-	}
 
-    public function autoapprove($purchase_id) {
+        $this->db->insert('acc_vaucher', $debitinsert);
+
+        return true;
+    }
+
+    public function autoapprove($purchase_id)
+    {
         // Ensure voucher exists but DO NOT auto-approve
         $vouchers = $this->db->select('referenceNo, VNo, status')
             ->from('acc_vaucher')
@@ -712,35 +725,30 @@ public function pmethod_dropdown_new(){
             ->where('status', 0) // Keep it as '0' so Edit button appears
             ->get()
             ->result();
-    
+
         foreach ($vouchers as $value) {
             // Ensure status remains 0 so it remains editable
             $this->db->where('VNo', $value->VNo);
             $this->db->update('acc_vaucher', ['status' => 0]);
         }
-    
+
         return true;
     }
 
     public function generator($lenth)
     {
-        $number=array("A","B","C","D","E","F","G","H","I","J","K","L","N","M","O","P","Q","R","S","U","V","T","W","X","Y","Z","1","2","3","4","5","6","7","8","9","0");
-    
-        for($i=0; $i<$lenth; $i++)
-        {
-            $rand_value=rand(0,34);
-            $rand_number=$number["$rand_value"];
-        
-            if(empty($con))
-            { 
-            $con=$rand_number;
+        $number = array("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "N", "M", "O", "P", "Q", "R", "S", "U", "V", "T", "W", "X", "Y", "Z", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0");
+
+        for ($i = 0; $i < $lenth; $i++) {
+            $rand_value = rand(0, 34);
+            $rand_number = $number["$rand_value"];
+
+            if (empty($con)) {
+                $con = $rand_number;
+            } else {
+                $con = "$con" . "$rand_number";
             }
-            else
-            {
-            $con="$con"."$rand_number";}
         }
         return $con;
     }
-
 }
-
