@@ -23,11 +23,17 @@
                     <label for="merchant_id"><?php echo display('customer') ?></label>
                     <select name="merchant_id" id="merchant_id" class="form-control" style="width: 200px;">
                         <option value=""><?php echo display('select_merchant') ?></option>
-                        <?php foreach ($merchant_list as $merchant): ?>
-                            <option value="<?php echo html_escape($merchant->id); ?>">
-                                <?php echo html_escape($merchant->name); ?>
-                            </option>
-                        <?php endforeach; ?>
+                        <?php
+                        if (isset($merchant_list) && !empty($merchant_list)) {
+                            foreach ($merchant_list as $merchant):
+                        ?>
+                                <option value="<?php echo html_escape($merchant->id); ?>">
+                                    <?php echo html_escape($merchant->name); ?>
+                                </option>
+                        <?php
+                            endforeach;
+                        }
+                        ?>
                     </select>
                 </div>
 
