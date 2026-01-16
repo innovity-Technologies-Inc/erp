@@ -368,7 +368,11 @@ class Purchase_model extends CI_Model
 
         $multiamnt = array_sum($multipayamount);
 
-        if ($multiamnt == $paid_amount) {
+        // Allow small tolerance (0.01) for rounding differences
+        $tolerance = 0.01;
+        $difference = abs($multiamnt - $paid_amount);
+
+        if ($difference <= $tolerance) {
             if (!empty($bank_id)) {
                 $bankname = $this->db->select('bank_name')->from('bank_add')->where('bank_id', $bank_id)->get()->row()->bank_name;
                 $bankcoaid = $this->db->select('HeadCode')->from('acc_coa')->where('HeadName', $bankname)->get()->row()->HeadCode;
@@ -465,6 +469,8 @@ class Purchase_model extends CI_Model
 
             return 1;
         } else {
+            // Log the mismatch for debugging
+            log_message('error', "Payment amount mismatch: Multi-payment sum = {$multiamnt}, Paid amount = {$paid_amount}, Difference = {$difference}");
             return 2;
         }
     }

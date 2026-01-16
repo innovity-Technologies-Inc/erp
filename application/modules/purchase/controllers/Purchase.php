@@ -190,7 +190,7 @@ class Purchase extends MX_Controller
                 }
                 if ($purchase_data == 2) {
 
-                    $this->session->set_flashdata('exception', 'Paid Amount Should Equal To Payment Amount');
+                    $this->session->set_flashdata('exception', 'Payment amount mismatch: The sum of payment method amounts must equal the total paid amount. Please verify all payment fields.');
                     redirect("add_purchase");
                 }
                 if ($purchase_data == 3) {
