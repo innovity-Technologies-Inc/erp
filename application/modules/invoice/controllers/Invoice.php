@@ -272,6 +272,14 @@ class Invoice extends MX_Controller {
     public function paysenz_invoice_details($invoice_id = null)
     {
         $invoice_detail = $this->invoice_model->retrieve_invoice_html_data($invoice_id);
+        
+        // Check if invoice exists
+        if (empty($invoice_detail) || !is_array($invoice_detail)) {
+            $this->session->set_flashdata('exception', 'Invoice not found');
+            redirect('invoice_list');
+            return;
+        }
+        
         $taxfield = $this->db->select('*')
             ->from('tax_settings')
             ->where('is_show', 1)
