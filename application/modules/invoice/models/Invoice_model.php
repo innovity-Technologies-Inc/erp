@@ -544,11 +544,11 @@ class Invoice_model extends CI_Model
 
     public function retrieve_invoice_editdata($invoice_id)
     {
-        $this->db->select('a.*, sum(c.quantity) as sum_quantity,a.id as dbinv_id, a.total_tax as taxs,a. prevous_due,b.customer_name,c.*,c.tax as total_tax,c.product_id,d.product_name,d.product_model,d.tax,d.unit,d.*');
+        $this->db->select('a.*, sum(c.quantity) as sum_quantity,a.id as dbinv_id, a.total_tax as taxs,a.prevous_due,b.customer_name,c.*,c.tax as total_tax,c.product_id,d.product_name,d.product_model,d.tax,d.unit,d.*');
         $this->db->from('invoice a');
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
-        $this->db->join('invoice_details c', 'c.invoice_id = a.id');
-        $this->db->join('product_information d', 'd.product_id = c.product_id');
+        $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left');
+        $this->db->join('invoice_details c', 'c.invoice_id = a.id', 'left');
+        $this->db->join('product_information d', 'd.product_id = c.product_id', 'left');
         $this->db->where('a.invoice_id', $invoice_id);
         $this->db->group_by('d.product_id');
 
@@ -1476,12 +1476,11 @@ class Invoice_model extends CI_Model
                 a.due_amount as due_amount'
         );
         $this->db->from('invoice a');
-        $this->db->join('invoice_details c', 'c.invoice_id = a.id');
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
-        $this->db->join('product_information d', 'd.product_id = c.product_id');
-        $this->db->join('warehouse w', 'w.id = c.warehouse_id', 'left'); // 👈 Join warehouse
+        $this->db->join('invoice_details c', 'c.invoice_id = a.id', 'left'); // Changed to LEFT JOIN
+        $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left'); // Changed to LEFT JOIN
+        $this->db->join('product_information d', 'd.product_id = c.product_id', 'left'); // Changed to LEFT JOIN
+        $this->db->join('warehouse w', 'w.id = c.warehouse_id', 'left');
         $this->db->where('a.invoice_id', $invoice_id);
-        $this->db->where('c.quantity >', 0);
 
         $query = $this->db->get();
         if ($query->num_rows() > 0) {
