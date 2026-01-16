@@ -167,7 +167,7 @@ class Purchase extends MX_Controller
     public function paysenz_save_purchase()
     {
         $this->form_validation->set_rules('supplier_id', display('supplier'), 'required|max_length[15]');
-        $this->form_validation->set_rules('chalan_no', display('invoice_no'), 'required|max_length[30]|is_unique[product_purchase.chalan_no]');
+        $this->form_validation->set_rules('chalan_no', 'Challan Number', 'required|min_length[30]|max_length[100]|is_unique[product_purchase.chalan_no]');
         $this->form_validation->set_rules('product_id[]', display('product'), 'required|max_length[20]');
         $this->form_validation->set_rules('multipaytype[]', display('payment_type'), 'required');
         $this->form_validation->set_rules('product_quantity[]', display('quantity'), 'required|max_length[20]');
@@ -215,7 +215,7 @@ class Purchase extends MX_Controller
         $dbpurs_id    = $this->input->post('dbpurs_id', TRUE);
 
         $this->form_validation->set_rules('supplier_id', display('supplier'), 'required|max_length[15]');
-        $this->form_validation->set_rules('chalan_no', display('invoice_no'), 'required|max_length[20]');
+        $this->form_validation->set_rules('chalan_no', 'Challan Number', 'required|min_length[30]|max_length[100]');
         $this->form_validation->set_rules('product_id[]', display('product'), 'required|max_length[20]');
         $this->form_validation->set_rules('multipaytype[]', display('payment_type'), 'required');
         $this->form_validation->set_rules('product_quantity[]', display('quantity'), 'required|max_length[20]');
