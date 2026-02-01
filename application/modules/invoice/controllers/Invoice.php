@@ -47,6 +47,7 @@ class Invoice extends MX_Controller
         $data['invoice_no']    = $this->number_generator();
         $data['title']         = display('add_invoice');
         $data['taxes']         = $this->invoice_model->tax_fileds();
+        $data['bank_list']     = $this->db->select('*')->from('bank_add')->where('status', 1)->get()->result_array();
         $data['module']        = "invoice";
         $vatortax              = $this->invoice_model->vat_tax_setting();
         if ($vatortax->fixed_tax == 1) {
@@ -1236,6 +1237,7 @@ class Invoice extends MX_Controller
             'multi_paytype'   => $multi_pay_data,
             'is_credit'       => $invoice_detail[0]['is_credit'],
         );
+        $data['bank_list']  = $this->db->select('*')->from('bank_add')->where('status', 1)->get()->result_array();
         $data['all_pmethod'] = $this->invoice_model->pmethod_dropdown_new();
         $data['all_pmethodwith_cr'] = $this->invoice_model->pmethod_dropdown();
         $data['module']     = "invoice";
@@ -1287,7 +1289,9 @@ class Invoice extends MX_Controller
                     $data['details'] = $this->load->view('invoice/invoice_html', $data, true);
                 } else {
                     $data['status'] = false;
-                    $data['exception'] = 'Please Try Again';
+                    // Check if there's a flashdata exception message set by the model
+                    $flash_exception = $this->session->flashdata('exception');
+                    $data['exception'] = !empty($flash_exception) ? $flash_exception : 'Please Try Again';
                 }
             } else {
                 $data['status'] = false;
@@ -2568,5 +2572,16 @@ class Invoice extends MX_Controller
             $invoice_no = 1000;
         }
         return $invoice_no;
+    }
+
+    public function get_warehouses()
+    {
+        $warehouses = $this->db->select('id, name')
+            ->from('warehouse')
+            ->where('status', 1)
+            ->get()
+            ->result_array();
+
+        echo json_encode($warehouses);
     }
 }

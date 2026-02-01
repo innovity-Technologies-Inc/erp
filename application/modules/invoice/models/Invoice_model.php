@@ -544,13 +544,14 @@ class Invoice_model extends CI_Model
 
     public function retrieve_invoice_editdata($invoice_id)
     {
-        $this->db->select('a.*, sum(c.quantity) as sum_quantity,a.id as dbinv_id, a.total_tax as taxs,a.prevous_due,b.customer_name,c.*,c.tax as total_tax,c.product_id,d.product_name,d.product_model,d.tax,d.unit,d.*');
+        $this->db->select('a.*, a.id as dbinv_id, a.total_tax as taxs, a.prevous_due, b.customer_name, c.*, c.tax as total_tax, c.product_id, c.warehouse_id, w.name as warehouse_name, d.product_name, d.product_model, d.tax, d.unit, d.*');
         $this->db->from('invoice a');
         $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left');
         $this->db->join('invoice_details c', 'c.invoice_id = a.id', 'left');
         $this->db->join('product_information d', 'd.product_id = c.product_id', 'left');
+        $this->db->join('warehouse w', 'w.id = c.warehouse_id', 'left');
         $this->db->where('a.invoice_id', $invoice_id);
-        $this->db->group_by('d.product_id');
+        $this->db->order_by('c.invoice_details_id', 'ASC');
 
         $query = $this->db->get();
 
@@ -677,6 +678,32 @@ class Invoice_model extends CI_Model
         }
 
         $customer_id = $this->input->post('customer_id', TRUE);
+
+        // Validate payment amount matches sum of payment methods with floating point tolerance
+        // Skip validation for credit sales (multipaytype[0] == 0 or empty)
+        if (!empty($multipayamount) && is_array($multipayamount) && !empty($multipaytype) && is_array($multipaytype)) {
+            // Skip validation if it's a credit sale
+            if (isset($multipaytype[0]) && $multipaytype[0] != 0) {
+                // Filter out empty payment amounts
+                $filteredAmounts = array_filter($multipayamount, function ($amt) {
+                    return !empty($amt) && $amt > 0;
+                });
+
+                // Only validate if there are multiple payment methods with values
+                if (!empty($filteredAmounts) && count($filteredAmounts) > 1) {
+                    $multiamnt = array_sum($filteredAmounts);
+                    $tolerance = 0.10; // Increased tolerance to 10 cents
+                    $difference = abs($multiamnt - $paidamount);
+
+                    if ($difference > $tolerance) {
+                        file_put_contents($log_path, "[ERROR] Payment mismatch: Multi-payment sum = {$multiamnt}, Paid amount = {$paidamount}, Difference = {$difference}\n", FILE_APPEND);
+                        $this->session->set_flashdata('exception', 'Payment amount mismatch: The sum of payment method amounts (' . number_format($multiamnt, 2) . ') must equal the total paid amount (' . number_format($paidamount, 2) . '). Difference: ' . number_format($difference, 2));
+                        redirect('add_invoice');
+                        return false;
+                    }
+                }
+            }
+        }
 
         //Full or partial Payment record.
         $paid_amount    = $this->input->post('paid_amount', TRUE);
@@ -1071,6 +1098,28 @@ class Invoice_model extends CI_Model
             $paidamount = $this->input->post('paid_amount', TRUE);
         }
 
+        // Validate payment amount matches sum of payment methods with floating point tolerance
+        // Skip validation for credit sales (multipaytype[0] == 0 or empty)
+        if (!empty($multipayamount) && is_array($multipayamount) && !empty($multipaytype) && is_array($multipaytype)) {
+            // Skip validation if it's a credit sale
+            if (isset($multipaytype[0]) && $multipaytype[0] != 0) {
+                // Filter out empty payment amounts
+                $filteredAmounts = array_filter($multipayamount, function ($amt) {
+                    return !empty($amt) && $amt > 0;
+                });
+
+                // Only validate if there are multiple payment methods with values
+                if (!empty($filteredAmounts) && count($filteredAmounts) > 1) {
+                    $totalMultiPayAmount = array_sum($filteredAmounts);
+                    $tolerance = 0.10; // Increased tolerance to 10 cents
+
+                    if (abs($totalMultiPayAmount - $paidamount) > $tolerance) {
+                        $this->session->set_flashdata('exception', 'Payment amount mismatch: The sum of payment method amounts (' . number_format($totalMultiPayAmount, 2) . ') must equal the total paid amount (' . number_format($paidamount, 2) . '). Difference: ' . number_format(abs($totalMultiPayAmount - $paidamount), 2));
+                        return false;
+                    }
+                }
+            }
+        }
 
         $bank_id = $this->input->post('bank_id', TRUE);
         if (!empty($bank_id)) {
@@ -1214,11 +1263,13 @@ class Invoice_model extends CI_Model
         $this->db->where('invoice_id', $dbinv_id);
         $this->db->delete('invoice_details');
         $serial_n       = $this->input->post('serial_no', TRUE);
+        $warehouse_ids  = $this->input->post('warehouse_id', TRUE);
         for ($i = 0, $n = count($p_id); $i < $n; $i++) {
             $product_quantity = $quantity[$i];
             $product_rate     = $rate[$i];
             $product_id       = $p_id[$i];
             $serial_no        = $serial_n[$i];
+            $warehouse_id     = (!empty($warehouse_ids) && isset($warehouse_ids[$i])) ? $warehouse_ids[$i] : null;
             $total_price      = $total_amount[$i];
             $supplier_rate    = $this->supplier_price($product_id);
             $discount         = $discount_rate[$i];
@@ -1239,6 +1290,7 @@ class Invoice_model extends CI_Model
                 'product_id'         => $product_id,
                 'serial_no'          => '',
                 'batch_id'           => $serial_no,
+                'warehouse_id'       => $warehouse_id,
                 'quantity'           => $product_quantity,
                 'rate'               => $product_rate,
                 'discount'           => $discount,
@@ -1476,11 +1528,12 @@ class Invoice_model extends CI_Model
                 a.due_amount as due_amount'
         );
         $this->db->from('invoice a');
-        $this->db->join('invoice_details c', 'c.invoice_id = a.id', 'left'); // Changed to LEFT JOIN
-        $this->db->join('customer_information b', 'b.customer_id = a.customer_id', 'left'); // Changed to LEFT JOIN
-        $this->db->join('product_information d', 'd.product_id = c.product_id', 'left'); // Changed to LEFT JOIN
-        $this->db->join('warehouse w', 'w.id = c.warehouse_id', 'left');
+        $this->db->join('invoice_details c', 'c.invoice_id = a.id');
+        $this->db->join('customer_information b', 'b.customer_id = a.customer_id');
+        $this->db->join('product_information d', 'd.product_id = c.product_id');
+        $this->db->join('warehouse w', 'w.id = c.warehouse_id', 'left'); // 👈 Join warehouse
         $this->db->where('a.invoice_id', $invoice_id);
+        $this->db->where('c.quantity >', 0);
 
         $query = $this->db->get();
         if ($query->num_rows() > 0) {

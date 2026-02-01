@@ -62,7 +62,7 @@ function addInputField_invoice(t) {
     tab14 = tabindex + 14;
     tab15 = tabindex + 15;
 
-    (e.innerHTML =
+    ((e.innerHTML =
       "<td><input type='text' name='product_name' onkeypress='invoice_productList(" +
       count +
       ");' class='form-control productSelection common_product' placeholder='Product Name' id='" +
@@ -79,7 +79,11 @@ function addInputField_invoice(t) {
       count +
       "' name='serial_no[]' required tabindex='" +
       tab3 +
-      "'><option></option></select></td><td><input type='text' name='available_quantity[]' class='form-control text-right common_avail_qnt available_quantity_" +
+      "'><option></option></select></td><td><select class='form-control basic-single' id='warehouse_" +
+      count +
+      "' name='warehouse_id[]' tabindex='" +
+      (tab3 + 1) +
+      "'><option value=''>Select Warehouse</option></select></td><td><input type='text' name='available_quantity[]' class='form-control text-right common_avail_qnt available_quantity_" +
       count +
       "' value='0' readonly /></td><td><input type='text' name='unit[]' class='form-control text-right unit_" +
       count +
@@ -136,7 +140,7 @@ function addInputField_invoice(t) {
       "' class='total_discount dppr' name='discount_amount[]'/><button tabindex='" +
       tab5 +
       "' class='btn btn-danger text-center' type='button' value='Delete' onclick='deleteRow_invoice(this)'><i class='fa fa-close'></i></button></td>"),
-      document.getElementById(t).appendChild(e);
+      document.getElementById(t).appendChild(e));
 
     // Reinitialize Select2 for the new batch_no dropdown
     $("#serial_no_" + count).select2({
@@ -144,17 +148,20 @@ function addInputField_invoice(t) {
       allowClear: true,
     });
 
+    // Load warehouse options and initialize Select2
+    load_warehouse_options(count);
+
     document.getElementById(a).focus();
     document.getElementById("add_invoice_item").setAttribute("tabindex", tab6);
     document.getElementById("details").setAttribute("tabindex", tab7);
     document.getElementById("invoice_discount").setAttribute("tabindex", tab8);
     document.getElementById("shipping_cost").setAttribute("tabindex", tab9);
 
-    document.getElementById(t).appendChild(e),
+    (document.getElementById(t).appendChild(e),
       document.getElementById(a).focus(),
       document
         .getElementById("add_invoice_item")
-        .setAttribute("tabindex", tab6);
+        .setAttribute("tabindex", tab6));
     document.getElementById("details").setAttribute("tabindex", tab7);
     document.getElementById("invoice_discount").setAttribute("tabindex", tab8);
     document.getElementById("shipping_cost").setAttribute("tabindex", tab9);
@@ -162,6 +169,48 @@ function addInputField_invoice(t) {
     document.getElementById("add_invoice").setAttribute("tabindex", tab12);
     count++;
   }
+}
+
+// Function to load warehouse options dynamically
+function load_warehouse_options(row_id) {
+  var base_url = $(".baseUrl").val();
+
+  // Save the currently selected value before reloading options
+  var selectedValue = $("#warehouse_" + row_id).val();
+
+  $.ajax({
+    url: base_url + "invoice/invoice/get_warehouses",
+    method: "GET",
+    dataType: "json",
+    success: function (data) {
+      var options = '<option value="">Select Warehouse</option>';
+      if (data && data.length > 0) {
+        data.forEach(function (warehouse) {
+          // Pre-select if this was the previously selected value
+          var selected =
+            selectedValue && selectedValue == warehouse.id ? "selected" : "";
+          options +=
+            '<option value="' +
+            warehouse.id +
+            '" ' +
+            selected +
+            ">" +
+            warehouse.name +
+            "</option>";
+        });
+      }
+      $("#warehouse_" + row_id).html(options);
+
+      // Initialize Select2 AFTER options are loaded
+      $("#warehouse_" + row_id).select2({
+        placeholder: "Select Warehouse",
+        allowClear: true,
+      });
+    },
+    error: function () {
+      console.log("Failed to load warehouse options");
+    },
+  });
 }
 
 function addInputField_invoice_dynamic(t) {
@@ -225,7 +274,7 @@ function addInputField_invoice_dynamic(t) {
     tab13 = tabindex + 13;
     tab14 = tabindex + 14;
     tab15 = tabindex + 15;
-    (e.innerHTML =
+    ((e.innerHTML =
       "<td><input type='text' name='product_name' onkeypress='invoice_productList(" +
       count +
       ");' class='form-control productSelection common_product' placeholder='Product Name' id='" +
@@ -293,7 +342,7 @@ function addInputField_invoice_dynamic(t) {
       document.getElementById(a).focus(),
       document
         .getElementById("add_invoice_item")
-        .setAttribute("tabindex", tab6);
+        .setAttribute("tabindex", tab6));
     document.getElementById("details").setAttribute("tabindex", tab7);
     document.getElementById("invoice_discount").setAttribute("tabindex", tab8);
     document.getElementById("shipping_cost").setAttribute("tabindex", tab9);
@@ -394,7 +443,7 @@ function paysenz_invoice_quantity_calculate(item) {
   } else {
     var n = quantity * price_item;
     var c = quantity * price_item * total_tax;
-    $("#total_price_" + item).val(n), $("#all_tax_" + item).val(c);
+    ($("#total_price_" + item).val(n), $("#all_tax_" + item).val(c));
   }
   invoice_calculateSum();
   var invoice_edit_page = $("#invoice_edit_page").val();
@@ -456,7 +505,7 @@ function invoice_calculateSum() {
     $("#total_tax_ammount" + i).val(j.toFixed(2, 2));
   }
   //Total Discount
-  $(".total_discount").each(function () {
+  ($(".total_discount").each(function () {
     isNaN(this.value) ||
       0 == this.value.length ||
       (p += parseFloat(this.value));
@@ -488,7 +537,7 @@ function invoice_calculateSum() {
     (o = a.toFixed(2, 2)),
     (e = t.toFixed(2, 2)),
     (tx = f.toFixed(2, 2)),
-    (ds = p.toFixed(2, 2));
+    (ds = p.toFixed(2, 2)));
 
   var test = +tx + +s_cost + +e + -ds + +ad;
   $("#grandTotal").val(test.toFixed(2, 2));
@@ -521,15 +570,41 @@ function invoice_calculateSum() {
 }
 
 $(document).on("click", "#add_invoice", function () {
+  // Count total payment fields
+  var totalPayFields = $(".pay").length;
+
+  // Check if it's a credit sale (payment type = 0)
+  var firstPaymentType = $("select[name='multipaytype[]']").first().val();
+
+  // Skip validation for:
+  // 1. Credit sales (payment type = 0)
+  // 2. Single payment method (no split payment)
+  if (firstPaymentType == "0" || totalPayFields <= 1) {
+    return true;
+  }
+
+  // For multiple payment methods, validate the sum
   var total = 0;
+  var filledFieldsCount = 0;
+
   $(".pay").each(function () {
-    total += parseFloat($(this).val()) || 0;
+    var value = parseFloat($(this).val()) || 0;
+    if (value > 0) {
+      filledFieldsCount++;
+    }
+    total += value;
   });
 
-  var gtotal = $("#paidAmount").val();
-  if (total != gtotal) {
-    toastr.error("Paid Amount Should Equal To Payment Amount");
+  // Only validate if multiple payment fields have values
+  if (filledFieldsCount <= 1) {
+    return true;
+  }
 
+  var gtotal = parseFloat($("#paidAmount").val()) || 0;
+  var tolerance = 0.1; // Allow 10 cent difference for floating point precision
+
+  if (Math.abs(total - gtotal) > tolerance) {
+    toastr.error("Paid Amount Should Equal To Payment Amount");
     return false;
   }
 });
@@ -639,10 +714,10 @@ function stockLimit(t) {
       alert(e);
       if (a > Number(e)) {
         var o = "You can Sale maximum " + e + " Items";
-        alert(o),
+        (alert(o),
           $("#qty_item_" + t).val("0"),
           $("#total_qntt_" + t).val("0"),
-          $("#total_price_" + t).val("0");
+          $("#total_price_" + t).val("0"));
       }
     },
   });
@@ -664,14 +739,14 @@ function deleteRow_invoice(t) {
   if (1 == a) alert("There only one row you can't delete.");
   else {
     var e = t.parentNode.parentNode;
-    e.parentNode.removeChild(e), invoice_calculateSum();
+    (e.parentNode.removeChild(e), invoice_calculateSum());
     invoice_paidamount();
     var current = 1;
     $("#normalinvoice > tbody > tr td input.productSelection").each(
       function () {
         current++;
         $(this).attr("id", "product_name" + current);
-      }
+      },
     );
     var common_qnt = 1;
     $("#normalinvoice > tbody > tr td input.common_qnt").each(function () {
@@ -679,11 +754,11 @@ function deleteRow_invoice(t) {
       $(this).attr("id", "total_qntt_" + common_qnt);
       $(this).attr(
         "onkeyup",
-        "paysenz_invoice_quantity_calculate(" + common_qnt + ");"
+        "paysenz_invoice_quantity_calculate(" + common_qnt + ");",
       );
       $(this).attr(
         "onchange",
-        "paysenz_invoice_quantity_calculate(" + common_qnt + ");"
+        "paysenz_invoice_quantity_calculate(" + common_qnt + ");",
       );
     });
     var common_rate = 1;
@@ -692,11 +767,11 @@ function deleteRow_invoice(t) {
       $(this).attr("id", "price_item_" + common_rate);
       $(this).attr(
         "onkeyup",
-        "paysenz_invoice_quantity_calculate(" + common_qnt + ");"
+        "paysenz_invoice_quantity_calculate(" + common_qnt + ");",
       );
       $(this).attr(
         "onchange",
-        "paysenz_invoice_quantity_calculate(" + common_qnt + ");"
+        "paysenz_invoice_quantity_calculate(" + common_qnt + ");",
       );
     });
     var common_discount = 1;
@@ -705,11 +780,11 @@ function deleteRow_invoice(t) {
       $(this).attr("id", "discount_" + common_discount);
       $(this).attr(
         "onkeyup",
-        "paysenz_invoice_quantity_calculate(" + common_qnt + ");"
+        "paysenz_invoice_quantity_calculate(" + common_qnt + ");",
       );
       $(this).attr(
         "onchange",
-        "paysenz_invoice_quantity_calculate(" + common_qnt + ");"
+        "paysenz_invoice_quantity_calculate(" + common_qnt + ");",
       );
     });
     var common_total_price = 1;
@@ -717,7 +792,7 @@ function deleteRow_invoice(t) {
       function () {
         common_total_price++;
         $(this).attr("id", "total_price_" + common_total_price);
-      }
+      },
     );
 
     var invoice_edit_page = $("#invoice_edit_page").val();
@@ -895,7 +970,7 @@ $(document).ready(function () {
               } else {
                 location.reload();
               }
-            }
+            },
           );
           if (data.status == true && event.keyCode == 13) {
           }
@@ -1036,6 +1111,25 @@ $(document).ready(function () {
   }
 
   $(".bankpayment").css("width", "100%");
+
+  // Initialize Select2 for warehouse and batch dropdowns
+  $("#warehouse_1").select2({
+    placeholder: "Select Warehouse",
+    allowClear: true,
+  });
+
+  $("#serial_no_1").select2({
+    placeholder: "Select Batch",
+    allowClear: true,
+  });
+
+  // Load warehouse options for edit page
+  if ($("#invoice_edit_page").val() == 1) {
+    var rowCount = $("#normalinvoice tbody tr").length;
+    for (var i = 1; i <= rowCount; i++) {
+      load_warehouse_options(i);
+    }
+  }
 });
 
 function invoice_product_batch(sl) {

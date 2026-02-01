@@ -146,13 +146,9 @@
                                         <th class="text-right"><?php echo ($discount_type == 2) ? display('discount') : display('fixed_dis'); ?></th>
                                     <?php endif; ?>
 
-                                    <?php if ($vat_amnt_per > 0): ?>
-                                        <th class="text-right"><?php echo display('vat') . ' %'; ?></th>
-                                    <?php endif; ?>
-
-                                    <?php if ($vat_amnt > 0): ?>
-                                        <th class="text-right"><?php echo display('dis_val'); ?></th>
-                                    <?php endif; ?>
+                                    <th class="text-right"><?php echo display('dis_val') ?></th>
+                                    <?php /* <th class="text-right"><?php echo display('vat') . ' %' ?></th>
+                                    <th class="text-right"><?php echo display('vat_val') ?></th> */ ?>
 
                                     <th class="text-right"><?php echo display('rate') ?></th>
                                     <th class="text-right"><?php echo display('ammount') ?></th>
@@ -193,13 +189,9 @@
                                             <td class="text-right"><?php echo $details['discount']; ?></td>
                                         <?php endif; ?>
 
-                                        <?php if ($vat_amnt_per > 0): ?>
-                                            <td class="text-right"><?php echo $details['discount_per']; ?></td>
-                                        <?php endif; ?>
-
-                                        <?php if ($vat_amnt > 0): ?>
-                                            <td class="text-right"><?php echo $details['invoice_discount']; ?></td>
-                                        <?php endif; ?>
+                                        <td class="text-right"><?php echo $details['discount']; ?></td>
+                                        <?php /* <td class="text-right"><?php echo $details['vat_amnt_per']; ?></td>
+                                        <td class="text-right"><?php echo $details['vat_amnt']; ?></td> */ ?>
 
                                         <td class="text-right"><?php echo $details['rate']; ?></td>
                                         <td class="text-right"><?php echo $details['total_price']; ?></td>
@@ -222,8 +214,10 @@
                                 if (($discount_type == 2 || $discount_type == 3) && $is_dis_val > 0) $has_discount_column = true;
                                 if ($has_discount_column) $additional_cols++;
 
-                                if ($vat_amnt_per > 0) $additional_cols++;
-                                if ($vat_amnt > 0) $additional_cols++;                                // "rate" and "total_price" columns = 2
+                                // Always add 1 column for Dis. Val (VAT columns hidden)
+                                $additional_cols += 1;
+
+                                // "rate" and "total_price" columns = 2
                                 $total_columns = $colspan_base + $additional_cols + 2;
 
                                 // Left colspan = all columns before quantity + quantity cell
@@ -238,13 +232,8 @@
                                         <td></td>
                                     <?php endif; ?>
 
-                                    <?php if ($vat_amnt_per > 0): ?>
-                                        <td></td>
-                                    <?php endif; ?>
-
-                                    <?php if ($vat_amnt > 0): ?>
-                                        <td></td>
-                                    <?php endif; ?>
+                                    <!-- Always show 1 empty cell for Dis. Val (VAT columns hidden) -->
+                                    <td></td>
 
                                     <td colspan="2" align="right">
                                         <?php

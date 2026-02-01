@@ -212,43 +212,67 @@ class Warehouse extends MX_Controller
 
     public function CheckBatchList()
     {
+        // Set proper headers for JSON response
+        header('Content-Type: application/json');
+
         $this->load->model('warehouse_model');
         $postData = $this->input->post();
-        $batches = $this->warehouse_model->get_batch_datatables($postData);
 
-        $data = [];
-        $sl = $postData['start'] + 1;
+        try {
+            $batches = $this->warehouse_model->get_batch_datatables($postData);
 
-        foreach ($batches as $b) {
-            $row = [];
-            $row['sl'] = $sl++;
-            $row['batch_name'] = html_escape($b['batch_id'] ?? 'N/A');
-            $row['product_name'] = html_escape($b['product_name'] ?? 'N/A');
-            $row['warehouse_name'] = html_escape($b['warehouse_name'] ?? 'N/A');
-            $row['expiry_date'] = !empty($b['expiry_date']) ? html_escape($b['expiry_date']) : '-';
+            $data = [];
+            $sl = $postData['start'] + 1;
 
-            // Added total_quantity and available_quantity with null checks
-            $row['total_quantity'] = !empty($b['total_quantity']) ? number_format($b['total_quantity'], 2) : '0.00';
-            $row['available_quantity'] = !empty($b['available_quantity']) ? number_format($b['available_quantity'], 2) : '0.00';
+            foreach ($batches as $b) {
+                $row = [];
+                $row['sl'] = $sl++;
+                $row['batch_name'] = html_escape($b['batch_id'] ?? 'N/A');
+                $row['product_name'] = html_escape($b['product_name'] ?? 'N/A');
+                $row['warehouse_name'] = html_escape($b['warehouse_name'] ?? 'N/A');
+                $row['expiry_date'] = !empty($b['expiry_date']) ? html_escape($b['expiry_date']) : '-';
 
-            // Set status based on available quantity
-            $row['status'] = (float)$b['available_quantity'] > 0 ? 'Active' : 'Inactive';
+                // 🛡️ **CRITICAL FIX**: Ensure quantities are never negative
+                $total_qty = floatval($b['total_quantity'] ?? 0);
+                $available_qty = floatval($b['available_quantity'] ?? 0);
 
-            // Action button
-            $row['action'] = '<a href="' . base_url("warehouse/warehouse/edit_batch/" . $b['id']) . '" class="btn btn-sm btn-primary"><i class="ti-pencil"></i></a>';
+                // Prevent negative quantities from being displayed
+                $total_qty = max(0, $total_qty);
+                $available_qty = max(0, $available_qty);
 
-            $data[] = $row;
+                $row['total_quantity'] = number_format($total_qty, 2);
+                $row['available_quantity'] = number_format($available_qty, 2);
+
+                // Set status based on available quantity
+                $row['status'] = $available_qty > 0 ? 'Active' : 'Inactive';
+
+                // Action button
+                $row['action'] = '<a href="' . base_url("warehouse/warehouse/edit_batch/" . $b['id']) . '" class="btn btn-sm btn-primary"><i class="ti-pencil"></i></a>';
+
+                $data[] = $row;
+            }
+
+            $totalRecords = $this->warehouse_model->count_all_batches();
+            $totalFiltered = $this->warehouse_model->count_filtered_batches($postData);
+
+            $response = [
+                "draw" => intval($postData['draw']),
+                "recordsTotal" => intval($totalRecords),
+                "recordsFiltered" => intval($totalFiltered),
+                "data" => $data
+            ];
+
+            echo json_encode($response);
+        } catch (Exception $e) {
+            log_message('error', 'CheckBatchList error: ' . $e->getMessage());
+            echo json_encode([
+                "draw" => intval($postData['draw'] ?? 0),
+                "recordsTotal" => 0,
+                "recordsFiltered" => 0,
+                "data" => [],
+                "error" => "An error occurred while fetching batch data"
+            ]);
         }
-
-        $totalRecords = $this->warehouse_model->count_all_batches();
-        $totalFiltered = $this->warehouse_model->count_filtered_batches($postData);
-
-        echo json_encode([
-            "draw" => intval($postData['draw']),
-            "recordsTotal" => $totalRecords,
-            "recordsFiltered" => $totalFiltered,
-            "data" => $data
-        ]);
     }
 
 
@@ -523,9 +547,13 @@ class Warehouse extends MX_Controller
         log_message('debug', "Batch Details: " . json_encode($batch));
 
         // 🛡️ **Validation: Check if sufficient quantity is available**
-        if ($batch->available_quantity < $quantity) {
-            log_message('error', "Insufficient available quantity for batch $batch_id. Available: $batch->available_quantity, Requested: $quantity");
-            $this->session->set_flashdata('exception', 'Insufficient available quantity');
+        $available_qty = floatval($batch->available_quantity ?? 0);
+        $requested_qty = floatval($quantity);
+
+        // Prevent negative quantities and ensure sufficient stock
+        if ($available_qty < $requested_qty || $available_qty <= 0) {
+            log_message('error', "Insufficient available quantity for batch $batch_id. Available: $available_qty, Requested: $requested_qty");
+            $this->session->set_flashdata('exception', "Insufficient available quantity. Available: " . number_format($available_qty, 2));
             redirect('warehouse/warehouse/stock_movement');
         }
 
@@ -730,5 +758,31 @@ class Warehouse extends MX_Controller
             log_message('error', 'No active warehouses found.');
             echo json_encode(['success' => false, 'message' => 'No active warehouses found.']);
         }
+    }
+
+    /**
+     * 🛡️ **CRITICAL MAINTENANCE ENDPOINT**
+     * Repairs all negative quantities in batch_master
+     * Access: warehouse/warehouse/repair_batch_quantities (Admin only)
+     */
+    public function repair_batch_quantities()
+    {
+        // Check authorization
+        if (!$this->permission1->method('warehouse', 'delete')->access()) {
+            $this->session->set_flashdata('exception', 'Unauthorized access');
+            redirect('warehouse/warehouse');
+            return;
+        }
+
+        $this->load->model('warehouse_model');
+        $repaired_count = $this->warehouse_model->repair_negative_quantities();
+
+        if ($repaired_count !== false) {
+            $this->session->set_flashdata('message', "Successfully repaired $repaired_count batches with negative quantities");
+        } else {
+            $this->session->set_flashdata('exception', 'Failed to repair negative quantities');
+        }
+
+        redirect('warehouse/warehouse/manage_batch');
     }
 }

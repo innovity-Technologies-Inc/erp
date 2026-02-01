@@ -84,6 +84,7 @@
                                 <th class="text-center"><?php echo display('item_description') ?></th>
                                 <th class="text-center"><?php echo display('batch_no') ?><i class="text-danger">*</i>
                                 </th>
+                                <th class="text-center"><?php echo display('warehouse') ?></th>
                                 <th class="text-center"><?php echo display('available_qnty') ?></th>
                                 <th class="text-center"><?php echo display('unit') ?></th>
                                 <th class="text-center"><?php echo display('quantity') ?> <i class="text-danger">*</i>
@@ -133,6 +134,18 @@
 
                                             <option value="<?php echo $details['batch_id'] ?>">
                                                 <?php echo $details['batch_id'] ?></option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select class="form-control basic-single" id="warehouse_<?php echo $details['sl'] ?>" name="warehouse_id[]">
+                                            <option value="">Select Warehouse</option>
+                                            <?php
+                                            $warehouses = $this->db->select('id, name')->from('warehouse')->where('status', 1)->get()->result();
+                                            foreach ($warehouses as $warehouse) {
+                                                $selected = (isset($details['warehouse_id']) && $details['warehouse_id'] == $warehouse->id) ? 'selected' : '';
+                                                echo '<option value="' . $warehouse->id . '" ' . $selected . '>' . $warehouse->name . '</option>';
+                                            }
+                                            ?>
                                         </select>
                                     </td>
                                     <td>
@@ -254,7 +267,7 @@
                                 </td>
                             </tr>
                             <tr>
-                                <td class="text-right" colspan="11"><b><?php echo display('ttl_val') ?>:</b></td>
+                                <td class="text-right" colspan="10"><b><?php echo display('ttl_val') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="total_vat_amnt" class="form-control text-right"
                                         value="<?php echo $total_vat_amnt; ?>" name="total_vat_amnt" value="0.00"
@@ -264,7 +277,7 @@
 
 
                             <tr>
-                                <td class="text-right" colspan="11"><b><?php echo display('shipping_cost') ?>:</b></td>
+                                <td class="text-right" colspan="10"><b><?php echo display('shipping_cost') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="shipping_cost" class="form-control text-right"
                                         name="shipping_cost" onkeyup="paysenz_invoice_quantity_calculate(1);"
@@ -273,7 +286,7 @@
                                 </td>
                             </tr>
                             <tr>
-                                <td colspan="11" class="text-right"><b><?php echo display('grand_total') ?>:</b></td>
+                                <td colspan="10" class="text-right"><b><?php echo display('grand_total') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="grandTotal" class="form-control grandTotalamnt text-right"
                                         name="grand_total_price" value="<?php echo $total_amount ?>"
@@ -281,14 +294,14 @@
                                 </td>
                             </tr>
                             <tr>
-                                <td colspan="11" class="text-right"><b><?php echo display('previous'); ?>:</b></td>
+                                <td colspan="10" class="text-right"><b><?php echo display('previous'); ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="previous" class="form-control text-right" name="previous"
                                         value="<?php echo $prev_due ?>" readonly="readonly" />
                                 </td>
                             </tr>
                             <tr>
-                                <td colspan="11" class="text-right"><b><?php echo display('net_total'); ?>:</b></td>
+                                <td colspan="10" class="text-right"><b><?php echo display('net_total'); ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="n_total" class="form-control text-right" name="n_total"
                                         value="<?php echo $net_total; ?>" readonly="readonly" placeholder="" />
@@ -296,7 +309,7 @@
                             </tr>
                             <tr>
 
-                                <td class="text-right" colspan="11"><b><?php echo display('paid_ammount') ?>:</b></td>
+                                <td class="text-right" colspan="10"><b><?php echo display('paid_ammount') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="paidAmount" onkeyup="invoice_paidamount();"
                                         class="form-control text-right" name="paid_amount" placeholder="0.00"
@@ -306,7 +319,7 @@
                             <tr>
 
 
-                                <td class="text-right" colspan="11">
+                                <td class="text-right" colspan="10">
                                     <input type="hidden" name="baseUrl" class="baseUrl"
                                         value="<?php echo base_url(); ?>" />
                                     <input type="hidden" name="invoice_id" id="invoice_id"
@@ -322,7 +335,7 @@
                             </tr>
                             <tr>
 
-                                <td class="text-right" colspan="11"><b><?php echo display('change') ?>:</b></td>
+                                <td class="text-right" colspan="10"><b><?php echo display('change') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="change" class="form-control text-right" name="change"
                                         value="0" readonly="readonly" />
@@ -342,52 +355,27 @@
 
                             <div class="" id="add_new_payment">
 
-                                <?php if ($is_credit != 1) {
+                                <div class="row no-gutters">
+                                    <div class="form-group col-md-6">
+                                        <label for="payments"
+                                            class="col-form-label pb-2"><?php echo display('payment_type'); ?></label>
 
-                                    foreach ($multi_paytype as $all_paytype) { ?>
-                                        <div class="row no-gutters">
-                                            <div class="form-group col-md-6">
-                                                <label for="payments"
-                                                    class="col-form-label pb-2"><?php echo display('payment_type'); ?></label>
+                                        <?php
+                                        // No pre-selected value - user must select payment type manually
+                                        echo form_dropdown('multipaytype[]', $all_pmethodwith_cr, '', 'onchange = "check_creditsale()" class="card_typesl postform resizeselect form-control "') ?>
 
-                                                <?php
-                                                echo form_dropdown('multipaytype[]', $all_pmethod, (!empty($all_paytype) ? $all_paytype->COAID : null), 'onchange = "check_creditsale()" class="card_typesl postform resizeselect form-control "') ?>
-
-                                            </div>
-                                            <div class="form-group col-md-6">
-                                                <label for="4digit"
-                                                    class="col-form-label pb-2"><?php echo display('paid_amount'); ?></label>
-
-                                                <input type="text" id="pamount_by_method"
-                                                    class="form-control number pay firstpay" name="pamount_by_method[]"
-                                                    value="<?php echo $all_paytype->Debit ?>" onkeyup="changedueamount()"
-                                                    placeholder="0" />
-
-                                            </div>
-                                        </div>
-                                    <?php }
-                                } else { ?>
-                                    <div class="row no-gutters">
-                                        <div class="form-group col-md-6">
-                                            <label for="payments"
-                                                class="col-form-label pb-2"><?php echo display('payment_type'); ?></label>
-
-                                            <?php
-                                            echo form_dropdown('multipaytype[]', $all_pmethodwith_cr, 0, 'onchange = "check_creditsale()" class="card_typesl postform resizeselect form-control "') ?>
-
-                                        </div>
-                                        <div class="form-group col-md-6">
-                                            <label for="4digit"
-                                                class="col-form-label pb-2"><?php echo display('paid_amount'); ?></label>
-
-                                            <input type="text" id="pamount_by_method"
-                                                class="form-control number pay firstpay" name="pamount_by_method[]"
-                                                value="<?php echo $paid_amount ?>" onkeyup="changedueamount()"
-                                                placeholder="0" />
-
-                                        </div>
                                     </div>
-                                <?php } ?>
+                                    <div class="form-group col-md-6">
+                                        <label for="4digit"
+                                            class="col-form-label pb-2"><?php echo display('paid_amount'); ?></label>
+
+                                        <input type="text" id="pamount_by_method"
+                                            class="form-control number pay firstpay" name="pamount_by_method[]"
+                                            value="<?php echo $paid_amount ?>" onkeyup="changedueamount()"
+                                            placeholder="0" />
+
+                                    </div>
+                                </div>
 
 
                             </div>
