@@ -688,7 +688,7 @@ function invoice_paidamount() {
       url: url,
       data: { csrf_test_name: csrf_test_name, is_credit_edit: is_credit_edit },
       success: function (data) {
-        $("#add_new_payment").append(data);
+        $("#add_new_payment").html(data);
         $("#pamount_by_method").val(a);
         $("#add_new_payment_type").prop("disabled", false);
       },
@@ -814,7 +814,7 @@ function deleteRow_invoice(t) {
           is_credit_edit: is_credit_edit,
         },
         success: function (data) {
-          $("#add_new_payment").append(data);
+          $("#add_new_payment").html(data);
           $("#pamount_by_method").val(gtotal);
           $("#add_new_payment_type").prop("disabled", false);
         },

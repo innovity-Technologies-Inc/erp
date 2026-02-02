@@ -238,15 +238,14 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="10" rowspan="2">
+                                <td colspan="11" rowspan="3">
                                     <center><label sclass="text-center" for="details"
                                             class="  col-form-label"><?php echo display('invoice_details') ?></label>
                                     </center>
                                     <textarea name="inva_details" id="details" class="form-control"
                                         placeholder="<?php echo display('invoice_details') ?>"><?php echo $invoice_details; ?></textarea>
                                 </td>
-                                <td class="text-right" colspan="1"><b><?php echo display('invoice_discount') ?>:</b>
-                                </td>
+                                <td class="text-right"><b><?php echo display('invoice_discount') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" onkeyup="paysenz_invoice_quantity_calculate(1);"
                                         onchange="paysenz_invoice_quantity_calculate(1);" id="invoice_discount"
@@ -259,87 +258,98 @@
                                             class="fa fa-plus"></i></a></td>
                             </tr>
                             <tr>
-                                <td class="text-right" colspan="1"><b><?php echo display('total_discount') ?>:</b></td>
+                                <td class="text-right"><b><?php echo display('total_discount') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="total_discount_ammount" class="form-control text-right"
                                         name="total_discount" value="<?php echo $total_discount; ?>"
                                         readonly="readonly" />
                                 </td>
+                                <td></td>
                             </tr>
                             <tr>
-                                <td class="text-right" colspan="10"><b><?php echo display('ttl_val') ?>:</b></td>
+                                <td class="text-right"><b><?php echo display('ttl_val') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="total_vat_amnt" class="form-control text-right"
                                         value="<?php echo $total_vat_amnt; ?>" name="total_vat_amnt" value="0.00"
                                         readonly="readonly" />
                                 </td>
+                                <td></td>
                             </tr>
 
 
                             <tr>
-                                <td class="text-right" colspan="10"><b><?php echo display('shipping_cost') ?>:</b></td>
+                                <td colspan="11"></td>
+                                <td class="text-right"><b><?php echo display('shipping_cost') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="shipping_cost" class="form-control text-right"
                                         name="shipping_cost" onkeyup="paysenz_invoice_quantity_calculate(1);"
                                         onchange="paysenz_invoice_quantity_calculate(1);" placeholder="0.00"
                                         value="<?php echo $shipping_cost ?>" />
                                 </td>
+                                <td></td>
                             </tr>
                             <tr>
-                                <td colspan="10" class="text-right"><b><?php echo display('grand_total') ?>:</b></td>
+                                <td colspan="11"></td>
+                                <td class="text-right"><b><?php echo display('grand_total') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="grandTotal" class="form-control grandTotalamnt text-right"
                                         name="grand_total_price" value="<?php echo $total_amount ?>"
                                         readonly="readonly" />
                                 </td>
+                                <td></td>
                             </tr>
                             <tr>
-                                <td colspan="10" class="text-right"><b><?php echo display('previous'); ?>:</b></td>
+                                <td colspan="11"></td>
+                                <td class="text-right"><b><?php echo display('previous'); ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="previous" class="form-control text-right" name="previous"
                                         value="<?php echo $prev_due ?>" readonly="readonly" />
                                 </td>
+                                <td></td>
                             </tr>
                             <tr>
-                                <td colspan="10" class="text-right"><b><?php echo display('net_total'); ?>:</b></td>
+                                <td colspan="11"></td>
+                                <td class="text-right"><b><?php echo display('net_total'); ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="n_total" class="form-control text-right" name="n_total"
                                         value="<?php echo $net_total; ?>" readonly="readonly" placeholder="" />
                                 </td>
+                                <td></td>
                             </tr>
                             <tr>
-
-                                <td class="text-right" colspan="10"><b><?php echo display('paid_ammount') ?>:</b></td>
+                                <td colspan="11"></td>
+                                <td class="text-right"><b><?php echo display('paid_ammount') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="paidAmount" onkeyup="invoice_paidamount();"
                                         class="form-control text-right" name="paid_amount" placeholder="0.00"
                                         tabindex="13" value="<?php echo $paid_amount; ?>" />
                                 </td>
+                                <td></td>
                             </tr>
                             <tr>
-
-
-                                <td class="text-right" colspan="10">
+                                <td colspan="11">
                                     <input type="hidden" name="baseUrl" class="baseUrl"
                                         value="<?php echo base_url(); ?>" />
                                     <input type="hidden" name="invoice_id" id="invoice_id"
                                         value="<?php echo $invoice ?>" />
                                     <input type="hidden" name="invoice" id="invoice" value="<?php echo $invoice ?>" />
                                     <input type="hidden" name="dbinv_id" id="invoice" value="<?php echo $dbinv_id ?>" />
-                                    <b><?php echo display('due') ?>:</b>
                                 </td>
+                                <td class="text-right"><b><?php echo display('due') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="dueAmmount" class="form-control text-right" name="due_amount"
                                         value="<?php echo $due_amount ?>" readonly="readonly" />
                                 </td>
+                                <td></td>
                             </tr>
                             <tr>
-
-                                <td class="text-right" colspan="10"><b><?php echo display('change') ?>:</b></td>
+                                <td colspan="11"></td>
+                                <td class="text-right"><b><?php echo display('change') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="change" class="form-control text-right" name="change"
                                         value="0" readonly="readonly" />
                                 </td>
+                                <td></td>
                             </tr>
                         </tfoot>
                     </table>
