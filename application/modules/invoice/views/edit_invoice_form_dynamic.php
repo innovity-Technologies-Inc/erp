@@ -51,7 +51,7 @@
                                     value="<?php echo html_escape($invoice); ?>" readonly />
                             </div>
                         </div>
-                    </div>
+                    </div>colspan="10"
                     <div class="col-sm-6" id="bank_div">
                         <div class="form-group row">
                             <label for="bank" class="col-sm-3 col-form-label"><?php

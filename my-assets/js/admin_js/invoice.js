@@ -291,7 +291,11 @@ function addInputField_invoice_dynamic(t) {
       count +
       "' name='serial_no[]' required aria-hidden='true' tabindex='" +
       tab3 +
-      "'><option></option></select></td> <td><input type='text' name='available_quantity[]' id='' class='form-control text-right common_avail_qnt available_quantity_" +
+      "'><option></option></select></td><td><select class='form-control basic-single' id='warehouse_" +
+      count +
+      "' name='warehouse_id[]' tabindex='" +
+      (tab3 + 1) +
+      "'><option value=''>Select Warehouse</option></select></td><td><input type='text' name='available_quantity[]' id='' class='form-control text-right common_avail_qnt available_quantity_" +
       count +
       "' value='0' readonly='readonly' /></td><td><input class='form-control text-right common_name unit_" +
       count +
@@ -304,7 +308,7 @@ function addInputField_invoice_dynamic(t) {
       "' class='common_qnt total_qntt_" +
       count +
       " form-control text-right'  placeholder='0.00' min='0' tabindex='" +
-      tab3 +
+      tab4 +
       "'/></td><td><input type='text' name='product_rate[]' onkeyup='paysenz_invoice_quantity_calculate(" +
       count +
       ");' onchange='paysenz_invoice_quantity_calculate(" +
@@ -314,7 +318,7 @@ function addInputField_invoice_dynamic(t) {
       "' class='common_rate price_item" +
       count +
       " form-control text-right' required placeholder='0.00' min='0' tabindex='" +
-      tab4 +
+      tab5 +
       "'/></td><td><input type='text' name='discount[]' onkeyup='paysenz_invoice_quantity_calculate(" +
       count +
       ");' onchange='paysenz_invoice_quantity_calculate(" +
@@ -322,14 +326,26 @@ function addInputField_invoice_dynamic(t) {
       ");' id='discount_" +
       count +
       "' class='form-control text-right common_discount' placeholder='0.00' min='0' tabindex='" +
-      tab5 +
+      tab6 +
       "' /><input type='hidden' value='' name='discount_type' id='discount_type_" +
       count +
       "'></td><td><input type='text' name='discountvalue[]'  id='discount_value_" +
       count +
       "' class='form-control text-right common_discount' placeholder='0.00' min='0' tabindex='" +
       tab13 +
-      "' readonly /></td><td class='text-right'><input class='common_total_price total_price form-control text-right' type='text' name='total_price[]' id='total_price_" +
+      "' readonly /></td><td><input type='text' name='vatpercent[]' onkeyup='paysenz_invoice_quantity_calculate(" +
+      count +
+      ");' onchange='paysenz_invoice_quantity_calculate(" +
+      count +
+      ");' id='vat_percent_" +
+      count +
+      "' class='form-control text-right' min='0' tabindex='" +
+      tab14 +
+      "' placeholder='0.00' /></td><td><input type='text' name='vatvalue[]' id='vat_value_" +
+      count +
+      "' class='form-control text-right total_vatamnt' min='0' tabindex='" +
+      tab15 +
+      "' placeholder='0.00' readonly /></td><td class='text-right'><input class='common_total_price total_price form-control text-right' type='text' name='total_price[]' id='total_price_" +
       count +
       "' value='0.00' readonly='readonly'/></td><td>" +
       tbfild +
@@ -338,11 +354,19 @@ function addInputField_invoice_dynamic(t) {
       "' class='total_discount dppr' name='discount_amount[]'/><button tabindex='" +
       tab5 +
       "' style='text-align: right;' class='btn btn-danger' type='button' value='Delete' onclick='deleteRow_invoice(this)'><i class='fa fa-close'></i></button></td>"),
-      document.getElementById(t).appendChild(e),
-      document.getElementById(a).focus(),
-      document
-        .getElementById("add_invoice_item")
-        .setAttribute("tabindex", tab6));
+      document.getElementById(t).appendChild(e));
+
+    // Reinitialize Select2 for the new batch_no dropdown
+    $("#serial_no_" + count).select2({
+      placeholder: "Select Batch",
+      allowClear: true,
+    });
+
+    // Load warehouse options and initialize Select2
+    load_warehouse_options(count);
+
+    document.getElementById(a).focus();
+    document.getElementById("add_invoice_item").setAttribute("tabindex", tab6);
     document.getElementById("details").setAttribute("tabindex", tab7);
     document.getElementById("invoice_discount").setAttribute("tabindex", tab8);
     document.getElementById("shipping_cost").setAttribute("tabindex", tab9);

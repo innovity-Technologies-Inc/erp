@@ -124,6 +124,8 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                     <th class="text-center invoice_fields"><?php echo display('fixed_dis') ?> </th>
                                 <?php } ?>
                                 <th class="text-center invoice_fields"><?php echo display('dis_val') ?> </th>
+                                <th class="text-center invoice_fields"><?php echo display('vat') . ' %' ?> </th>
+                                <th class="text-center invoice_fields"><?php echo display('vat_val') ?> </th>
 
                                 <th class="text-center invoice_fields"><?php echo display('total') ?>
                                 </th>
@@ -199,7 +201,19 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                 </td>
 
                                 <!-- VAT  -->
+                                <td>
+                                    <input type="text" name="vatpercent[]"
+                                        onkeyup="paysenz_invoice_quantity_calculate(1);"
+                                        onchange="paysenz_invoice_quantity_calculate(1);"
+                                        id="vat_percent_1" class="form-control text-right"
+                                        min="0" tabindex="19" placeholder="0.00" />
 
+                                </td>
+                                <td>
+                                    <input type="text" name="vatvalue[]" id="vat_value_1"
+                                        class="form-control text-right total_vatamnt" min="0" tabindex="20"
+                                        placeholder="0.00" readonly />
+                                </td>
                                 <!-- VAT end -->
 
                                 <td class="invoice_fields">
@@ -223,7 +237,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="8" rowspan="2">
+                                <td colspan="11" rowspan="2">
                                     <center><label for="details"
                                             class="  col-form-label text-center"><?php echo display('invoice_details') ?></label>
                                     </center>
@@ -251,7 +265,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                 </td>
                             </tr>
                             <!-- <tr>
-                                <td class="text-right" colspan="9"><b><?php echo display('ttl_val') ?>:</b></td>
+                                <td class="text-right" colspan="10"><b><?php echo display('ttl_val') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="total_vat_amnt" class="form-control text-right"
                                         name="total_vat_amnt" value="0.00" readonly="readonly" />
@@ -261,7 +275,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                 name="total_vat_amnt" value="0.00" readonly="readonly" />
                             <tr>
                             <tr>
-                                <td class="text-right" colspan="9"><b><?php echo display('shipping_cost') ?>:</b></td>
+                                <td class="text-right" colspan="12"><b><?php echo display('shipping_cost') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="shipping_cost" class="form-control text-right"
                                         name="shipping_cost" onkeyup="paysenz_invoice_quantity_calculate(1);"
@@ -270,28 +284,28 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                 </td>
                             </tr>
                             <tr>
-                                <td colspan="9" class="text-right"><b><?php echo display('grand_total') ?>:</b></td>
+                                <td colspan="12" class="text-right"><b><?php echo display('grand_total') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="grandTotal" class="form-control text-right grandTotalamnt"
                                         name="grand_total_price" value="0.00" readonly="readonly" />
                                 </td>
                             </tr>
                             <tr>
-                                <td colspan="9" class="text-right"><b><?php echo display('previous'); ?>:</b></td>
+                                <td colspan="12" class="text-right"><b><?php echo display('previous'); ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="previous" class="form-control text-right" name="previous"
                                         value="0.00" readonly="readonly" />
                                 </td>
                             </tr>
                             <tr>
-                                <td colspan="9" class="text-right"><b><?php echo display('net_total'); ?>:</b></td>
+                                <td colspan="12" class="text-right"><b><?php echo display('net_total'); ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="n_total" class="form-control text-right" name="n_total"
                                         value="0" readonly="readonly" placeholder="" />
                                 </td>
                             </tr>
                             <tr>
-                                <td class="text-right" colspan="9"><b><?php echo display('paid_ammount') ?>:</b></td>
+                                <td class="text-right" colspan="12"><b><?php echo display('paid_ammount') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="hidden" name="baseUrl" class="baseUrl"
                                         value="<?php echo base_url(); ?>" />
@@ -301,7 +315,7 @@ file_put_contents(APPPATH . 'logs/invoice_submission.log', $log_data, FILE_APPEN
                                 </td>
                             </tr>
                             <tr>
-                                <td class="text-right" colspan="9"><b><?php echo display('due') ?>:</b></td>
+                                <td class="text-right" colspan="12"><b><?php echo display('due') ?>:</b></td>
                                 <td class="text-right">
                                     <input type="text" id="dueAmmount" class="form-control text-right" name="due_amount"
                                         value="0.00" readonly="readonly" />

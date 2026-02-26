@@ -121,6 +121,8 @@
                                     <th class="text-center invoice_fields"><?php echo display('fixed_dis') ?> </th>
                                 <?php } ?>
                                 <th class="text-center invoice_fields"><?php echo display('dis_val') ?> </th>
+                                <th class="text-center invoice_fields">VAT %</th>
+                                <th class="text-center invoice_fields">VAT Value</th>
 
                                 <th class="text-center invoice_fields"><?php echo display('total') ?>
                                 </th>
@@ -193,10 +195,15 @@
                                         class="form-control text-right" min="0" tabindex="18" placeholder="0.00"
                                         readonly />
                                 </td>
-
-                                <td class="invoice_fields">
-                                    <input class="total_price form-control text-right" type="text" name="total_price[]"
-                                        id="total_price_1" value="0.00" readonly="readonly" />
+                                <td>
+                                    <input type="text" name="vatpercent[]" onkeyup="paysenz_invoice_quantity_calculate(1);"
+                                        onchange="paysenz_invoice_quantity_calculate(1);" id="vat_percent_1"
+                                        class="form-control text-right" min="0" tabindex="19" placeholder="0.00" />
+                                </td>
+                                <td>
+                                    <input type="text" name="vatvalue[]" id="vat_value_1"
+                                        class="form-control text-right total_vatamnt" min="0" tabindex="20" placeholder="0.00"
+                                        readonly />
                                 </td>
 
                                 <td>
